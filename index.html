@@ -832,7 +832,7 @@ function vLogin(){
     '<div class="f jb aic"><button class="txm muted" onclick="go(\'/welcome\')">← Back</button>'+themeToggleBtn()+'</div>'+
     '<div class="fc aic mt4">'+logo(64)+'<h1 class="tx2 bold mt4">Welcome back</h1><p class="txm muted">Log in with your email or Google account</p></div>'+
     '<div class="fc g4 mt6">'+
-      authField('lgEmail','Email','mail','text',e.email,'placeholder="you@example.com"')+
+      authField('lgEmail','Email','mail','text',e.email,'placeholder="Alvinwalker01@example.com"')+
       authField('lgPw','Password','lock','password',e.password,'placeholder="••••••••"')+
       '<div class="f jb aic txm"><label class="f g2 aic"><input type="checkbox" checked style="accent-color:#5B8DEF"/> <span class="muted">Remember me</span></label><button class="med" style="color:#5B8DEF" onclick="resetPassword()">Forgot?</button></div>'+
       '<button class="btn btn-primary btn-lg" onclick="doLogin()">Log In '+ic('arrowR',18)+'</button>'+
@@ -846,8 +846,8 @@ function vRegister(){
     '<div class="f jb aic"><button class="txm muted" onclick="go(\'/welcome\')">← Back</button>'+themeToggleBtn()+'</div>'+
     '<div class="fc aic mt4">'+logo(64)+'<h1 class="tx2 bold mt4">Create account</h1><p class="txm muted">Use any email or your Google account</p></div>'+
     '<div class="fc g4 mt5">'+
-      authField('rgName','Full name','user','text',e.name,'placeholder="Maya Reyes"')+
-      authField('rgEmail','Email','mail','email',e.email,'placeholder="you@example.com"')+
+      authField('rgName','Full name','user','text',e.name,'placeholder="Alvin Walker"')+
+      authField('rgEmail','Email','mail','email',e.email,'placeholder="Alvinwalker01@example.com"')+
       authField('rgPw','Password','lock','password',e.password,'placeholder="••••••••"')+
       authField('rgCf','Confirm password','lock','password',e.confirm,'placeholder="••••••••"')+
       '<button class="btn btn-primary btn-lg" onclick="doRegister()">'+ic('userPlus',18)+' Create Account</button>'+
