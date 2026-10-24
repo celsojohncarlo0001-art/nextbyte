@@ -438,53 +438,21 @@ async function bootstrapAuth(){
   });
 }
 
-/* ---------- IndexedDB for offline music blobs ---------- */
 var MUSIC_DB=null;
 function openMusicDB(){
   return new Promise(function(resolve,reject){
     if(MUSIC_DB) return resolve(MUSIC_DB);
     if(!('indexedDB' in window)) return reject(new Error('IndexedDB not available'));
     var req=indexedDB.open('nexbyte_music',1);
-    req.onupgradeneeded=function(e){
-      var db=e.target.result;
-      if(!db.objectStoreNames.contains('files')){db.createObjectStore('files',{keyPath:'id'});}
-    };
+    req.onupgradeneeded=function(e){var db=e.target.result;if(!db.objectStoreNames.contains('files')){db.createObjectStore('files',{keyPath:'id'});}};
     req.onsuccess=function(e){MUSIC_DB=e.target.result;resolve(MUSIC_DB);};
     req.onerror=function(){reject(req.error);};
   });
 }
-function dbAdd(record){
-  return openMusicDB().then(function(db){
-    return new Promise(function(resolve,reject){
-      var tx=db.transaction('files','readwrite');
-      var req=tx.objectStore('files').add(record);
-      req.onsuccess=function(){resolve(record);};
-      req.onerror=function(){reject(req.error);};
-    });
-  });
-}
-function dbGet(id){
-  return openMusicDB().then(function(db){
-    return new Promise(function(resolve,reject){
-      var tx=db.transaction('files','readonly');
-      var req=tx.objectStore('files').get(id);
-      req.onsuccess=function(){resolve(req.result||null);};
-      req.onerror=function(){reject(req.error);};
-    });
-  });
-}
-function dbDelete(id){
-  return openMusicDB().then(function(db){
-    return new Promise(function(resolve,reject){
-      var tx=db.transaction('files','readwrite');
-      var req=tx.objectStore('files').delete(id);
-      req.onsuccess=function(){resolve();};
-      req.onerror=function(){reject(req.error);};
-    });
-  });
-}
+function dbAdd(record){return openMusicDB().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('files','readwrite');var req=tx.objectStore('files').add(record);req.onsuccess=function(){resolve(record);};req.onerror=function(){reject(req.error);};});});}
+function dbGet(id){return openMusicDB().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('files','readonly');var req=tx.objectStore('files').get(id);req.onsuccess=function(){resolve(req.result||null);};req.onerror=function(){reject(req.error);};});});}
+function dbDelete(id){return openMusicDB().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('files','readwrite');var req=tx.objectStore('files').delete(id);req.onsuccess=function(){resolve();};req.onerror=function(){reject(req.error);};});});}
 
-/* ---------- Persistent media host ---------- */
 var CURRENT_BLOB_URL=null;
 function ensureMediaHost(){
   if(document.getElementById('nbMediaHost')) return;
@@ -503,52 +471,35 @@ function ensureMediaHost(){
   window.addEventListener('resize',syncMediaHostPosition);
 }
 function restoreIframes(){
-  var sp=document.getElementById('nbSpotify');
-  var yt=document.getElementById('nbYoutube');
+  var sp=document.getElementById('nbSpotify');var yt=document.getElementById('nbYoutube');
   if(sp&&S.music.spotifyEmbed&&sp.getAttribute('src')!==S.music.spotifyEmbed) sp.src=S.music.spotifyEmbed;
   if(yt&&S.music.youtubeEmbed&&yt.getAttribute('src')!==S.music.youtubeEmbed) yt.src=S.music.youtubeEmbed;
 }
 function syncMediaHostPosition(){
   var host=document.getElementById('nbMediaHost');if(!host) return;
   host.classList.remove('visible');
-  if(S.music.active!=='spotify'&&S.music.active!=='youtube'){
-    host.style.top='-9999px';host.style.left='-9999px';host.style.width='1px';host.style.height='1px';return;
-  }
+  if(S.music.active!=='spotify'&&S.music.active!=='youtube'){host.style.top='-9999px';host.style.left='-9999px';host.style.width='1px';host.style.height='1px';return;}
   var R=resolve();var holder=document.getElementById('mediaHolder');
-  if(R.view!=='music'||!holder){
-    host.style.top='-9999px';host.style.left='-9999px';host.style.width='1px';host.style.height='1px';return;
-  }
+  if(R.view!=='music'||!holder){host.style.top='-9999px';host.style.left='-9999px';host.style.width='1px';host.style.height='1px';return;}
   var r=holder.getBoundingClientRect();if(r.width<10||r.height<10) return;
   host.classList.add('visible');
   host.style.top=r.top+'px';host.style.left=r.left+'px';host.style.width=r.width+'px';host.style.height=r.height+'px';
 }
 
-/* ---------- MUSIC CONTROLLER ---------- */
 function getAudio(){return document.getElementById('nbAudio');}
 async function playLocalMusic(id){
   try{
-    var rec=await dbGet(id);
-    if(!rec){toast('File not found on this device. Re-add it.');return;}
+    var rec=await dbGet(id);if(!rec){toast('File not found on this device. Re-add it.');return;}
     var audio=getAudio();if(!audio){toast('Audio engine not ready.');return;}
     var newUrl=URL.createObjectURL(rec.blob);
-    audio.pause();audio.src=newUrl;audio.load();
-    await audio.play();
-    if(CURRENT_BLOB_URL)URL.revokeObjectURL(CURRENT_BLOB_URL);
-    CURRENT_BLOB_URL=newUrl;
-    S.music.active='local';S.music.localId=id;S.music.playing=true;
-    save();render();
+    audio.pause();audio.src=newUrl;audio.load();await audio.play();
+    if(CURRENT_BLOB_URL)URL.revokeObjectURL(CURRENT_BLOB_URL);CURRENT_BLOB_URL=newUrl;
+    S.music.active='local';S.music.localId=id;S.music.playing=true;save();render();
   }catch(e){toast('Could not play file: '+(e&&e.message?e.message:'unknown error'));}
 }
 function musicTogglePlay(){
-  if(S.music.active==='local'){
-    var a=getAudio();if(!a) return;
-    if(a.paused){
-      if(!a.src&&S.music.localId){playLocalMusic(S.music.localId);return;}
-      a.play().catch(function(){});
-    }else{a.pause();}
-  }else if(S.music.active==='spotify'||S.music.active==='youtube'){
-    toast('Use the play/pause controls inside the '+(S.music.active==='spotify'?'Spotify':'YouTube')+' player.');
-  }
+  if(S.music.active==='local'){var a=getAudio();if(!a) return;if(a.paused){if(!a.src&&S.music.localId){playLocalMusic(S.music.localId);return;}a.play().catch(function(){});}else{a.pause();}}
+  else if(S.music.active==='spotify'||S.music.active==='youtube'){toast('Use the play/pause controls inside the '+(S.music.active==='spotify'?'Spotify':'YouTube')+' player.');}
 }
 function musicPrev(){if(S.music.active!=='local')return;var list=S.offlineMusic;var i=list.findIndex(function(x){return x.id===S.music.localId;});if(i<0)return;var n=list[(i-1+list.length)%list.length];if(n)playLocalMusic(n.id);}
 function musicNext(){if(S.music.active!=='local')return;var list=S.offlineMusic;var i=list.findIndex(function(x){return x.id===S.music.localId;});if(i<0)return;var n=list[(i+1)%list.length];if(n)playLocalMusic(n.id);}
@@ -580,9 +531,7 @@ function parseMediaUrl(raw){
     if(host==='open.spotify.com'){
       var parts=u.pathname.split('/').filter(Boolean);
       if(parts[0]==='embed') return {type:'spotify',embed:u.href};
-      if(['track','album','playlist','episode','show'].indexOf(parts[0])>=0&&parts[1]){
-        return {type:'spotify',embed:'https://open.spotify.com/embed/'+parts[0]+'/'+encodeURIComponent(parts[1])+'?utm_source=generator&theme=0'};
-      }
+      if(['track','album','playlist','episode','show'].indexOf(parts[0])>=0&&parts[1]){return {type:'spotify',embed:'https://open.spotify.com/embed/'+parts[0]+'/'+encodeURIComponent(parts[1])+'?utm_source=generator&theme=0'};}
     }
     if(host==='youtu.be'){var id=u.pathname.replace(/^\//,'');if(id)return{type:'youtube',embed:'https://www.youtube.com/embed/'+id};}
     if(host==='youtube.com'||host==='music.youtube.com'||host==='m.youtube.com'){
@@ -593,27 +542,15 @@ function parseMediaUrl(raw){
   }catch(e){}
   return null;
 }
-function saveSpotifyLink(){
-  var input=document.getElementById('spotifyUrl');var raw=(input&&input.value||'').trim();
-  var parsed=parseMediaUrl(raw);
-  if(!parsed||parsed.type!=='spotify'){toast('Paste a valid Spotify track, album, or playlist link.');return;}
-  S.music.spotifyUrl=raw;S.music.spotifyEmbed=parsed.embed;save();render();toast('Spotify link saved');
-}
-function saveYoutubeLink(){
-  var input=document.getElementById('youtubeUrl');var raw=(input&&input.value||'').trim();
-  var parsed=parseMediaUrl(raw);
-  if(!parsed||parsed.type!=='youtube'){toast('Paste a valid YouTube or YouTube Music link.');return;}
-  S.music.youtubeUrl=raw;S.music.youtubeEmbed=parsed.embed;save();render();toast('YouTube link saved');
-}
+function saveSpotifyLink(){var input=document.getElementById('spotifyUrl');var raw=(input&&input.value||'').trim();var parsed=parseMediaUrl(raw);if(!parsed||parsed.type!=='spotify'){toast('Paste a valid Spotify track, album, or playlist link.');return;}S.music.spotifyUrl=raw;S.music.spotifyEmbed=parsed.embed;save();render();toast('Spotify link saved');}
+function saveYoutubeLink(){var input=document.getElementById('youtubeUrl');var raw=(input&&input.value||'').trim();var parsed=parseMediaUrl(raw);if(!parsed||parsed.type!=='youtube'){toast('Paste a valid YouTube or YouTube Music link.');return;}S.music.youtubeUrl=raw;S.music.youtubeEmbed=parsed.embed;save();render();toast('YouTube link saved');}
 
-/* ---------- OFF-LINE FILE MANAGEMENT (FIXED) ---------- */
 async function addOfflineFiles(input){
   var files=input.files;
   if(!files||!files.length) return;
   var added=0;
   for(var i=0;i<files.length;i++){
     var f=files[i];
-    /* FIX: accept files by extension too, since Android often reports an empty MIME type */
     var ext=(f.name.split('.').pop()||'').toLowerCase();
     var audioExtensions=['mp3','m4a','aac','wav','ogg','oga','opus','flac','weba','webm','aif','aiff','3gp'];
     var looksLikeAudio=(f.type&&f.type.indexOf('audio/')===0)||audioExtensions.indexOf(ext)!==-1;
@@ -623,17 +560,13 @@ async function addOfflineFiles(input){
       await dbAdd({id:id,name:f.name,mime:f.type||'audio/'+ext,size:f.size,addedAt:Date.now(),blob:f});
       S.offlineMusic.push({id:id,name:f.name,mime:f.type||'audio/'+ext,size:f.size,addedAt:Date.now()});
       added++;
-    }catch(e){
-      console.error(e);
-      toast('Storage error for '+f.name+': '+(e&&e.message?e.message:'unknown')+' — the file may be too large for this browser.');
-    }
+    }catch(e){console.error(e);toast('Storage error for '+f.name+': '+(e&&e.message?e.message:'unknown')+' — the file may be too large for this browser.');}
   }
   if(added){save();toast('Added '+added+' track'+(added===1?'':'s'));render();}
   input.value='';
 }
 async function deleteOfflineFile(id){
-  var meta=S.offlineMusic.filter(function(x){return x.id===id;})[0];
-  if(!meta) return;
+  var meta=S.offlineMusic.filter(function(x){return x.id===id;})[0];if(!meta) return;
   confirmSheet({title:'Remove track?',message:'"'+meta.name+'" will be deleted from this device.',onConfirm:async function(){
     if(S.music.active==='local'&&S.music.localId===id) stopMusic();
     try{await dbDelete(id);}catch(e){}
@@ -642,7 +575,6 @@ async function deleteOfflineFile(id){
   }});
 }
 
-/* ---------- UI helpers ---------- */
 function updateProgressBars(){
   var a=getAudio();if(!a) return;
   var pct=(a.duration&&isFinite(a.duration))?(a.currentTime/a.duration*100):0;
@@ -666,8 +598,7 @@ function currentTrackSub(){
 function updateMusicUI(){
   var mp=document.getElementById('miniPlayBtn');if(mp)mp.innerHTML=S.music.playing?icf('pause',16):icf('play',16);
   var big=document.getElementById('musicBigPlay');if(big)big.innerHTML=S.music.playing?icf('pause',26):icf('play',26);
-  var cover=document.getElementById('miniCover');
-  if(cover)cover.innerHTML=S.music.playing?'<span class="eq"><i></i><i></i><i></i></span>':ic('music',18);
+  var cover=document.getElementById('miniCover');if(cover)cover.innerHTML=S.music.playing?'<span class="eq"><i></i><i></i><i></i></span>':ic('music',18);
   var db=document.getElementById('dashMusicTitle');if(db)db.textContent=currentTrackName()||'Nothing playing';
   var dbSub=document.getElementById('dashMusicSub');if(dbSub)dbSub.textContent=currentTrackSub()||'Open Music to start';
   var dbBtn=document.getElementById('dashMusicBtn');if(dbBtn)dbBtn.innerHTML=S.music.playing?icf('pause',16):icf('play',16);
@@ -811,11 +742,23 @@ function openNotifications(){
   el.querySelector('[data-close]').onclick=closeTop;
 }
 
+/* ============================================================
+   GOOGLE SIGN-IN (FIXED — no forced account chooser)
+   ============================================================ */
 async function doGoogleLogin(){
   if(!dbClient){toast('Setup required: configure Supabase first.');return;}
   if(window.location.protocol==='file:'){toast('Google sign-in needs HTTPS or localhost.');return;}
-  try{var result=await dbClient.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin+window.location.pathname,queryParams:{prompt:'select_account'}}});if(result.error)toast('Google sign-in failed: '+result.error.message);}catch(err){toast('Google sign-in failed: '+(err&&err.message?err.message:'Please try again.'));}
+  try{
+    var result=await dbClient.auth.signInWithOAuth({
+      provider:'google',
+      options:{redirectTo:window.location.origin+window.location.pathname}
+    });
+    if(result.error)toast('Google sign-in failed: '+result.error.message);
+  }catch(err){
+    toast('Google sign-in failed: '+(err&&err.message?err.message:'Please try again.'));
+  }
 }
+
 async function doLogin(){
   var email=document.getElementById('lgEmail').value.trim(),pw=document.getElementById('lgPw').value,e={};
   if(!email)e.email='Email is required';else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))e.email='Enter a valid email';
@@ -1274,7 +1217,7 @@ function profileSettings(){
   h+='<div class="pgroup"><div class="pgroup-head">'+ic('music',15)+' Music</div><div class="pgroup-body"><div class="prow"><div><p class="txm med">Offline tracks</p><p class="txs muted">'+S.offlineMusic.length+' file'+(S.offlineMusic.length===1?'':'s')+' on this device</p></div><button class="btn btn-sm" style="background:var(--secondary);color:var(--fg)" onclick="go(\'/music\')">Manage</button></div><div class="hr"></div><div class="prow"><div><p class="txm med">Now playing</p><p class="txs muted">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active!=='none'?'<button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#EF4444" onclick="stopMusic()">Stop</button>':'')+'</div></div></div>';
   h+='<div class="pgroup"><div class="pgroup-head">'+ic('moon',15)+' Appearance & Notifications</div><div class="pgroup-body"><div class="prow"><div class="f g3 aic"><span class="iconbtn" style="background:var(--secondary);color:'+(S.theme==='dark'?'#A78BFA':'#FBBF24')+'">'+ic(S.theme==='dark'?'moon':'sun',17)+'</span><span class="txm med">Dark mode</span></div><button class="toggle purple'+(S.theme==='dark'?' on':'')+'" onclick="toggleTheme()"><span></span></button></div><div class="hr"></div>'+[['roomUpdates','Room updates'],['taskReminders','Task reminders'],['chatMessages','Chat messages'],['weeklyProgress','Weekly progress']].map(function(n){return '<div class="prow"><span class="txm med">'+n[1]+'</span><button class="toggle'+(S.notifications[n[0]]?' on':'')+'" onclick="toggleNotif(\''+n[0]+'\')"><span></span></button></div>';}).join('')+'<div class="hr"></div><div class="prow"><div><p class="txm med">Auto-save notes</p><p class="txs muted">Persist edits as you type</p></div><button class="toggle'+(S.settings.autoSave?' on':'')+'" onclick="toggleSetting(\'autoSave\')"><span></span></button></div></div></div>';
   h+='<div class="pgroup pb"><div class="pgroup-head">'+ic('lock',15)+' Session & Security</div><div class="pgroup-body"><button class="arow" onclick="downloadAppFile()"><span class="txm med">Download app file</span>'+ic('download',18)+'</button><div class="hr"></div><button class="arow" onclick="clearWorkspace()"><span class="txm med">Clear my workspace</span>'+ic('reset',18)+'</button><div class="hr"></div><button class="arow" onclick="openAbout()"><span class="txm med">About NEXBYTE</span>'+ic('info',18)+'</button><div class="hr"></div><button class="arow" onclick="doLogout()"><span class="txm med">Sign out</span>'+ic('logOut',18)+'</button><div class="hr"></div><button class="arow" onclick="deleteAccount()"><span class="txm med" style="color:#EF4444">Delete account</span>'+ic('trash',18)+'</button></div></div>';
-  h+='<div class="pad mt5 pb"><p class="center txs muted">NEXBYTE · Academic Collaboration Environment · v3.3</p></div>';
+  h+='<div class="pad mt5 pb"><p class="center txs muted">NEXBYTE · Academic Collaboration Environment · v3.4</p></div>';
   return h;
 }
 function infoRow(icon,color,label,value){return '<div class="f g3 aic" style="padding:8px 0"><span class="iconbtn" style="background:'+color+'15;color:'+color+'">'+ic(icon,17)+'</span><div class="grow"><p class="txs muted">'+esc(label)+'</p><p class="txm med">'+esc(value)+'</p></div></div>';}
@@ -1292,7 +1235,7 @@ function openEditProfile(){
   el.querySelector('[data-cancel]').onclick=closeTop;
   el.querySelector('[data-save]').onclick=function(){var name=el.querySelector('#pfName').value.trim()||u.name;S.auth.user=Object.assign({},S.auth.user,{name:name,school:el.querySelector('#pfSchool').value,grade:el.querySelector('#pfGrade').value,track:el.querySelector('#pfTrack').value,bio:el.querySelector('#pfBio').value,initials:name.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase()});save();closeTop();toast('Profile updated');render();};
 }
-function openAbout(){var el=sheet('<div class="fc aic center">'+logo(64)+'<h3 class="txl bold mt3">NEXBYTE</h3><p class="txs muted" style="letter-spacing:.2em;text-transform:uppercase">Academic Collaboration Environment</p><p class="txm muted mt4">An all-in-one academic workspace. Subject-bound Lock-In sessions, synchronized study rooms, a Markdown knowledge base, focus audio, and task telemetry — all in one place.</p><p class="txs muted mt4">Version 3.3 · Account-based workspace</p></div><button class="btn btn-secondary btn-block mt5" data-close>Close</button>');el.querySelector('[data-close]').onclick=closeTop;}
+function openAbout(){var el=sheet('<div class="fc aic center">'+logo(64)+'<h3 class="txl bold mt3">NEXBYTE</h3><p class="txs muted" style="letter-spacing:.2em;text-transform:uppercase">Academic Collaboration Environment</p><p class="txm muted mt4">An all-in-one academic workspace. Subject-bound Lock-In sessions, synchronized study rooms, a Markdown knowledge base, focus audio, and task telemetry — all in one place.</p><p class="txs muted mt4">Version 3.4 · Account-based workspace</p></div><button class="btn btn-secondary btn-block mt5" data-close>Close</button>');el.querySelector('[data-close]').onclick=closeTop;}
 function downloadAppFile(){var html=document.documentElement.outerHTML;var blob=new Blob([html],{type:'text/html'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='nexbyte_app.html';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);toast('App file downloaded 📥');}
 
 applyTheme();
