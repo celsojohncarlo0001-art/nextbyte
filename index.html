@@ -428,7 +428,7 @@ async function loadWorkspace(user){
 }
 
 /* ============================================================
-   AUTH BOOTSTRAP — FIXED
+   AUTH BOOTSTRAP
    After restoring a session (including the one Supabase sets
    automatically when the OAuth redirect returns), navigate to
    /dashboard instead of leaving the user on /login or /welcome.
@@ -448,8 +448,6 @@ async function bootstrapAuth(){
   dbClient.auth.onAuthStateChange(function(event,session){
     if(event==='SIGNED_OUT'){S=defaultState();render();}
     else if(session&&event==='SIGNED_IN'){
-      /* Safety net: if the OAuth code exchange finished after getSession
-         returned null, the session arrives here. Land on /dashboard too. */
       setTimeout(async function(){
         await loadWorkspace(session.user);
         if(location.hash==='#/login'||location.hash==='#/welcome'||!location.hash){
@@ -765,7 +763,7 @@ function openNotifications(){
 }
 
 /* ============================================================
-   GOOGLE SIGN-IN (no forced account chooser)
+   GOOGLE SIGN-IN — with account chooser (prompt: select_account)
    ============================================================ */
 async function doGoogleLogin(){
   if(!dbClient){toast('Setup required: configure Supabase first.');return;}
@@ -773,7 +771,10 @@ async function doGoogleLogin(){
   try{
     var result=await dbClient.auth.signInWithOAuth({
       provider:'google',
-      options:{redirectTo:window.location.origin+window.location.pathname}
+      options:{
+        redirectTo:window.location.origin+window.location.pathname,
+        queryParams:{prompt:'select_account'}
+      }
     });
     if(result.error)toast('Google sign-in failed: '+result.error.message);
   }catch(err){
@@ -1239,7 +1240,7 @@ function profileSettings(){
   h+='<div class="pgroup"><div class="pgroup-head">'+ic('music',15)+' Music</div><div class="pgroup-body"><div class="prow"><div><p class="txm med">Offline tracks</p><p class="txs muted">'+S.offlineMusic.length+' file'+(S.offlineMusic.length===1?'':'s')+' on this device</p></div><button class="btn btn-sm" style="background:var(--secondary);color:var(--fg)" onclick="go(\'/music\')">Manage</button></div><div class="hr"></div><div class="prow"><div><p class="txm med">Now playing</p><p class="txs muted">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active!=='none'?'<button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#EF4444" onclick="stopMusic()">Stop</button>':'')+'</div></div></div>';
   h+='<div class="pgroup"><div class="pgroup-head">'+ic('moon',15)+' Appearance & Notifications</div><div class="pgroup-body"><div class="prow"><div class="f g3 aic"><span class="iconbtn" style="background:var(--secondary);color:'+(S.theme==='dark'?'#A78BFA':'#FBBF24')+'">'+ic(S.theme==='dark'?'moon':'sun',17)+'</span><span class="txm med">Dark mode</span></div><button class="toggle purple'+(S.theme==='dark'?' on':'')+'" onclick="toggleTheme()"><span></span></button></div><div class="hr"></div>'+[['roomUpdates','Room updates'],['taskReminders','Task reminders'],['chatMessages','Chat messages'],['weeklyProgress','Weekly progress']].map(function(n){return '<div class="prow"><span class="txm med">'+n[1]+'</span><button class="toggle'+(S.notifications[n[0]]?' on':'')+'" onclick="toggleNotif(\''+n[0]+'\')"><span></span></button></div>';}).join('')+'<div class="hr"></div><div class="prow"><div><p class="txm med">Auto-save notes</p><p class="txs muted">Persist edits as you type</p></div><button class="toggle'+(S.settings.autoSave?' on':'')+'" onclick="toggleSetting(\'autoSave\')"><span></span></button></div></div></div>';
   h+='<div class="pgroup pb"><div class="pgroup-head">'+ic('lock',15)+' Session & Security</div><div class="pgroup-body"><button class="arow" onclick="downloadAppFile()"><span class="txm med">Download app file</span>'+ic('download',18)+'</button><div class="hr"></div><button class="arow" onclick="clearWorkspace()"><span class="txm med">Clear my workspace</span>'+ic('reset',18)+'</button><div class="hr"></div><button class="arow" onclick="openAbout()"><span class="txm med">About NEXBYTE</span>'+ic('info',18)+'</button><div class="hr"></div><button class="arow" onclick="doLogout()"><span class="txm med">Sign out</span>'+ic('logOut',18)+'</button><div class="hr"></div><button class="arow" onclick="deleteAccount()"><span class="txm med" style="color:#EF4444">Delete account</span>'+ic('trash',18)+'</button></div></div>';
-  h+='<div class="pad mt5 pb"><p class="center txs muted">NEXBYTE · Academic Collaboration Environment · v3.5</p></div>';
+  h+='<div class="pad mt5 pb"><p class="center txs muted">NEXBYTE · Academic Collaboration Environment · v3.6</p></div>';
   return h;
 }
 function infoRow(icon,color,label,value){return '<div class="f g3 aic" style="padding:8px 0"><span class="iconbtn" style="background:'+color+'15;color:'+color+'">'+ic(icon,17)+'</span><div class="grow"><p class="txs muted">'+esc(label)+'</p><p class="txm med">'+esc(value)+'</p></div></div>';}
@@ -1257,7 +1258,7 @@ function openEditProfile(){
   el.querySelector('[data-cancel]').onclick=closeTop;
   el.querySelector('[data-save]').onclick=function(){var name=el.querySelector('#pfName').value.trim()||u.name;S.auth.user=Object.assign({},S.auth.user,{name:name,school:el.querySelector('#pfSchool').value,grade:el.querySelector('#pfGrade').value,track:el.querySelector('#pfTrack').value,bio:el.querySelector('#pfBio').value,initials:name.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase()});save();closeTop();toast('Profile updated');render();};
 }
-function openAbout(){var el=sheet('<div class="fc aic center">'+logo(64)+'<h3 class="txl bold mt3">NEXBYTE</h3><p class="txs muted" style="letter-spacing:.2em;text-transform:uppercase">Academic Collaboration Environment</p><p class="txm muted mt4">An all-in-one academic workspace. Subject-bound Lock-In sessions, synchronized study rooms, a Markdown knowledge base, focus audio, and task telemetry — all in one place.</p><p class="txs muted mt4">Version 3.5 · Account-based workspace</p></div><button class="btn btn-secondary btn-block mt5" data-close>Close</button>');el.querySelector('[data-close]').onclick=closeTop;}
+function openAbout(){var el=sheet('<div class="fc aic center">'+logo(64)+'<h3 class="txl bold mt3">NEXBYTE</h3><p class="txs muted" style="letter-spacing:.2em;text-transform:uppercase">Academic Collaboration Environment</p><p class="txm muted mt4">An all-in-one academic workspace. Subject-bound Lock-In sessions, synchronized study rooms, a Markdown knowledge base, focus audio, and task telemetry — all in one place.</p><p class="txs muted mt4">Version 3.6 · Account-based workspace</p></div><button class="btn btn-secondary btn-block mt5" data-close>Close</button>');el.querySelector('[data-close]').onclick=closeTop;}
 function downloadAppFile(){var html=document.documentElement.outerHTML;var blob=new Blob([html],{type:'text/html'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='nexbyte_app.html';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);toast('App file downloaded 📥');}
 
 applyTheme();
