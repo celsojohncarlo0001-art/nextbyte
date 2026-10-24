@@ -1,0 +1,2307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="theme-color" content="#5B8DEF"/>
+<title>NEXBYTE — Academic Collaboration Environment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F8FAFD;--fg:#0F172A;--card:#FFFFFF;--muted:#F1F5F9;--muted-fg:#64748B;
+  --secondary:#F1F6FC;--border:#E3E9F2;--primary:#5B8DEF;--destructive:#EF4444;
+  --purple:#A78BFA;--teal:#2DD4BF;--amber:#FBBF24;--coral:#FF7A7A;--mint:#34D399;
+  --shell:#DCE3ED;
+}
+html.dark{
+  --bg:#0B1220;--fg:#E8EEF7;--card:#141D2E;--muted:#1C2739;--muted-fg:#94A3B8;
+  --secondary:#1C2739;--border:#243044;--shell:#070C15;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--fg);background:var(--shell);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4,.display{font-family:Poppins,Inter,system-ui,sans-serif;line-height:1.25}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,textarea,select{font:inherit;color:inherit}
+a{color:inherit;text-decoration:none}
+img{max-width:100%}
+
+.wrap{min-height:100%;display:flex;justify-content:center}
+.phone{position:relative;width:100%;max-width:430px;height:100vh;height:100dvh;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(15,23,42,.25)}
+.main{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;position:relative;min-height:0}
+.main::-webkit-scrollbar,.hscroll::-webkit-scrollbar,.split-rail::-webkit-scrollbar{display:none}
+.hscroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+.pad{padding-left:20px;padding-right:20px}
+.pb{padding-bottom:28px}
+.pt{padding-top:24px}
+
+.f{display:flex}.fc{display:flex;flex-direction:column}.aic{align-items:center}.jb{justify-content:space-between}.jc{justify-content:center}.wrapf{flex-wrap:wrap}
+.g1{gap:4px}.g2{gap:8px}.g3{gap:12px}.g4{gap:16px}
+.grow{flex:1}.minw{min-width:0}
+.center{text-align:center}.right{text-align:right}
+.mt1{margin-top:4px}.mt2{margin-top:8px}.mt3{margin-top:12px}.mt4{margin-top:16px}.mt5{margin-top:20px}.mt6{margin-top:24px}
+.mb1{margin-bottom:4px}.mb2{margin-bottom:8px}.mb3{margin-bottom:12px}.mb4{margin-bottom:16px}
+.txs{font-size:11px}.txm{font-size:13px}.txd{font-size:14px}.txl{font-size:16px}.txxl{font-size:20px}.tx2{font-size:24px}
+.bold{font-weight:700}.semi{font-weight:600}.med{font-weight:500}
+.muted{color:var(--muted-fg)}
+.trunc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.clamp3{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.pill{border-radius:999px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.hr{height:1px;background:var(--border)}
+.hide{display:none!important}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:22px}
+.card.padc{padding:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:48px;border-radius:16px;font-weight:600;font-size:14px;transition:transform .12s ease}
+.btn:active{transform:scale(.97)}
+.btn-lg{height:56px}
+.btn-sm{height:40px;border-radius:12px;font-size:13px;padding:0 14px}
+.btn-primary{background:linear-gradient(90deg,#5B8DEF,#A78BFA);color:#fff;box-shadow:0 10px 24px rgba(91,141,239,.3)}
+.btn-secondary{background:var(--secondary);color:var(--fg)}
+.btn-danger{background:var(--destructive);color:#fff}
+.btn-soft-danger{background:rgba(239,68,68,.1);color:var(--destructive);height:48px;border-radius:16px;width:100%;font-weight:600}
+.btn-block{width:100%}
+.btn-google{width:100%;height:52px;border:1px solid var(--border);background:var(--card);color:var(--fg);border-radius:15px;display:flex;align-items:center;justify-content:center;gap:11px;font-weight:600}
+.btn-google:active{transform:scale(.98)}
+.google-g{font-family:Arial,sans-serif;font-size:20px;font-weight:700;color:#4285F4}
+.auth-divider{display:flex;align-items:center;gap:12px;color:var(--muted-fg);font-size:12px}
+.auth-divider:before,.auth-divider:after{content:"";height:1px;background:var(--border);flex:1}
+.chip{padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--muted-fg);font-size:12px;font-weight:500;white-space:nowrap;transition:transform .12s}
+.chip:active{transform:scale(.96)}
+.chip.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.input{width:100%;height:44px;border-radius:14px;border:1px solid var(--border);background:var(--card);padding:0 12px;font-size:14px;outline:none}
+.input:focus{border-color:var(--primary)}
+textarea.input{height:auto;padding:12px;resize:none;line-height:1.55}
+.field-label{font-size:11px;font-weight:600;color:var(--muted-fg);display:block;margin-bottom:4px}
+.field{position:relative;display:flex;align-items:center;border:1px solid var(--border);border-radius:16px;background:var(--card)}
+.field.err{border-color:var(--destructive)}
+.field input{flex:1;background:none;border:none;outline:none;font-size:14px;padding:13px 12px 13px 40px;width:100%}
+.field .lead{position:absolute;left:12px;color:var(--muted-fg)}
+.errmsg{font-size:11px;color:var(--destructive);margin-top:4px;margin-left:4px}
+.avatar{border-radius:999px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;flex-shrink:0}
+.logo{background:linear-gradient(135deg,#5B8DEF,#A78BFA,#2DD4BF);display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 12px 30px rgba(91,141,239,.35);border-radius:22px}
+.searchbar{display:flex;align-items:center;gap:8px;height:44px;border-radius:16px;background:var(--card);border:1px solid var(--border);padding:0 12px}
+.searchbar input{flex:1;background:none;border:none;outline:none;font-size:14px}
+.iconbtn{display:flex;align-items:center;justify-content:center;height:36px;width:36px;border-radius:999px;background:var(--secondary);color:var(--muted-fg);transition:transform .12s}
+.iconbtn:active{transform:scale(.94)}
+.iconbtn.blue{background:var(--primary);color:#fff}
+.badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px}
+.pri-high{background:rgba(239,68,68,.12);color:#dc2626}
+.pri-medium{background:rgba(251,191,36,.18);color:#b45309}
+.pri-low{background:rgba(45,212,191,.18);color:#0f766e}
+.bar{height:10px;border-radius:999px;background:var(--muted);overflow:hidden}
+.bar>div{height:100%;border-radius:999px;transition:width .2s linear}
+.seg{display:flex;background:var(--secondary);border-radius:14px;padding:4px;gap:4px}
+.seg button{flex:1;height:34px;border-radius:11px;font-size:12px;font-weight:600;color:var(--muted-fg);display:flex;align-items:center;justify-content:center;gap:5px}
+.seg button.on{background:var(--card);color:var(--fg);box-shadow:0 2px 8px rgba(15,23,42,.08)}
+
+.theme-toggle{height:42px;width:42px;background:var(--card);border:1px solid var(--border);color:var(--muted-fg);box-shadow:0 4px 14px rgba(15,23,42,.08)}
+.theme-toggle:active{transform:scale(.92)}
+.welcome-theme{position:absolute;top:18px;right:20px;z-index:40}
+
+.nav{flex-shrink:0;border-top:1px solid var(--border);background:var(--card);display:flex;padding:6px 2px calc(6px + env(safe-area-inset-bottom))}
+.nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted-fg);font-size:9px;font-weight:500;padding:2px 0}
+.nav a .nic{display:flex;align-items:center;justify-content:center;height:32px;width:32px;border-radius:14px;transition:.18s}
+.nav a.on{color:var(--fg)}
+.nav a.on .nic{background:var(--primary);color:#fff;box-shadow:0 6px 16px rgba(91,141,239,.35)}
+
+.topbar{position:sticky;top:0;z-index:25;display:flex;align-items:center;gap:8px;padding:10px 16px;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid transparent;transition:border-color .2s}
+.topbar.scrolled{border-bottom-color:var(--border)}
+.streakbadge{display:flex;align-items:center;gap:4px;height:30px;padding:0 10px;border-radius:999px;background:linear-gradient(90deg,rgba(255,122,122,.15),rgba(251,191,36,.15));color:#E06C2B;font-size:11px;font-weight:700}
+html.dark .streakbadge{color:#FBBF24}
+.hdr{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;padding:0 16px;height:56px;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(12px)}
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--card);flex-shrink:0}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 0;font-size:11px;font-weight:500;color:var(--muted-fg);position:relative}
+.tab.on{color:var(--primary)}
+.tab .underline{position:absolute;bottom:0;height:2px;width:32px;border-radius:999px}
+
+.welcome{position:relative;padding:40px 28px;display:flex;flex-direction:column;overflow:hidden}
+.blob{position:absolute;border-radius:999px;filter:blur(48px)}
+.b1{width:220px;height:220px;background:rgba(167,139,250,.4);top:-64px;right:-64px}
+.b2{width:220px;height:220px;background:rgba(45,212,191,.35);top:160px;left:-80px}
+.b3{width:190px;height:190px;background:rgba(91,141,239,.28);bottom:-20px;right:-20px}
+.wcontent{position:relative;z-index:1;flex:1;display:flex;flex-direction:column}
+.wtop{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.wtitle{font-size:38px;font-weight:800;letter-spacing:-.02em;background:linear-gradient(90deg,#5B8DEF,#A78BFA,#2DD4BF);-webkit-background-clip:text;background-clip:text;color:transparent;margin-top:22px}
+.wtag{font-size:11px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--muted-fg);margin-top:4px}
+.wdesc{font-size:15px;color:var(--muted-fg);margin-top:18px;max-width:300px}
+.wgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;width:100%;max-width:320px;margin-top:34px}
+.wfeat{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 0;border-radius:16px;background:color-mix(in srgb,var(--card) 80%,transparent);border:1px solid var(--border)}
+.wfeat span:first-child{font-size:22px}
+.wactions{display:flex;flex-direction:column;gap:12px;padding-top:24px}
+
+.hero{padding:20px 20px 8px;background:linear-gradient(180deg,rgba(91,141,239,.1),transparent)}
+.stat{display:flex;flex-direction:column;align-items:flex-start;padding:12px;border-radius:16px;background:var(--card);border:1px solid var(--border);text-align:left}
+.stat .si{display:flex;align-items:center;justify-content:center;height:32px;width:32px;border-radius:12px;margin-bottom:4px}
+.qbtn{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 0;border-radius:16px;background:var(--card);border:1px solid var(--border)}
+.qbtn .qi{display:flex;align-items:center;justify-content:center;height:44px;width:44px;border-radius:16px}
+.roomcard{min-width:200px;border-radius:22px;padding:16px;text-align:left;border:1px solid var(--border)}
+.actrow{display:flex;align-items:center;gap:12px;padding:8px 0}
+.actdot{display:flex;align-items:center;justify-content:center;height:32px;width:32px;border-radius:999px}
+.actdot i{display:block;height:10px;width:10px;border-radius:999px}
+.seeall{font-size:12px;color:var(--primary);font-weight:500;display:inline-flex;align-items:center;gap:2px}
+
+.ring-wrap{position:relative;width:290px;height:290px;max-width:78vw;max-height:78vw}
+.ring-wrap svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-time{font-size:52px;font-weight:700;font-variant-numeric:tabular-nums;font-family:Poppins,Inter,sans-serif}
+.playbtn{border-radius:999px;color:#fff;display:flex;align-items:center;justify-content:center;transition:transform .12s}
+.playbtn:active{transform:scale(.94)}
+.modebtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 0;border-radius:16px;border:1px solid var(--border);background:var(--card);color:var(--muted-fg);font-size:11px;font-weight:500}
+.modebtn.on{color:#fff;border-color:transparent}
+
+.subjcard{border-radius:22px;padding:16px;border:1px solid var(--border);background:var(--card);text-align:left;position:relative;overflow:hidden}
+.subjcard .accent{position:absolute;left:0;top:0;bottom:0;width:5px}
+
+.rowitem{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:var(--card);border:1px solid var(--border);width:100%;text-align:left}
+.checkbox{display:flex;align-items:center;justify-content:center;height:24px;width:24px;border-radius:999px;border:2px solid var(--border);flex-shrink:0;transition:.15s}
+.checkbox.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:56px 32px}
+.empty .em{font-size:46px;margin-bottom:12px}
+
+.kanban{display:flex;gap:12px;overflow-x:auto;padding:0 20px 8px;scrollbar-width:none;align-items:flex-start}
+.kcol{min-width:250px;max-width:250px;background:var(--secondary);border-radius:20px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.kcol-head{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 6px}
+.kdot{height:8px;width:8px;border-radius:999px}
+.kcard{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px;text-align:left;width:100%}
+.kcard:active{transform:scale(.98)}
+
+.split{flex:1;display:flex;min-height:0}
+.split-rail{width:150px;flex-shrink:0;border-right:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;min-height:0}
+.split-rail .rail-scroll{flex:1;overflow-y:auto;scrollbar-width:none}
+.rail-item{display:block;width:100%;text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);position:relative}
+.rail-item.on{background:color-mix(in srgb,var(--primary) 10%,transparent)}
+.rail-item .stripe{position:absolute;left:0;top:0;bottom:0;width:3px}
+.split-main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--secondary);color:var(--muted-fg)}
+.autosave{font-size:10px;font-weight:600;display:inline-flex;align-items:center;gap:4px}
+.autosave.saving{color:var(--amber)}
+.autosave.saved{color:var(--mint)}
+
+.room-tools{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;border-top:1px solid var(--border);background:var(--card)}
+.room-tools .chip{padding:7px 10px;font-size:11px}
+.msg-link{display:inline-block;color:#2563eb;text-decoration:underline;overflow-wrap:anywhere}
+.poll-card{padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--secondary)}
+
+.heat{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,1fr);gap:3px;overflow-x:auto;padding-bottom:4px}
+.heat i{width:11px;height:11px;border-radius:3px;background:var(--muted);display:block}
+.hl1{background:#DBEAFE!important}.hl2{background:#93C5FD!important}.hl3{background:#5B8DEF!important}.hl4{background:#3B6FD4!important}
+html.dark .hl1{background:#1E3A5F!important}html.dark .hl2{background:#2C5282!important}html.dark .hl3{background:#5B8DEF!important}html.dark .hl4{background:#93C5FD!important}
+.badgegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.badgecell{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border-radius:16px;background:var(--secondary);text-align:center}
+.badgecell.locked{opacity:.4;filter:grayscale(1)}
+.badgecell span:first-child{font-size:26px}
+
+.pgroup{margin-top:24px;padding:0 20px}
+.pgroup-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:0 4px;color:var(--muted-fg);font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.pgroup-body{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:12px 16px}
+.toggle{position:relative;height:28px;width:48px;border-radius:999px;background:var(--secondary);transition:.2s;flex-shrink:0}
+.toggle.on{background:var(--primary)}
+.toggle.purple.on{background:var(--purple)}
+.toggle span{position:absolute;top:4px;left:4px;height:20px;width:20px;border-radius:999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.2s}
+.toggle.on span{left:24px}
+.prow{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+.arow{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 0;text-align:left}
+
+.overlay{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center}
+.ov-bg{position:absolute;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(3px)}
+.ov-sheet{position:relative;width:100%;max-width:430px;background:var(--card);border-radius:26px 26px 0 0;padding:24px 24px 32px;box-shadow:0 -10px 40px rgba(15,23,42,.3);max-height:88vh;overflow-y:auto;animation:up .28s cubic-bezier(.3,.9,.3,1)}
+@keyframes up{from{transform:translateY(60px);opacity:.6}to{transform:translateY(0);opacity:1}}
+.ov-handle{height:5px;width:40px;border-radius:999px;background:var(--border);margin:0 auto 16px}
+.warn-ic{height:56px;width:56px;border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;background:rgba(239,68,68,.1);color:var(--destructive)}
+.warn-ic.blue{background:rgba(91,141,239,.12);color:var(--primary)}
+.swatch{height:36px;width:36px;border-radius:999px}
+.swatch.on{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--fg)}
+.emoji-pick{height:40px;width:40px;border-radius:14px;background:var(--secondary);display:flex;align-items:center;justify-content:center;font-size:18px}
+.emoji-pick.on{background:rgba(91,141,239,.15);box-shadow:0 0 0 2px var(--primary)}
+
+.search-overlay{position:fixed;inset:0;z-index:150;display:flex;justify-content:center;align-items:flex-start}
+.search-bg{position:absolute;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(4px)}
+.search-panel{position:relative;width:100%;max-width:430px;background:var(--card);border-radius:0 0 26px 26px;padding:16px 16px 20px;box-shadow:0 20px 50px rgba(15,23,42,.4);animation:down .24s cubic-bezier(.3,.9,.3,1);max-height:80vh;display:flex;flex-direction:column}
+@keyframes down{from{transform:translateY(-30px);opacity:.5}to{transform:translateY(0);opacity:1}}
+.sres{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;width:100%;text-align:left}
+.sres:active{background:var(--secondary)}
+.sgroup{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-fg);padding:12px 12px 4px}
+
+.toasts{position:fixed;top:16px;left:0;right:0;z-index:300;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none}
+.toast{background:#0F172A;color:#fff;font-size:13px;font-weight:500;padding:10px 18px;border-radius:14px;box-shadow:0 10px 30px rgba(15,23,42,.35);transition:opacity .3s,transform .3s;max-width:88vw;text-align:center}
+.toast.out{opacity:0;transform:translateY(-8px)}
+
+.lockin{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);z-index:40}
+.lockin-strict{background:#05070D;color:#E8EEF7}
+
+.msgs{display:flex;flex-direction:column;gap:12px;padding:16px;width:100%}
+.msg{display:flex;align-items:flex-end;gap:8px;max-width:85%}
+.msg.me{align-self:flex-end;flex-direction:row-reverse}
+.msg.them{align-self:flex-start}
+.msg-content{display:flex;flex-direction:column;min-width:0;flex:1}
+.msg.me .msg-content{align-items:flex-end}
+.msg.them .msg-content{align-items:flex-start}
+.msg-author{font-size:11px;color:var(--muted-fg);margin-bottom:2px;margin-left:4px}
+.bubble{padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.4;word-break:break-word;white-space:pre-wrap;max-width:100%}
+.msg.them .bubble{background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px;color:var(--fg)}
+.msg.me .bubble{background:var(--primary);color:#fff;border-bottom-right-radius:4px}
+.msg-time{font-size:10px;color:var(--muted-fg);margin-top:4px;margin-left:4px;margin-right:4px}
+.composer{flex-shrink:0;display:flex;align-items:center;gap:8px;padding:12px;border-top:1px solid var(--border);background:var(--card);width:100%}
+.composer input{flex:1;height:44px;border-radius:999px;background:var(--secondary);border:none;outline:none;padding:0 16px;font-size:14px;min-width:0}
+
+/* ============================================================
+   PERSISTENT MEDIA HOST + MINI PLAYER
+   The host lives OUTSIDE #app so audio/iframe keep playing.
+   ============================================================ */
+#nbMediaHost{
+  position:fixed;
+  z-index:35;
+  top:-9999px;
+  left:-9999px;
+  width:1px;
+  height:1px;
+  overflow:hidden;
+  pointer-events:none;
+  border-radius:16px;
+  background:var(--secondary);
+  box-shadow:0 10px 30px rgba(15,23,42,.18);
+}
+#nbMediaHost.visible{
+  pointer-events:auto;
+}
+#nbMediaHost iframe{
+  width:100%;
+  height:100%;
+  border:0;
+  display:block;
+}
+#nbMediaHost audio{
+  position:absolute;
+  width:1px;
+  height:1px;
+  opacity:0;
+  pointer-events:none;
+}
+
+.nb-mini{
+  position:absolute;
+  left:12px;
+  right:12px;
+  bottom:76px;
+  z-index:55;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:18px;
+  box-shadow:0 12px 32px rgba(15,23,42,.22);
+  animation:up .28s cubic-bezier(.3,.9,.3,1);
+}
+.nb-mini .cover{
+  height:40px;width:40px;border-radius:12px;
+  background:linear-gradient(135deg,#5B8DEF,#A78BFA);
+  color:#fff;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;overflow:hidden;position:relative;
+}
+.nb-mini .cover .eq{display:flex;align-items:flex-end;gap:2px;height:16px}
+.nb-mini .cover .eq i{width:3px;background:#fff;border-radius:2px;animation:eq .9s ease-in-out infinite}
+.nb-mini .cover .eq i:nth-child(2){animation-delay:.15s}
+.nb-mini .cover .eq i:nth-child(3){animation-delay:.3s}
+@keyframes eq{0%,100%{height:4px}50%{height:16px}}
+.nb-mini .info{flex:1;min-width:0}
+.nb-mini .title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nb-mini .sub{font-size:10px;color:var(--muted-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nb-mini .btn{
+  height:36px;width:36px;border-radius:999px;
+  background:var(--secondary);color:var(--fg);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.nb-mini .btn.play{background:linear-gradient(135deg,#5B8DEF,#A78BFA);color:#fff}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./supabase-config.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ============================================================
+   NEXBYTE — Offline music library + persistent background playback
+   ============================================================ */
+
+var ICONS={
+  home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
+  users:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5.5a3 3 0 0 1 0 5.6"/><path d="M17.5 20a6 6 0 0 0-2-4.5"/>',
+  notebook:'<rect x="4" y="3" width="14" height="18" rx="2"/><path d="M8 3v18"/><path d="M12 8h3M12 12h3"/>',
+  listChecks:'<path d="M4 7l1.6 1.6L8.5 5"/><path d="M4 13l1.6 1.6L8.5 11"/><path d="M4 19l1.6 1.6L8.5 17"/><path d="M11 7h9M11 13h9M11 19h9"/>',
+  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  x:'<path d="M6 6l12 12M18 6 6 18"/>',
+  chevR:'<path d="m9 6 6 6-6 6"/>',
+  chevL:'<path d="m15 6-6 6 6 6"/>',
+  bell:'<path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21a2 2 0 0 0 4 0"/>',
+  send:'<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/>',
+  message:'<path d="M21 15a3 3 0 0 1-3 3H8l-5 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3Z"/>',
+  timer:'<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/>',
+  trending:'<path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/>',
+  flame:'<path d="M12 22c4 0 7-3 7-7 0-5-7-9-7-13 0 0-1 3-3 5s-4 4-4 8c0 4 3 7 7 7Z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  check:'<path d="m4 12 5 5L20 6"/>',
+  checkCircle:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+  trash:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 15h10l1-15"/>',
+  save:'<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+  logOut:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  logIn:'<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
+  moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/>',
+  help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.1.9-1.1 1.7"/><path d="M12 17h.01"/>',
+  grad:'<path d="M12 4 2 9l10 5 10-5-10-5Z"/><path d="M6 11.5V17c0 1.5 2.7 3 6 3s6-1.5 6-3v-5.5"/>',
+  play:'<path d="M6 4l14 8-14 8V4Z"/>',
+  pause:'<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+  reset:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>',
+  brain:'<path d="M9.5 4A3 3 0 0 0 6.5 7a3 3 0 0 0-1.2 5.7V16a3 3 0 0 0 3 3h1.2V4Z"/><path d="M14.5 4a3 3 0 0 1 3 3 3 3 0 0 1 1.2 5.7V16a3 3 0 0 1-3 3h-1.2V4Z"/>',
+  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  flag:'<path d="M5 21V4"/><path d="M5 4h12l-2 4 2 4H5"/>',
+  smile:'<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>',
+  mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  lock:'<rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  arrowR:'<path d="M4 12h16"/><path d="m14 6 6 6-6 6"/>',
+  idcard:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16a3 3 0 0 1 6 0M14 10h4M14 14h4"/>',
+  userPlus:'<circle cx="10" cy="8" r="3.5"/><path d="M4 20a6 6 0 0 1 12 0"/><path d="M18 8v6M15 11h6"/>',
+  download:'<path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/>',
+  alert:'<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>',
+  music:'<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  award:'<circle cx="12" cy="9" r="6"/><path d="m8.5 14-1.5 7 5-3 5 3-1.5-7"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+  layers:'<path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/>',
+  file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>',
+  headphones:'<path d="M3 16v-4a9 9 0 0 1 18 0v4"/><path d="M21 16a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2Z"/><path d="M3 16a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2Z"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  rows:'<rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="12" width="18" height="5" rx="1.5"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
+  zap:'<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/>',
+  skipBack:'<path d="M19 20 9 12l10-8v16Z"/><path d="M5 19V5"/>',
+  skipFwd:'<path d="M5 4l10 8-10 8V4Z"/><path d="M19 5v14"/>',
+  upload:'<path d="M12 21V9"/><path d="m7 13 5-5 5 5"/><path d="M4 4h16"/>'
+};
+function ic(n,s){s=s||20;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+(ICONS[n]||'')+'</svg>';}
+function icf(n,s){s=s||20;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="currentColor" stroke="none">'+(ICONS[n]||'')+'</svg>';}
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function logo(size){return '<div class="logo" style="width:'+size+'px;height:'+size+'px;border-radius:'+Math.round(size*.26)+'px">'+ic('grad',size*.55)+'</div>';}
+function avatar(initials,color,size){return '<div class="avatar" style="width:'+size+'px;height:'+size+'px;background:'+color+';font-size:'+Math.round(size*.38)+'px">'+esc(initials)+'</div>';}
+function themeToggleBtn(extraClass){
+  var dark=S.theme==='dark';
+  return '<button class="iconbtn theme-toggle'+(extraClass?' '+extraClass:'')+'" onclick="toggleTheme()" title="Theme" aria-label="Toggle color theme">'+ic(dark?'sun':'moon',19)+'</button>';
+}
+function uid(){return Math.random().toString(36).slice(2,9);}
+function clone(o){return JSON.parse(JSON.stringify(o));}
+function fmtShort(s){s=Math.floor(s||0);var m=Math.floor(s/60),x=s%60;return m+':'+(x<10?'0':'')+x;}
+function fmtSize(b){b=b||0;if(b<1024)return b+' B';if(b<1048576)return (b/1024).toFixed(1)+' KB';return (b/1048576).toFixed(1)+' MB';}
+
+var TRACKS=[
+  {id:'tr1',playlist:'Lo-Fi',title:'Rainy Window',artist:'Kudasaibeats',dur:184,mood:'chill'}
+];
+var ACHIEVEMENTS=[
+  {id:'ac1',emoji:'🔥',name:'7-Day Streak',unlocked:true},
+  {id:'ac2',emoji:'⏱️',name:'10 Hours Focused',unlocked:true},
+  {id:'ac3',emoji:'🎯',name:'Goal Crusher',unlocked:true},
+  {id:'ac4',emoji:'☀️',name:'Early Bird',unlocked:true},
+  {id:'ac5',emoji:'📝',name:'Note Taker · 10',unlocked:false},
+  {id:'ac6',emoji:'👥',name:'Social Learner',unlocked:false},
+  {id:'ac7',emoji:'🌙',name:'Night Owl',unlocked:false},
+  {id:'ac8',emoji:'🏆',name:'30-Day Streak',unlocked:false},
+  {id:'ac9',emoji:'🧠',name:'Subject Master',unlocked:false}
+];
+
+/* ---------- Supabase (UNCHANGED) ---------- */
+var KEY='nexbyte_v3';
+var SUPABASE_URL=window.NEXBYTE_SUPABASE_URL||'';
+var SUPABASE_ANON_KEY=window.NEXBYTE_SUPABASE_ANON_KEY||'';
+var dbClient=(window.supabase&&SUPABASE_URL&&SUPABASE_ANON_KEY)?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
+
+function defaultState(){return{
+  auth:{isAuthenticated:false,user:null},theme:'light',
+  notifications:{roomUpdates:true,taskReminders:true,chatMessages:true,weeklyProgress:false},
+  settings:{defaultLength:25,strictDefault:false,chime:true,autoSave:true,theme:'light'},
+  subjects:[],tasks:[],notes:[],rooms:[],activities:[],sessions:[],weekly:[],
+  achievements:ACHIEVEMENTS.map(function(a){return Object.assign({},a,{unlocked:false});}),
+  focus:{streak:0,bestStreak:0},
+  /* Metadata of offline music files (blob stays in IndexedDB) */
+  offlineMusic:[],
+  /* Which player is active and what it's playing */
+  music:{
+    active:'none',        /* 'none' | 'local' | 'spotify' | 'youtube' */
+    localId:null,
+    spotifyUrl:'',
+    spotifyEmbed:'',
+    youtubeUrl:'',
+    youtubeEmbed:'',
+    playing:false
+  }
+};}
+var S=defaultState(),saveTimer=null;
+
+function profileFromUser(user){var md=user.user_metadata||{},name=md.full_name||user.email||'Student';var ini=name.split(/\s+/).map(function(p){return p[0]||'';}).join('').slice(0,2).toUpperCase()||'U';return {id:user.id,name:name,email:user.email||'',school:md.school||'',grade:md.grade||'',track:md.track||'',initials:ini,color:'#5B8DEF',avatar:ini,bio:md.bio||''};}
+
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify({theme:S.theme,settings:S.settings,notifications:S.notifications}));}catch(e){}
+  if(!dbClient||!S.auth.user||!S.auth.user.id)return;
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(async function(){
+    try{
+      var payload=clone(S);
+      payload.auth={isAuthenticated:true,user:S.auth.user};
+      var {error}=await dbClient.from('user_workspaces').upsert({user_id:S.auth.user.id,state:payload,updated_at:new Date().toISOString()},{onConflict:'user_id'});
+      if(error)console.error('Workspace sync failed',error.message);
+    }catch(e){console.error('Workspace sync failed',e);}
+  },350);
+}
+
+async function loadWorkspace(user){
+  S=defaultState();
+  S.auth={isAuthenticated:true,user:profileFromUser(user)};
+  try{
+    var {data,error}=await dbClient.from('user_workspaces').select('state').eq('user_id',user.id).maybeSingle();
+    if(error)throw error;
+    if(data&&data.state){
+      var d=defaultState(),p=data.state;
+      S=Object.assign(d,p);
+      S.auth={isAuthenticated:true,user:profileFromUser(user)};
+      S.notifications=Object.assign(d.notifications,p.notifications||{});
+      S.settings=Object.assign(d.settings,p.settings||{});
+      S.focus=Object.assign(d.focus,p.focus||{});
+      S.music=Object.assign(d.music,p.music||{});
+      S.offlineMusic=Array.isArray(p.offlineMusic)?p.offlineMusic:[];
+    }
+  }catch(e){console.error(e);toast('Could not load saved workspace. Check database setup.');}
+  applyTheme();
+  restoreIframes();
+  render();
+}
+
+async function bootstrapAuth(){
+  if(!dbClient){render();return;}
+  var {data}=await dbClient.auth.getSession();
+  if(data.session){await loadWorkspace(data.session.user);}
+  else{S=defaultState();render();}
+  dbClient.auth.onAuthStateChange(function(event,session){
+    if(event==='SIGNED_OUT'){S=defaultState();render();}
+    else if(session&&event==='SIGNED_IN'){setTimeout(function(){loadWorkspace(session.user);},0);}
+  });
+}
+
+/* ============================================================
+   IndexedDB for offline music blobs (device-local, NOT synced)
+   ============================================================ */
+var MUSIC_DB=null;
+function openMusicDB(){
+  return new Promise(function(resolve,reject){
+    if(MUSIC_DB) return resolve(MUSIC_DB);
+    if(!('indexedDB' in window)) return reject(new Error('IndexedDB not available'));
+    var req=indexedDB.open('nexbyte_music',1);
+    req.onupgradeneeded=function(e){
+      var db=e.target.result;
+      if(!db.objectStoreNames.contains('files')){
+        db.createObjectStore('files',{keyPath:'id'});
+      }
+    };
+    req.onsuccess=function(e){MUSIC_DB=e.target.result;resolve(MUSIC_DB);};
+    req.onerror=function(){reject(req.error);};
+  });
+}
+function dbAdd(record){
+  return openMusicDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction('files','readwrite');
+      var req=tx.objectStore('files').add(record);
+      req.onsuccess=function(){resolve(record);};
+      req.onerror=function(){reject(req.error);};
+    });
+  });
+}
+function dbGet(id){
+  return openMusicDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction('files','readonly');
+      var req=tx.objectStore('files').get(id);
+      req.onsuccess=function(){resolve(req.result||null);};
+      req.onerror=function(){reject(req.error);};
+    });
+  });
+}
+function dbDelete(id){
+  return openMusicDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction('files','readwrite');
+      var req=tx.objectStore('files').delete(id);
+      req.onsuccess=function(){resolve();};
+      req.onerror=function(){reject(req.error);};
+    });
+  });
+}
+
+/* ============================================================
+   Persistent media host (created once, lives outside #app)
+   ============================================================ */
+var CURRENT_BLOB_URL=null;
+function ensureMediaHost(){
+  if(document.getElementById('nbMediaHost')) return;
+  var host=document.createElement('div');
+  host.id='nbMediaHost';
+  host.innerHTML=
+    '<audio id="nbAudio" preload="metadata"></audio>'+
+    '<iframe id="nbSpotify" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>'+
+    '<iframe id="nbYoutube" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe>';
+  document.body.appendChild(host);
+  var a=host.querySelector('#nbAudio');
+  a.addEventListener('play',function(){S.music.playing=true;updateMusicUI();});
+  a.addEventListener('pause',function(){S.music.playing=false;updateMusicUI();});
+  a.addEventListener('ended',function(){onLocalEnded();});
+  a.addEventListener('timeupdate',updateProgressBars);
+  a.addEventListener('loadedmetadata',updateProgressBars);
+  window.addEventListener('resize',syncMediaHostPosition);
+}
+function restoreIframes(){
+  var sp=document.getElementById('nbSpotify');
+  var yt=document.getElementById('nbYoutube');
+  if(sp&&S.music.spotifyEmbed&&sp.getAttribute('src')!==S.music.spotifyEmbed) sp.src=S.music.spotifyEmbed;
+  if(yt&&S.music.youtubeEmbed&&yt.getAttribute('src')!==S.music.youtubeEmbed) yt.src=S.music.youtubeEmbed;
+}
+function syncMediaHostPosition(){
+  var host=document.getElementById('nbMediaHost');
+  if(!host) return;
+  host.classList.remove('visible');
+  /* Local audio has no visible frame; only iframe types need a position. */
+  if(S.music.active!=='spotify'&&S.music.active!=='youtube'){
+    host.style.top='-9999px';host.style.left='-9999px';
+    host.style.width='1px';host.style.height='1px';
+    return;
+  }
+  var R=resolve();
+  var holder=document.getElementById('mediaHolder');
+  if(R.view!=='music'||!holder){
+    /* Keep playing offscreen while user navigates */
+    host.style.top='-9999px';host.style.left='-9999px';
+    host.style.width='1px';host.style.height='1px';
+    return;
+  }
+  var r=holder.getBoundingClientRect();
+  if(r.width<10||r.height<10) return;
+  host.classList.add('visible');
+  host.style.top=r.top+'px';
+  host.style.left=r.left+'px';
+  host.style.width=r.width+'px';
+  host.style.height=r.height+'px';
+}
+
+/* ============================================================
+   MUSIC CONTROLLER
+   ============================================================ */
+function getAudio(){return document.getElementById('nbAudio');}
+
+async function playLocalMusic(id){
+  try{
+    var rec=await dbGet(id);
+    if(!rec){toast('File not found on this device. Re-add it.');return;}
+    var audio=getAudio();
+    if(!audio){toast('Audio engine not ready.');return;}
+    var newUrl=URL.createObjectURL(rec.blob);
+    audio.pause();
+    audio.src=newUrl;
+    audio.load();
+    await audio.play();
+    if(CURRENT_BLOB_URL)URL.revokeObjectURL(CURRENT_BLOB_URL);
+    CURRENT_BLOB_URL=newUrl;
+    S.music.active='local';
+    S.music.localId=id;
+    S.music.playing=true;
+    save();render();
+  }catch(e){
+    toast('Could not play file: '+(e&&e.message?e.message:'unknown error'));
+  }
+}
+function musicTogglePlay(){
+  if(S.music.active==='local'){
+    var a=getAudio();
+    if(!a) return;
+    if(a.paused){
+      if(!a.src && S.music.localId){playLocalMusic(S.music.localId);return;}
+      a.play().catch(function(){});
+    } else {
+      a.pause();
+    }
+  } else if(S.music.active==='spotify'||S.music.active==='youtube'){
+    toast('Use the play/pause controls inside the '+(S.music.active==='spotify'?'Spotify':'YouTube')+' player.');
+  }
+}
+function musicPrev(){
+  if(S.music.active!=='local') return;
+  var list=S.offlineMusic;
+  var i=list.findIndex(function(x){return x.id===S.music.localId;});
+  if(i<0) return;
+  var n=list[(i-1+list.length)%list.length];
+  if(n) playLocalMusic(n.id);
+}
+function musicNext(){
+  if(S.music.active!=='local') return;
+  var list=S.offlineMusic;
+  var i=list.findIndex(function(x){return x.id===S.music.localId;});
+  if(i<0) return;
+  var n=list[(i+1)%list.length];
+  if(n) playLocalMusic(n.id);
+}
+function onLocalEnded(){
+  if(S.music.active==='local'&&S.offlineMusic.length>1) musicNext();
+  else {S.music.playing=false;updateMusicUI();}
+}
+function stopMusic(){
+  var a=getAudio();
+  if(a){a.pause();a.removeAttribute('src');a.load();}
+  if(CURRENT_BLOB_URL){URL.revokeObjectURL(CURRENT_BLOB_URL);CURRENT_BLOB_URL=null;}
+  var sp=document.getElementById('nbSpotify');
+  if(sp) sp.removeAttribute('src');
+  var yt=document.getElementById('nbYoutube');
+  if(yt) yt.removeAttribute('src');
+  S.music.active='none';
+  S.music.localId=null;
+  S.music.playing=false;
+  save();render();
+}
+
+function playSpotify(){
+  if(!S.music.spotifyEmbed){toast('Save a Spotify link first.');return;}
+  var f=document.getElementById('nbSpotify');
+  if(f&&f.getAttribute('src')!==S.music.spotifyEmbed) f.src=S.music.spotifyEmbed;
+  var yt=document.getElementById('nbYoutube');
+  if(yt) yt.removeAttribute('src');
+  var a=getAudio();
+  if(a){a.pause();a.removeAttribute('src');a.load();}
+  S.music.active='spotify';
+  save();render();
+}
+function playYoutube(){
+  if(!S.music.youtubeEmbed){toast('Save a YouTube link first.');return;}
+  var f=document.getElementById('nbYoutube');
+  if(f&&f.getAttribute('src')!==S.music.youtubeEmbed) f.src=S.music.youtubeEmbed;
+  var sp=document.getElementById('nbSpotify');
+  if(sp) sp.removeAttribute('src');
+  var a=getAudio();
+  if(a){a.pause();a.removeAttribute('src');a.load();}
+  S.music.active='youtube';
+  save();render();
+}
+
+/* ---------- URL parsing ---------- */
+function parseMediaUrl(raw){
+  try{
+    var u=new URL(raw);
+    var host=u.hostname.replace(/^www\./,'').toLowerCase();
+    if(host==='open.spotify.com'){
+      var parts=u.pathname.split('/').filter(Boolean);
+      if(parts[0]==='embed') return {type:'spotify',embed:u.href};
+      if(['track','album','playlist','episode','show'].indexOf(parts[0])>=0&&parts[1]){
+        return {type:'spotify',embed:'https://open.spotify.com/embed/'+parts[0]+'/'+encodeURIComponent(parts[1])+'?utm_source=generator&theme=0'};
+      }
+    }
+    if(host==='youtu.be'){
+      var id=u.pathname.replace(/^\//,'');
+      if(id) return {type:'youtube',embed:'https://www.youtube.com/embed/'+id};
+    }
+    if(host==='youtube.com'||host==='music.youtube.com'||host==='m.youtube.com'){
+      if(u.pathname==='/watch'){
+        var vid=u.searchParams.get('v');
+        if(vid) return {type:'youtube',embed:'https://www.youtube.com/embed/'+vid};
+      }
+      if(u.pathname==='/playlist'){
+        var list=u.searchParams.get('list');
+        if(list) return {type:'youtube',embed:'https://www.youtube.com/embed/videoseries?list='+list};
+      }
+      if(u.pathname.indexOf('/shorts/')===0){
+        var sid=u.pathname.split('/')[2];
+        if(sid) return {type:'youtube',embed:'https://www.youtube.com/embed/'+sid};
+      }
+    }
+  }catch(e){}
+  return null;
+}
+
+function saveSpotifyLink(){
+  var input=document.getElementById('spotifyUrl');
+  var raw=(input&&input.value||'').trim();
+  var parsed=parseMediaUrl(raw);
+  if(!parsed||parsed.type!=='spotify'){toast('Paste a valid Spotify track, album, or playlist link.');return;}
+  S.music.spotifyUrl=raw;
+  S.music.spotifyEmbed=parsed.embed;
+  save();render();toast('Spotify link saved');
+}
+function saveYoutubeLink(){
+  var input=document.getElementById('youtubeUrl');
+  var raw=(input&&input.value||'').trim();
+  var parsed=parseMediaUrl(raw);
+  if(!parsed||parsed.type!=='youtube'){toast('Paste a valid YouTube or YouTube Music link.');return;}
+  S.music.youtubeUrl=raw;
+  S.music.youtubeEmbed=parsed.embed;
+  save();render();toast('YouTube link saved');
+}
+
+/* ---------- Offline file management ---------- */
+async function addOfflineFiles(input){
+  var files=input.files;
+  if(!files||!files.length) return;
+  var added=0;
+  for(var i=0;i<files.length;i++){
+    var f=files[i];
+    if(!f.type||f.type.indexOf('audio/')!==0){toast('Skipping non-audio file: '+f.name);continue;}
+    try{
+      var id='m_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+      await dbAdd({id:id,name:f.name,mime:f.type,size:f.size,addedAt:Date.now(),blob:f});
+      S.offlineMusic.push({id:id,name:f.name,mime:f.type,size:f.size,addedAt:Date.now()});
+      added++;
+    }catch(e){console.error(e);}
+  }
+  if(added){save();toast('Added '+added+' track'+(added===1?'':'s'));render();}
+  input.value='';
+}
+async function deleteOfflineFile(id){
+  var meta=S.offlineMusic.filter(function(x){return x.id===id;})[0];
+  if(!meta) return;
+  confirmSheet({title:'Remove track?',message:'"'+meta.name+'" will be deleted from this device.',onConfirm:async function(){
+    if(S.music.active==='local'&&S.music.localId===id) stopMusic();
+    try{await dbDelete(id);}catch(e){}
+    S.offlineMusic=S.offlineMusic.filter(function(x){return x.id!==id;});
+    save();toast('Track removed');render();
+  }});
+}
+
+/* ---------- UI update helpers ---------- */
+function updateProgressBars(){
+  var a=getAudio();
+  if(!a) return;
+  var pct=(a.duration&&isFinite(a.duration))?(a.currentTime/a.duration*100):0;
+  var bar=document.getElementById('musicProgressBar');
+  if(bar) bar.style.width=Math.min(100,pct)+'%';
+  var mini=document.getElementById('miniProgress');
+  if(mini) mini.style.width=Math.min(100,pct)+'%';
+  var cur=document.getElementById('musicCurrentTime');
+  if(cur) cur.textContent=fmtShort(a.currentTime);
+  var dur=document.getElementById('musicDuration');
+  if(dur) dur.textContent=fmtShort(a.duration||0);
+}
+function currentTrackName(){
+  if(S.music.active==='local'){
+    var m=S.offlineMusic.filter(function(x){return x.id===S.music.localId;})[0];
+    return m?m.name:'Offline track';
+  }
+  if(S.music.active==='spotify') return 'Spotify player';
+  if(S.music.active==='youtube') return 'YouTube player';
+  return '';
+}
+function currentTrackSub(){
+  if(S.music.active==='local') return 'Offline · this device';
+  if(S.music.active==='spotify') return 'Spotify';
+  if(S.music.active==='youtube') return 'YouTube / YouTube Music';
+  return '';
+}
+function updateMusicUI(){
+  /* mini-player play icon */
+  var mp=document.getElementById('miniPlayBtn');
+  if(mp) mp.innerHTML=S.music.playing?icf('pause',16):icf('play',16);
+  /* music-view big button */
+  var big=document.getElementById('musicBigPlay');
+  if(big) big.innerHTML=S.music.playing?icf('pause',26):icf('play',26);
+  /* mini cover EQ animation */
+  var cover=document.getElementById('miniCover');
+  if(cover){
+    cover.innerHTML=S.music.playing?'<span class="eq"><i></i><i></i><i></i></span>':ic('music',18);
+  }
+  /* dashboard widget */
+  var db=document.getElementById('dashMusicTitle');
+  if(db) db.textContent=currentTrackName()||'Nothing playing';
+  var dbSub=document.getElementById('dashMusicSub');
+  if(dbSub) dbSub.textContent=currentTrackSub()||'Open Music to start';
+  var dbBtn=document.getElementById('dashMusicBtn');
+  if(dbBtn) dbBtn.innerHTML=S.music.playing?icf('pause',16):icf('play',16);
+}
+
+/* ---------- UI state ---------- */
+var UI={
+  loginErr:{},regErr:{},showPw:false,
+  roomQuery:'',roomFilter:'live',
+  noteQuery:'',noteFilter:'all',noteSubject:'All',activeNoteId:null,noteSaveState:'saved',
+  taskView:'kanban',taskFilter:'all',
+  roomTab:'chat',
+  subjectTab:'syllabus',
+  profileTab:'overview',
+  musicTab:'offline',
+  searchQuery:''
+};
+
+/* ---------- focus engine ---------- */
+var LOCK={subjectId:null,phase:'setup',duration:25*60,left:25*60,running:false,strict:false,chime:true,mode:'solo',roomId:null,interval:null,startedAt:null};
+function persistLock(){try{sessionStorage.setItem('nb_lock',JSON.stringify({subjectId:LOCK.subjectId,phase:LOCK.phase,duration:LOCK.duration,left:LOCK.left,running:LOCK.running,strict:LOCK.strict,chime:LOCK.chime,mode:LOCK.mode,roomId:LOCK.roomId,startedAt:LOCK.startedAt}));}catch(e){}}
+function restoreLock(){try{var r=sessionStorage.getItem('nb_lock');if(r){var p=JSON.parse(r);Object.assign(LOCK,p);LOCK.interval=null;}}catch(e){}}
+
+/* ---------- routing ---------- */
+function go(path){if(location.hash==='#'+path){render();}else{location.hash='#'+path;}}
+function resolve(){
+  var parts=(location.hash||'#/welcome').slice(1).split('/').filter(Boolean);
+  var a=parts[0]||'welcome',b=parts[1]||null;
+  if(a==='study'&&b)return{view:'subject',id:b};
+  if(a==='lockin'&&b)return{view:'lockin',id:b};
+  if(a==='room'&&b)return{view:'room',id:b};
+  return{view:a,id:null};
+}
+var AUTH_VIEWS=['welcome','login','register'];
+var FULLSCREEN=['welcome','login','register','lockin','room'];
+
+function render(){
+  var R=resolve();
+  if(!S.auth.isAuthenticated&&AUTH_VIEWS.indexOf(R.view)<0){location.hash='#/welcome';return;}
+  var body;
+  var mini='';
+  if(FULLSCREEN.indexOf(R.view)>=0){body=viewFor(R);}
+  else{
+    body='<div class="main" id="mainScroll">'+topBar(R.view)+viewFor(R)+'</div>'+bottomNav(R.view);
+    if(S.music.active!=='none'&&R.view!=='music') mini=miniPlayerHtml();
+  }
+  document.getElementById('app').innerHTML='<div class="wrap"><div class="phone">'+body+mini+'</div></div>';
+  afterRender(R);
+  updateMusicUI();
+}
+function miniPlayerHtml(){
+  return '<div class="nb-mini" id="nbMini">'+
+    '<div class="cover" id="miniCover">'+(S.music.playing?'<span class="eq"><i></i><i></i><i></i></span>':ic('music',18))+'</div>'+
+    '<div class="info">'+
+      '<p class="title">'+esc(currentTrackName()||'Nothing playing')+'</p>'+
+      '<p class="sub">'+esc(currentTrackSub())+'</p>'+
+      '<div class="bar" style="height:3px;margin-top:4px"><div id="miniProgress" style="width:0%;background:linear-gradient(90deg,#5B8DEF,#A78BFA)"></div></div>'+
+    '</div>'+
+    (S.music.active==='local'?'<button class="btn play" id="miniPlayBtn" onclick="musicTogglePlay()">'+(S.music.playing?icf('pause',16):icf('play',16))+'</button>':'')+
+    '<button class="btn" onclick="stopMusic()" title="Stop">'+ic('x',16)+'</button>'+
+  '</div>';
+}
+function bottomNav(active){
+  var items=[['/dashboard','home','Home'],['/study','grad','Study'],['/rooms','users','Rooms'],['/music','music','Music'],['/notes','notebook','Notes'],['/tasks','listChecks','Tasks'],['/profile','user','Profile']];
+  return '<nav class="nav">'+items.map(function(it){
+    var on=(active===it[1]);
+    return '<a href="#'+it[0]+'" class="'+(on?'on':'')+'"><span class="nic">'+ic(it[1],18)+'</span><span>'+it[2]+'</span></a>';
+  }).join('')+'</nav>';
+}
+function topBar(active){
+  var u=S.auth.user||{};
+  return '<header class="topbar" id="topbar">'+
+    '<button onclick="go(\'/profile\')" style="display:flex;align-items:center;gap:8px">'+avatar(u.initials||'U',u.color||'#5B8DEF',34)+'</button>'+
+    '<span class="streakbadge">🔥 '+S.focus.streak+'d</span>'+
+    '<div class="grow"></div>'+
+    '<button class="iconbtn" onclick="openSearch()" title="Search (Ctrl+K)">'+ic('search',18)+'</button>'+
+    '<button class="iconbtn" onclick="openNotifications()" style="position:relative">'+ic('bell',18)+'<span style="position:absolute;top:7px;right:7px;height:7px;width:7px;border-radius:999px;background:#FF7A7A"></span></button>'+
+    '<button class="iconbtn" onclick="toggleTheme()" title="Theme">'+ic(S.theme==='dark'?'sun':'moon',18)+'</button>'+
+  '</header>';
+}
+function viewFor(R){
+  switch(R.view){
+    case 'welcome':return vWelcome();
+    case 'login':return vLogin();
+    case 'register':return vRegister();
+    case 'dashboard':return vDashboard();
+    case 'study':return vStudy();
+    case 'subject':return vSubject(R.id);
+    case 'lockin':return vLockIn(R.id);
+    case 'rooms':return vRooms();
+    case 'room':return vRoom(R.id);
+    case 'music':return vMusic();
+    case 'notes':return vNotes();
+    case 'tasks':return vTasks();
+    case 'profile':return vProfile();
+  }
+  return '<div class="pad pt"><p class="muted">Not found.</p></div>';
+}
+function afterRender(R){
+  var m=document.getElementById('mainScroll');
+  if(m){
+    m.onscroll=function(){
+      var tb=document.getElementById('topbar');
+      if(tb)tb.classList.toggle('scrolled',m.scrollTop>4);
+      syncMediaHostPosition();
+    };
+  }
+  if(R.view==='lockin')mountLock();
+  if(R.view==='room'){var sc=document.getElementById('scrollArea');if(sc)sc.scrollTop=sc.scrollHeight;}
+  requestAnimationFrame(function(){
+    syncMediaHostPosition();
+    updateProgressBars();
+  });
+}
+window.addEventListener('hashchange',function(){render();});
+window.addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openSearch();}
+  if(e.key==='Escape')closeTop();
+});
+
+/* ---------- overlays ---------- */
+function sheet(html){
+  var el=document.createElement('div');
+  el.className='overlay';
+  el.innerHTML='<div class="ov-bg"></div><div class="ov-sheet">'+html+'</div>';
+  el.querySelector('.ov-bg').onclick=closeTop;
+  document.body.appendChild(el);
+  return el;
+}
+function closeTop(){var o=document.querySelectorAll('.overlay,.search-overlay');if(o.length)o[o.length-1].remove();}
+function confirmSheet(o){
+  var el=sheet('<div class="ov-handle"></div><div class="center"><div class="warn-ic'+(o.danger===false?' blue':'')+'">'+ic('alert',26)+'</div>'+
+    '<h3 class="txl semi">'+esc(o.title)+'</h3>'+(o.message?'<p class="txm muted mt1">'+esc(o.message)+'</p>':'')+'</div>'+
+    '<div class="f g3 mt5"><button class="btn btn-secondary grow" data-cancel>Cancel</button>'+
+    '<button class="btn '+(o.danger===false?'btn-primary':'btn-danger')+' grow" data-ok>'+esc(o.confirmLabel||'Delete')+'</button></div>');
+  el.querySelector('[data-cancel]').onclick=closeTop;
+  el.querySelector('[data-ok]').onclick=function(){closeTop();o.onConfirm&&o.onConfirm();};
+}
+function toast(msg){
+  var box=document.getElementById('toasts');
+  if(!box){box=document.createElement('div');box.id='toasts';box.className='toasts';document.body.appendChild(box);}
+  var t=document.createElement('div');t.className='toast';t.textContent=msg;box.appendChild(t);
+  setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove();},320);},1900);
+}
+
+/* ---------- search ---------- */
+function openSearch(){
+  UI.searchQuery='';
+  var el=document.createElement('div');
+  el.className='search-overlay';
+  el.innerHTML='<div class="search-bg"></div><div class="search-panel">'+
+    '<div class="searchbar">'+ic('search',18)+'<input id="gsInput" placeholder="Search subjects, notes, tasks, rooms…" autocomplete="off"/>'+
+    '<span class="txs muted" style="border:1px solid var(--border);border-radius:6px;padding:2px 6px">ESC</span></div>'+
+    '<div id="gsResults" style="overflow-y:auto;margin-top:12px"></div></div>';
+  el.querySelector('.search-bg').onclick=closeTop;
+  document.body.appendChild(el);
+  var inp=el.querySelector('#gsInput');
+  inp.focus();
+  inp.oninput=function(){UI.searchQuery=inp.value;document.getElementById('gsResults').innerHTML=searchResults();};
+  document.getElementById('gsResults').innerHTML=searchResults();
+}
+function searchResults(){
+  var q=UI.searchQuery.trim().toLowerCase();
+  if(!q)return '<p class="txs muted center" style="padding:24px 0">Type to search.</p>';
+  var out='';
+  var subs=S.subjects.filter(function(s){return (s.code+' '+s.name+' '+s.professor).toLowerCase().indexOf(q)>=0;});
+  if(subs.length)out+='<div class="sgroup">Subjects</div>'+subs.map(function(s){
+    return '<button class="sres" onclick="closeTop();go(\'/study/'+s.id+'\')"><span class="iconbtn" style="background:'+s.color+'18;color:'+s.color+'">'+ic('grad',17)+'</span>'+
+    '<div class="grow minw"><p class="txm med">'+esc(s.code)+' · '+esc(s.name)+'</p><p class="txs muted">'+esc(s.professor)+'</p></div></button>';}).join('');
+  var notes=S.notes.filter(function(n){return (n.title+' '+n.content+' '+n.tags.join(' ')).toLowerCase().indexOf(q)>=0;});
+  if(notes.length)out+='<div class="sgroup">Notes</div>'+notes.map(function(n){
+    return '<button class="sres" onclick="closeTop();openNote(\''+n.id+'\')"><span class="iconbtn" style="background:'+n.color+'18;color:'+n.color+'">'+ic('notebook',17)+'</span>'+
+    '<div class="grow minw"><p class="txm med trunc">'+esc(n.title)+'</p><p class="txs muted trunc">'+esc(n.tags.join(' · '))+'</p></div></button>';}).join('');
+  var tasks=S.tasks.filter(function(t){return (t.title+' '+t.description+' '+t.type).toLowerCase().indexOf(q)>=0;});
+  if(tasks.length)out+='<div class="sgroup">Tasks</div>'+tasks.map(function(t){
+    return '<button class="sres" onclick="closeTop();go(\'/tasks\')"><span class="iconbtn" style="background:var(--secondary)">'+ic('listChecks',17)+'</span>'+
+    '<div class="grow minw"><p class="txm med trunc">'+esc(t.title)+'</p><p class="txs muted">'+esc(t.type)+' · due '+esc(t.dueDate)+'</p></div></button>';}).join('');
+  var music=S.offlineMusic.filter(function(m){return m.name.toLowerCase().indexOf(q)>=0;});
+  if(music.length)out+='<div class="sgroup">Offline music</div>'+music.map(function(m){
+    return '<button class="sres" onclick="closeTop();playLocalMusic(\''+m.id+'\')"><span class="iconbtn" style="background:#A78BFA18;color:#A78BFA">'+ic('music',17)+'</span>'+
+    '<div class="grow minw"><p class="txm med trunc">'+esc(m.name)+'</p><p class="txs muted">'+fmtSize(m.size)+'</p></div></button>';}).join('');
+  var rooms=S.rooms.filter(function(r){return (r.name+' '+r.subjectTag).toLowerCase().indexOf(q)>=0;});
+  if(rooms.length)out+='<div class="sgroup">Rooms</div>'+rooms.map(function(r){
+    return '<button class="sres" onclick="closeTop();go(\'/room/'+r.id+'\')"><span class="iconbtn" style="background:'+r.color+'18;color:'+r.color+'">'+ic('users',17)+'</span>'+
+    '<div class="grow minw"><p class="txm med trunc">'+esc(r.name)+'</p><p class="txs muted">'+esc(r.subjectTag)+'</p></div></button>';}).join('');
+  if(!out)return '<p class="txs muted center" style="padding:24px 0">No matches for "'+esc(UI.searchQuery)+'".</p>';
+  return out;
+}
+
+function openNotifications(){
+  var el=sheet('<div class="f jb aic mb4"><h3 class="txl semi">Notifications</h3><button class="iconbtn" data-close>'+ic('x',18)+'</button></div><div class="empty"><div class="em">🔔</div><h3 class="txl semi mb1">You are all caught up</h3><p class="txm muted">Notifications will appear here.</p></div>');
+  el.querySelector('[data-close]').onclick=closeTop;
+}
+
+/* ---------- auth (UNCHANGED) ---------- */
+async function doGoogleLogin(){
+  if(!dbClient){toast('Setup required: configure Supabase first.');return;}
+  if(window.location.protocol==='file:'){toast('Google sign-in needs HTTPS or localhost.');return;}
+  try{
+    var result=await dbClient.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin+window.location.pathname,queryParams:{prompt:'select_account'}}});
+    if(result.error)toast('Google sign-in failed: '+result.error.message);
+  }catch(err){toast('Google sign-in failed: '+(err&&err.message?err.message:'Please try again.'));}
+}
+async function doLogin(){
+  var email=document.getElementById('lgEmail').value.trim(),pw=document.getElementById('lgPw').value,e={};
+  if(!email)e.email='Email is required';else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))e.email='Enter a valid email';
+  if(!pw)e.password='Password is required';
+  UI.loginErr=e;if(Object.keys(e).length){render();return;}
+  if(!dbClient){toast('Setup required: configure Supabase first.');return;}
+  var r=await dbClient.auth.signInWithPassword({email:email,password:pw});
+  if(r.error){UI.loginErr={password:r.error.message};render();return;}
+  await loadWorkspace(r.data.user);toast('Signed in successfully');go('/dashboard');
+}
+async function doRegister(){
+  var name=document.getElementById('rgName').value.trim(),email=document.getElementById('rgEmail').value.trim(),pw=document.getElementById('rgPw').value,cf=document.getElementById('rgCf').value,e={};
+  if(!name)e.name='Full name is required';
+  if(!email)e.email='Email is required';else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))e.email='Enter a valid email';
+  if(!pw||pw.length<8)e.password='Use at least 8 characters';
+  if(cf!==pw)e.confirm='Passwords do not match';
+  UI.regErr=e;if(Object.keys(e).length){render();return;}
+  if(!dbClient){toast('Setup required: configure Supabase first.');return;}
+  var r=await dbClient.auth.signUp({email:email,password:pw,options:{data:{full_name:name}}});
+  if(r.error){UI.regErr={email:r.error.message};render();return;}
+  if(r.data.session&&r.data.user){await loadWorkspace(r.data.user);toast('Account created');go('/dashboard');}
+  else{toast('Check your email to confirm your account, then log in.');go('/login');}
+}
+async function doLogout(){
+  confirmSheet({title:'Sign out?',message:'Your saved workspace remains in your account.',confirmLabel:'Sign out',danger:false,onConfirm:async function(){
+    stopMusic();
+    if(dbClient)await dbClient.auth.signOut();
+    S=defaultState();render();go('/welcome');
+  }});
+}
+
+function vWelcome(){
+  var features=[['📚','Study'],['🎯','Lock-In'],['👥','Rooms'],['🎧','Music'],['📝','Notes'],['✅','Tasks']];
+  return '<div class="main welcome">'+themeToggleBtn('welcome-theme')+
+    '<div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>'+
+    '<div class="wcontent"><div class="wtop">'+logo(88)+
+      '<h1 class="wtitle">NEXBYTE</h1>'+
+      '<p class="wtag">Academic Collaboration Environment</p>'+
+      '<p class="wdesc">Subject-bound focus sessions, study rooms, shared notes, and task tracking — everything you need to learn together, in one place.</p>'+
+      '<div class="wgrid">'+features.map(function(f){return '<div class="wfeat"><span>'+f[0]+'</span><span class="txs muted med">'+f[1]+'</span></div>';}).join('')+'</div>'+
+    '</div><div class="wactions">'+
+      '<button class="btn btn-primary btn-lg" onclick="go(\'/register\')">Get Started '+ic('arrowR',20)+'</button>'+
+      '<button class="btn btn-secondary btn-lg" onclick="go(\'/login\')">'+ic('logIn',18)+' Log In</button>'+
+      '<p class="center txs muted mt1">Secure account required. Your workspace is private to your account.</p>'+(dbClient?'':'<p class="center txs mt2" style="color:#dc2626">Setup required: configure Supabase URL and anon key before use.</p>')+
+    '</div></div></div>';
+}
+function authField(id,label,icon,type,err,extra){
+  return '<div><label class="field-label">'+label+'</label>'+
+    '<div class="field'+(err?' err':'')+'"><span class="lead">'+ic(icon,18)+'</span>'+
+    '<input id="'+id+'" type="'+type+'" '+(extra||'')+'/></div>'+
+    (err?'<p class="errmsg">'+esc(err)+'</p>':'')+'</div>';
+}
+function vLogin(){
+  var e=UI.loginErr;
+  return '<div class="main" style="padding:40px 28px">'+
+    '<div class="f jb aic"><button class="txm muted" onclick="go(\'/welcome\')">← Back</button>'+themeToggleBtn()+'</div>'+
+    '<div class="fc aic mt4">'+logo(64)+'<h1 class="tx2 bold mt4">Welcome back</h1><p class="txm muted">Log in with your email or Google account</p></div>'+
+    '<div class="fc g4 mt6">'+
+      authField('lgEmail','Email','mail','text',e.email,'placeholder="you@example.com"')+
+      authField('lgPw','Password','lock','password',e.password,'placeholder="••••••••"')+
+      '<div class="f jb aic txm"><label class="f g2 aic"><input type="checkbox" checked style="accent-color:#5B8DEF"/> <span class="muted">Remember me</span></label>'+
+      '<button class="med" style="color:#5B8DEF" onclick="resetPassword()">Forgot?</button></div>'+
+      '<button class="btn btn-primary btn-lg" onclick="doLogin()">Log In '+ic('arrowR',18)+'</button>'+
+      '<div class="auth-divider">or continue with</div>'+
+      '<button class="btn-google" onclick="doGoogleLogin()"><span class="google-g">G</span> Continue with Google</button>'+
+    '</div>'+
+    '<p class="center txm muted mt5">Don\'t have an account? <a href="#/register" class="semi" style="color:#5B8DEF">Create one</a></p>'+
+  '</div>';
+}
+function vRegister(){
+  var e=UI.regErr;
+  return '<div class="main" style="padding:40px 28px">'+
+    '<div class="f jb aic"><button class="txm muted" onclick="go(\'/welcome\')">← Back</button>'+themeToggleBtn()+'</div>'+
+    '<div class="fc aic mt4">'+logo(64)+'<h1 class="tx2 bold mt4">Create account</h1><p class="txm muted">Use any email or your Google account</p></div>'+
+    '<div class="fc g4 mt5">'+
+      authField('rgName','Full name','user','text',e.name,'placeholder="Maya Reyes"')+
+      authField('rgEmail','Email','mail','email',e.email,'placeholder="you@example.com"')+
+      authField('rgPw','Password','lock','password',e.password,'placeholder="••••••••"')+
+      authField('rgCf','Confirm password','lock','password',e.confirm,'placeholder="••••••••"')+
+      '<button class="btn btn-primary btn-lg" onclick="doRegister()">'+ic('userPlus',18)+' Create Account</button>'+
+      '<div class="auth-divider">or sign up with</div>'+
+      '<button class="btn-google" onclick="doGoogleLogin()"><span class="google-g">G</span> Continue with Google</button>'+
+    '</div>'+
+    '<p class="center txm muted mt5">Already have an account? <a href="#/login" class="semi" style="color:#5B8DEF">Log in</a></p>'+
+  '</div>';
+}
+
+/* ---------- helpers ---------- */
+function subjectById(id){return S.subjects.filter(function(s){return s.id===id;})[0];}
+function fmtTime(s){var m=Math.floor(s/60),x=s%60;return (m<10?'0':'')+m+':'+(x<10?'0':'')+x;}
+function fmtHours(sec){var h=Math.floor(sec/3600),m=Math.round((sec%3600)/60);return h+'h '+(m<10?'0':'')+m+'m';}
+function todayISO(){return new Date().toISOString().slice(0,10);}
+function dueLabel(d){
+  var today=todayISO();
+  var t=new Date(today+'T00:00:00'),x=new Date(d+'T00:00:00');
+  var diff=Math.round((x-t)/86400000);
+  if(diff<0)return{text:Math.abs(diff)+'d overdue',over:true};
+  if(diff===0)return{text:'Due today',over:false,today:true};
+  if(diff===1)return{text:'Due tomorrow',over:false};
+  if(diff<=7)return{text:'Due in '+diff+'d',over:false};
+  return{text:x.toLocaleDateString('en-US',{month:'short',day:'numeric'}),over:false};
+}
+function taskCounts(){
+  var today=todayISO();
+  return{
+    all:S.tasks.length,
+    todo:S.tasks.filter(function(t){return t.status==='todo';}).length,
+    progress:S.tasks.filter(function(t){return t.status==='progress';}).length,
+    done:S.tasks.filter(function(t){return t.status==='done';}).length,
+    dueToday:S.tasks.filter(function(t){return t.status!=='done'&&t.dueDate===today;}).length,
+    week:S.tasks.filter(function(t){var d=new Date(t.dueDate+'T00:00:00');var n=new Date();var diff=(d-n)/86400000;return t.status!=='done'&&diff>=0&&diff<=7;}).length,
+    overdue:S.tasks.filter(function(t){return t.status!=='done'&&t.dueDate<today;}).length
+  };
+}
+
+/* ---------- DASHBOARD ---------- */
+function vDashboard(){
+  var u=S.auth.user||{};
+  var joined=S.rooms.filter(function(r){return r.isJoined;});
+  var counts=taskCounts();
+  var todayMin=Math.round(S.sessions.filter(function(s){return s.time.indexOf('Today')===0;}).reduce(function(a,s){return a+s.seconds;},0)/60);
+  var goal=120,pct=Math.min(100,Math.round(todayMin/goal*100));
+  var hour=new Date().getHours();
+  var greet=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
+  var upcoming=S.tasks.filter(function(t){return t.status!=='done';}).sort(function(a,b){return a.dueDate<b.dueDate?-1:1;}).slice(0,4);
+  var h='';
+  h+='<div class="hero"><div class="f jb aic"><div class="f g3 aic">'+avatar(u.initials||'U',u.color||'#5B8DEF',44)+
+    '<div><p class="txs muted">'+greet+',</p><h1 class="txl bold">'+esc((u.name||'Student').split(' ')[0])+' 👋</h1></div></div>'+
+    '<button class="iconbtn" style="background:var(--card);border:1px solid var(--border)" onclick="openQuickLock()">'+ic('zap',17)+'</button></div></div>';
+
+  h+='<div class="pad mt3"><div class="grid3">'+
+    quickAction('calendar','#5B8DEF','Plan Day','openPlanDay()')+
+    quickAction('users','#A78BFA','Join Room','go(\'/rooms\')')+
+    quickAction('zap','#FF7A7A','Quick Lock-In','openQuickLock()')+
+  '</div></div>';
+
+  h+='<div class="pad mt4"><div class="card padc">'+
+    '<div class="f jb aic mb3"><div><p class="txs muted">Today\'s focus</p>'+
+    '<p class="txxl bold">'+todayMin+' <span class="txm muted" style="font-weight:400">/ '+goal+' min</span></p></div>'+
+    '<div class="f g1 aic" style="color:#2DD4BF">'+ic('clock',16)+'<span class="txs semi">'+pct+'%</span></div></div>'+
+    '<div class="bar"><div style="width:'+pct+'%;background:linear-gradient(90deg,#5B8DEF,#2DD4BF)"></div></div>'+
+    '<div class="f jb aic mt3"><span class="txs muted">'+joined.length+' active room'+(joined.length===1?'':'s')+'</span>'+
+    '<button class="seeall" onclick="go(\'/study\')">Start a lock-in '+ic('chevR',14)+'</button></div></div></div>';
+
+  h+='<div class="pad mt4"><div style="border-radius:22px;padding:18px;background:linear-gradient(90deg,#FF7A7A,#FBBF24);color:#fff;box-shadow:0 14px 30px rgba(251,191,36,.28)">'+
+    '<div class="f jb aic"><div><p class="txs" style="color:rgba(255,255,255,.88)">Study streak</p>'+
+    '<p class="tx2 bold mt1">'+S.focus.streak+' days 🔥</p>'+
+    '<p class="txs mt1" style="color:rgba(255,255,255,.88)">Best: '+S.focus.bestStreak+' days</p></div>'+
+    '<span style="color:rgba(255,255,255,.9)">'+ic('flame',48)+'</span></div>'+
+    '<div class="heat mt3">'+heatCells(84)+'</div></div></div>';
+
+  var totalSec=S.sessions.reduce(function(a,s){return a+s.seconds;},0);
+  var weekTotal=S.weekly.reduce(function(a,d){return a+d.minutes;},0);
+  h+='<div class="pad mt4 grid3">'+
+    statCard('clock','#5B8DEF',fmtHours(totalSec),'Total time','/profile')+
+    statCard('trending','#2DD4BF',weekTotal+'m','This week','/profile')+
+    statCard('checkCircle','#A78BFA',counts.done+'/'+counts.all,'Tasks done','/tasks')+'</div>';
+
+  h+='<div class="pad mt5"><div class="f jb aic mb3"><h2 class="txm semi">Active rooms</h2>'+
+    '<button class="seeall" onclick="go(\'/rooms\')">See all '+ic('chevR',14)+'</button></div>';
+  if(!joined.length){h+='<p class="txm muted">No rooms joined yet.</p>';}
+  else{
+    h+='<div class="hscroll" style="padding-bottom:4px">'+joined.map(function(r){
+      return '<button class="roomcard" style="background:'+r.color+'12" onclick="go(\'/room/'+r.id+'\')">'+
+        '<div class="f jb aic"><span style="font-size:24px">'+r.emoji+'</span>'+
+        '<span class="f g1 aic txs med" style="color:'+(r.status==='focus'?'#5B8DEF':'#2DD4BF')+'"><span style="height:6px;width:6px;border-radius:999px;background:'+(r.status==='focus'?'#5B8DEF':'#2DD4BF')+'"></span>'+(r.status==='focus'?'Focus':'Break')+'</span></div>'+
+        '<p class="txm semi mt2 trunc">'+esc(r.name)+'</p>'+
+        '<p class="txs muted mt1">'+fmtTime(r.timer)+' · Round '+r.round+'</p>'+
+        '<div class="f mt2">'+r.members.slice(0,4).map(function(m,i){
+          return '<span style="margin-left:'+(i?'-8px':'0')+';border:2px solid var(--card);border-radius:999px">'+avatar(m.initials,m.color,22)+'</span>';}).join('')+'</div>'+
+      '</button>';}).join('')+'</div>';
+  }
+  h+='</div>';
+
+  h+='<div class="pad mt5"><div class="f jb aic mb3"><h2 class="txm semi">Upcoming tasks</h2>'+
+    '<button class="seeall" onclick="go(\'/tasks\')">See all '+ic('chevR',14)+'</button></div>';
+  if(!upcoming.length){h+='<p class="txm muted">All caught up! 🎉</p>';}
+  else{
+    h+='<div class="fc g2">'+upcoming.map(function(t){
+      var sub=subjectById(t.subjectId),d=dueLabel(t.dueDate);
+      return '<div class="rowitem"><span class="badge pri-'+t.priority+'">'+t.priority.toUpperCase()+'</span>'+
+        '<div class="grow minw"><p class="txm med trunc">'+esc(t.title)+'</p>'+
+        '<p class="txs muted">'+esc(sub?sub.code:'')+' · <span style="color:'+(d.over?'#EF4444':'inherit')+'">'+d.text+'</span></p></div>'+
+        '<button class="checkbox" onclick="cycleTask(\''+t.id+'\')"></button></div>';}).join('')+'</div>';
+  }
+  h+='</div>';
+
+  h+='<div class="pad mt5"><h2 class="txm semi mb3">Your subjects</h2>'+
+    '<div class="hscroll" style="padding-bottom:4px">'+S.subjects.map(function(s){
+      return '<button class="roomcard" style="min-width:170px;background:'+s.color+'0F;border-color:'+s.color+'33" onclick="go(\'/study/'+s.id+'\')">'+
+      '<div class="f jb aic"><span class="txs bold" style="color:'+s.color+'">'+esc(s.code)+'</span><span class="txs muted">'+s.progress+'%</span></div>'+
+      '<p class="txm semi mt2 clamp2" style="min-height:36px">'+esc(s.name)+'</p>'+
+      '<div class="bar mt2" style="height:6px"><div style="width:'+s.progress+'%;background:'+s.color+'"></div></div></button>';}).join('')+'</div></div>';
+
+  /* Widgets */
+  h+='<div class="pad mt5 pb"><h2 class="txm semi mb3">Widgets</h2>'+
+    '<div class="fc g3">'+
+    '<div class="card padc f g3 aic">'+
+      '<span class="iconbtn" style="height:44px;width:44px;background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',20)+'</span>'+
+      '<div class="grow minw"><p class="txs muted" id="dashMusicSub">'+(currentTrackSub()||'Open Music to start')+'</p>'+
+      '<p class="txm semi trunc" id="dashMusicTitle">'+(currentTrackName()||'Nothing playing')+'</p></div>'+
+      '<button class="playbtn" id="dashMusicBtn" style="height:40px;width:40px;background:#A78BFA" onclick="'+(S.music.active==='local'?'musicTogglePlay()':'go(\'/music\')')+'">'+
+      (S.music.playing?icf('pause',16):icf('play',16))+'</button>'+
+    '</div>'+
+    '<div class="card padc">'+
+      '<div class="f jb aic mb2"><span class="txs muted f g2 aic">'+ic('target',15)+' Daily goal</span><span class="txs semi" style="color:#2DD4BF">'+pct+'%</span></div>'+
+      '<div class="bar" style="height:8px"><div style="width:'+pct+'%;background:linear-gradient(90deg,#5B8DEF,#2DD4BF)"></div></div>'+
+      '<p class="txs muted mt2">'+Math.max(0,goal-todayMin)+' minutes left to hit today\'s target.</p>'+
+    '</div></div>';
+
+  h+='<div class="mt5"><h2 class="txm semi mb3">Recent activity</h2><div class="fc">'+
+    S.activities.slice(0,5).map(function(a){
+      return '<div class="actrow"><span class="actdot" style="background:'+a.color+'18"><i style="background:'+a.color+'"></i></span>'+
+      '<p class="grow txm muted">'+esc(a.text)+'</p><span class="txs muted" style="white-space:nowrap">'+esc(a.time)+'</span></div>';}).join('')+
+    '</div></div></div>';
+  return h;
+}
+function quickAction(icon,color,label,fn){return '<button class="qbtn" onclick="'+fn+'"><span class="qi" style="background:'+color+'15;color:'+color+'">'+ic(icon,20)+'</span><span class="txs med">'+label+'</span></button>';}
+function statCard(icon,color,value,label,to){return '<button class="stat" onclick="go(\''+to+'\')"><span class="si" style="background:'+color+'15;color:'+color+'">'+ic(icon,16)+'</span><span class="txl bold">'+value+'</span><span class="txs muted mt1">'+label+'</span></button>';}
+function heatCells(n){
+  var out='',seed=7;
+  function rnd(){seed=(seed*9301+49297)%233280;return seed/233280;}
+  for(var i=0;i<n;i++){var v=rnd();var lv=v<0.4?0:v<0.62?1:v<0.8?2:v<0.93?3:4;out+='<i class="'+(lv?'hl'+lv:'')+'"></i>';}
+  return out;
+}
+function cycleTask(id){
+  var t=S.tasks.filter(function(x){return x.id===id;})[0];if(!t)return;
+  t.status=t.status==='todo'?'progress':t.status==='progress'?'done':'todo';
+  if(t.status==='done'){logActivity('Completed "'+t.title+'"','#2DD4BF');}
+  save();render();toast(t.status==='done'?'Task completed ✅':'Task moved to '+t.status);
+}
+function logActivity(text,color){S.activities.unshift({id:uid(),text:text,time:'Just now',color:color||'#5B8DEF'});S.activities=S.activities.slice(0,20);}
+function openPlanDay(){
+  var counts=taskCounts();
+  sheet('<div class="f jb aic mb4"><h3 class="txl semi">Plan your day</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div>'+
+    '<div class="grid3 mb4">'+
+    '<div class="stat"><span class="si" style="background:#5B8DEF15;color:#5B8DEF">'+ic('calendar',16)+'</span><span class="txl bold">'+counts.dueToday+'</span><span class="txs muted mt1">Due today</span></div>'+
+    '<div class="stat"><span class="si" style="background:#FBBF2418;color:#b45309">'+ic('clock',16)+'</span><span class="txl bold">'+counts.week+'</span><span class="txs muted mt1">This week</span></div>'+
+    '<div class="stat"><span class="si" style="background:#EF444412;color:#dc2626">'+ic('alert',16)+'</span><span class="txl bold">'+counts.overdue+'</span><span class="txs muted mt1">Overdue</span></div></div>'+
+    '<p class="txm muted">Start with a 25-minute Lock-In on your highest-priority subject, then clear overdue items.</p>'+
+    '<button class="btn btn-primary btn-block mt5" data-close>Got it</button>'
+  ).querySelector('[data-close]').onclick=closeTop;
+}
+function openQuickLock(){
+  var opts=S.subjects.map(function(s){
+    return '<button class="rowitem" onclick="closeTop();go(\'/lockin/'+s.id+'\')">'+
+    '<span class="iconbtn" style="background:'+s.color+'18;color:'+s.color+'">'+ic('grad',17)+'</span>'+
+    '<div class="grow"><p class="txm med">'+esc(s.code)+' · '+esc(s.name)+'</p><p class="txs muted">'+fmtHours(s.loggedSeconds)+' logged</p></div>'+
+    ic('chevR',18)+'</button>';}).join('');
+  var el=sheet('<div class="f jb aic mb2"><h3 class="txl semi">Quick Lock-In</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div>'+
+    '<p class="txm muted mb4">Every session is bound to a subject.</p>'+
+    '<div class="fc g2">'+opts+'</div>');
+  el.querySelector('[data-cancel]').onclick=closeTop;
+}
+
+/* ---------- STUDY ---------- */
+function vStudy(){
+  var totalSec=S.subjects.reduce(function(a,s){return a+s.loggedSeconds;},0);
+  var h='<div class="pad pt" style="padding-top:20px;padding-bottom:12px">'+
+    '<div class="f jb aic"><div><h1 class="tx2 bold">Study Hub</h1>'+
+    '<p class="txm muted">'+S.subjects.length+' subjects · '+fmtHours(totalSec)+' logged</p></div>'+
+    '<button class="btn btn-sm" style="background:#5B8DEF;color:#fff" onclick="openAddSubject()">'+ic('plus',18)+' Subject</button></div></div>';
+  h+='<div class="pad"><div class="searchbar">'+ic('search',18)+'<input id="subSearch" placeholder="Search subjects…" oninput="filterSubjects(this.value)"/></div></div>';
+  h+='<div class="pad mt4 pb" id="subjectList">'+subjectCards()+'</div>';
+  return h;
+}
+function subjectCards(){
+  if(!S.subjects.length)return '<div class="empty"><div class="em">📚</div><h3 class="txl semi mb1">No subjects yet</h3><p class="txm muted mb4">Add a subject to start tracking focus time.</p></div>';
+  return '<div class="fc g3">'+S.subjects.map(function(s){
+    var due=S.tasks.filter(function(t){return t.subjectId===s.id&&t.status!=='done'&&t.dueDate<=todayISO();}).length;
+    return '<div class="subjcard">'+
+      '<span class="accent" style="background:'+s.color+'"></span>'+
+      '<div class="f jb aic"><div class="f g2 aic"><span class="badge" style="background:'+s.color+'18;color:'+s.color+'">'+esc(s.code)+'</span>'+
+      (due?'<span class="badge pri-high">'+due+' DUE</span>':'')+'</div>'+
+      '<span class="txs muted">'+s.progress+'%</span></div>'+
+      '<h3 class="txl bold mt2">'+esc(s.name)+'</h3>'+
+      '<p class="txs muted">'+esc(s.professor)+'</p>'+
+      '<div class="bar mt3" style="height:8px"><div style="width:'+s.progress+'%;background:'+s.color+'"></div></div>'+
+      '<div class="f jb aic mt2"><span class="txs muted">'+fmtHours(s.loggedSeconds)+' logged</span>'+
+      '<span class="txs muted">'+s.topics.filter(function(t){return t.done;}).length+'/'+s.topics.length+' topics</span></div>'+
+      '<div class="f g2 mt3">'+
+        '<button class="btn btn-sm grow" style="background:var(--secondary);color:var(--fg)" onclick="go(\'/study/'+s.id+'\')">Open</button>'+
+        '<button class="btn btn-sm grow" style="background:'+s.color+';color:#fff" onclick="go(\'/lockin/'+s.id+'\')">'+ic('zap',15)+' Lock In</button>'+
+      '</div></div>';}).join('')+'</div>';
+}
+function filterSubjects(q){
+  q=q.toLowerCase();
+  var el=document.getElementById('subjectList');if(!el)return;
+  var all=S.subjects;
+  S.subjects=all.filter(function(s){return (s.code+' '+s.name+' '+s.professor).toLowerCase().indexOf(q)>=0;});
+  el.innerHTML=subjectCards();
+  S.subjects=all;
+}
+function openAddSubject(){
+  var colors=['#5B8DEF','#A78BFA','#2DD4BF','#FBBF24','#FF7A7A','#34D399'];
+  var el=sheet('<div class="f jb aic mb4"><h3 class="txl semi">Add subject</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div>'+
+    '<div class="fc g4">'+
+    '<div><label class="field-label">Course code</label><input id="asCode" class="input" placeholder="e.g. CS 301"/></div>'+
+    '<div><label class="field-label">Course name</label><input id="asName" class="input" placeholder="e.g. Operating Systems"/></div>'+
+    '<div><label class="field-label">Instructor</label><input id="asProf" class="input" placeholder="e.g. Prof. Santos"/></div>'+
+    '<div><label class="field-label">Color</label><div class="f g2 mt1" id="asColors">'+colors.map(function(c,i){
+      return '<button class="swatch'+(i===0?' on':'')+'" data-color="'+c+'" style="background:'+c+'"></button>';}).join('')+'</div></div>'+
+    '<button class="btn btn-primary btn-block" data-save>Add subject</button></div>');
+  var chosen=colors[0];
+  el.querySelector('[data-cancel]').onclick=closeTop;
+  el.querySelectorAll('[data-color]').forEach(function(b){b.onclick=function(){chosen=b.dataset.color;el.querySelectorAll('[data-color]').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+  el.querySelector('[data-save]').onclick=function(){
+    var code=el.querySelector('#asCode').value.trim();
+    var name=el.querySelector('#asName').value.trim();
+    if(!code||!name){toast('Code and name are required');return;}
+    S.subjects.unshift({id:uid(),code:code,name:name,professor:el.querySelector('#asProf').value.trim()||'—',color:chosen,progress:0,loggedSeconds:0,goal:40,topics:[],materials:[]});
+    save();closeTop();toast('Subject added');render();
+  };
+}
+
+/* ---------- SUBJECT ---------- */
+function vSubject(id){
+  var s=subjectById(id);
+  if(!s)return '<div class="pad pt center txm muted">Subject not found.<br><button class="mt3 med" style="color:#5B8DEF" onclick="go(\'/study\')">Back to Study Hub</button></div>';
+  var tabs=[['syllabus','Syllabus'],['materials','Materials'],['tasks','Tasks'],['notes','Notes'],['lockin','Lock-In']];
+  var h='<div class="hdr"><button class="iconbtn" onclick="go(\'/study\')">'+ic('chevL',20)+'</button>'+
+    '<div class="grow minw"><h1 class="txl semi trunc" style="color:'+s.color+'">'+esc(s.code)+'</h1>'+
+    '<p class="txs muted trunc">'+esc(s.name)+'</p></div>'+
+    '<button class="iconbtn blue" onclick="go(\'/lockin/'+s.id+'\')">'+ic('zap',16)+'</button></div>';
+  h+='<div class="tabs">'+tabs.map(function(t){
+    return '<button class="tab'+(UI.subjectTab===t[0]?' on':'')+'" onclick="setSubjectTab(\''+t[0]+'\')"><span>'+t[1]+'</span>'+
+    (UI.subjectTab===t[0]?'<span class="underline" style="background:'+s.color+'"></span>':'')+'</button>';}).join('')+'</div>';
+  h+='<div style="padding:20px 20px 28px">'+subjectTabBody(s)+'</div>';
+  return h;
+}
+function setSubjectTab(t){UI.subjectTab=t;render();}
+function subjectTabBody(s){
+  if(UI.subjectTab==='syllabus'){
+    if(!s.topics.length)return '<p class="txm muted center" style="padding:32px 0">No syllabus topics yet.</p>';
+    var done=s.topics.filter(function(t){return t.done;}).length;
+    return '<div class="card padc mb4"><div class="f jb aic mb2"><span class="txm semi">Course progress</span>'+
+      '<span class="txm bold" style="color:'+s.color+'">'+Math.round(done/s.topics.length*100)+'%</span></div>'+
+      '<div class="bar"><div style="width:'+Math.round(done/s.topics.length*100)+'%;background:'+s.color+'"></div></div></div>'+
+      '<div class="fc g2">'+s.topics.map(function(t,i){
+        return '<button class="rowitem" onclick="toggleTopic(\''+s.id+'\','+i+')">'+
+        '<span class="checkbox'+(t.done?' on':'')+'">'+(t.done?ic('check',14):'')+'</span>'+
+        '<span class="txm'+(t.done?' muted" style="text-decoration:line-through':'')+'">'+esc(t.t)+'</span></button>';}).join('')+'</div>'+
+      '<button class="btn btn-secondary btn-block mt4" onclick="addTopic(\''+s.id+'\')">'+ic('plus',18)+' Add topic</button>';
+  }
+  if(UI.subjectTab==='materials'){
+    if(!s.materials.length)return '<p class="txm muted center" style="padding:32px 0">No materials uploaded.</p>';
+    return '<div class="fc g2">'+s.materials.map(function(m){
+      return '<div class="rowitem"><span class="iconbtn" style="background:'+s.color+'18;color:'+s.color+'">'+ic('file',17)+'</span>'+
+      '<div class="grow minw"><p class="txm med trunc">'+esc(m.n)+'</p><p class="txs muted">'+esc(m.t)+' · '+esc(m.s)+'</p></div>'+
+      '<button class="iconbtn" onclick="toast(\'Opening '+esc(m.n)+'\')">'+ic('download',15)+'</button></div>';}).join('')+'</div>'+
+      '<button class="btn btn-secondary btn-block mt4" onclick="addMaterial(\''+s.id+'\')">'+ic('plus',18)+' Add material</button>';
+  }
+  if(UI.subjectTab==='tasks'){
+    var list=S.tasks.filter(function(t){return t.subjectId===s.id;});
+    if(!list.length)return '<div class="empty"><div class="em">✅</div><p class="txm muted">No tasks for this subject.</p>'+
+      '<button class="btn btn-sm mt4" style="background:'+s.color+';color:#fff" onclick="openTaskSheet(null,\''+s.id+'\')">'+ic('plus',16)+' Add task</button></div>';
+    return '<div class="fc g2">'+list.map(function(t){
+      var st={todo:['To Do','#94A3B8'],progress:['In Progress','#FBBF24'],done:['Done','#2DD4BF']}[t.status];
+      var d=dueLabel(t.dueDate);
+      return '<div class="card" style="padding:14px"><div class="f" style="align-items:flex-start;gap:12px">'+
+        '<button class="checkbox'+(t.status==='done'?' on':'')+'" style="margin-top:2px" onclick="cycleTask(\''+t.id+'\')">'+(t.status==='done'?ic('check',14):'')+'</button>'+
+        '<div class="grow minw"><p class="txm med'+(t.status==='done'?' muted" style="text-decoration:line-through':'')+'">'+esc(t.title)+'</p>'+
+        '<div class="f g2 wrapf mt1 aic"><span class="badge pri-'+t.priority+'">'+t.priority.toUpperCase()+'</span>'+
+        '<span class="txs muted">'+esc(t.type)+'</span><span class="txs muted">·</span>'+
+        '<span class="txs" style="color:'+(d.over?'#EF4444':'var(--muted-fg)')+'">'+d.text+'</span>'+
+        '<span class="badge" style="background:'+st[1]+'20;color:'+st[1]+'">'+st[0]+'</span></div></div>'+
+        '<button class="iconbtn" style="height:28px;width:28px" onclick="openTaskSheet(\''+t.id+'\')">'+ic('edit',13)+'</button></div></div>';}).join('')+'</div>'+
+      '<button class="btn btn-secondary btn-block mt4" onclick="openTaskSheet(null,\''+s.id+'\')">'+ic('plus',18)+' Add task</button>';
+  }
+  if(UI.subjectTab==='notes'){
+    var notes=S.notes.filter(function(n){return n.subjectId===s.id;});
+    if(!notes.length)return '<div class="empty"><div class="em">📝</div><p class="txm muted">No notes linked to this subject.</p>'+
+      '<button class="btn btn-sm mt4" style="background:'+s.color+';color:#fff" onclick="newNoteFor(\''+s.id+'\')">'+ic('plus',16)+' New note</button></div>';
+    return '<div class="grid2">'+notes.map(function(n){
+      return '<button class="card" style="padding:14px;text-align:left;background:'+n.color+'10" onclick="openNote(\''+n.id+'\')">'+
+      '<div style="height:5px;width:28px;border-radius:999px;background:'+n.color+'" class="mb2"></div>'+
+      '<p class="txm semi clamp2">'+esc(n.title)+'</p>'+
+      '<p class="txs muted mt1 clamp3">'+esc(n.content.replace(/[#*>]/g,'').slice(0,80))+'</p>'+
+      '<p class="txs muted mt2" style="font-size:10px">'+esc(n.updatedAt)+'</p></button>';}).join('')+'</div>'+
+      '<button class="btn btn-secondary btn-block mt4" onclick="newNoteFor(\''+s.id+'\')">'+ic('plus',18)+' New note</button>';
+  }
+  return '<div class="card padc">'+
+    '<div class="f g3 aic mb3"><span class="iconbtn" style="height:44px;width:44px;background:'+s.color+'18;color:'+s.color+'">'+ic('zap',20)+'</span>'+
+    '<div><p class="txm semi">Lock-In Workspace</p><p class="txs muted">Every session writes to '+esc(s.code)+'</p></div></div>'+
+    '<div class="hr mb3"></div>'+
+    '<div class="f jb aic mb2"><span class="txs muted">Logged time</span><span class="txm semi">'+fmtHours(s.loggedSeconds)+'</span></div>'+
+    '<div class="f jb aic mb2"><span class="txs muted">Sessions</span><span class="txm semi">'+S.sessions.filter(function(x){return x.subjectId===s.id;}).length+'</span></div>'+
+    '<div class="f jb aic mb3"><span class="txs muted">Default length</span><span class="txm semi">'+S.settings.defaultLength+' min</span></div>'+
+    '<button class="btn btn-primary btn-block" onclick="go(\'/lockin/'+s.id+'\')">'+ic('zap',18)+' Enter Lock-In Workspace</button></div>'+
+    '<h3 class="txm semi mt5 mb2">Recent sessions</h3>'+
+    (S.sessions.filter(function(x){return x.subjectId===s.id;}).slice(0,5).map(function(x){
+      return '<div class="rowitem mb2"><span class="iconbtn" style="background:'+s.color+'18;color:'+s.color+'">'+ic('timer',16)+'</span>'+
+      '<div class="grow"><p class="txm med">'+Math.round(x.seconds/60)+' min · '+(x.mode==='room'?'Room Focus':'Solo Lock-In')+'</p>'+
+      '<p class="txs muted">'+esc(x.time)+'</p></div></div>';}).join('')||'<p class="txm muted">No sessions yet.</p>');
+}
+function toggleTopic(sid,i){var s=subjectById(sid);s.topics[i].done=!s.topics[i].done;s.progress=Math.round(s.topics.filter(function(t){return t.done;}).length/s.topics.length*100);save();render();}
+function addTopic(sid){
+  var el=sheet('<div class="f jb aic mb4"><h3 class="txl semi">Add topic</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div>'+
+    '<div class="fc g4"><div><label class="field-label">Topic name</label><input id="tpName" class="input" placeholder="e.g. Binary Search Trees"/></div>'+
+    '<button class="btn btn-primary btn-block" data-save>Add topic</button></div>');
+  el.querySelector('[data-cancel]').onclick=closeTop;
+  el.querySelector('[data-save]').onclick=function(){
+    var v=el.querySelector('#tpName').value.trim();if(!v){toast('Enter a topic name');return;}
+    var s=subjectById(sid);s.topics.push({t:v,done:false});
+    s.progress=Math.round(s.topics.filter(function(t){return t.done;}).length/s.topics.length*100);
+    save();closeTop();render();
+  };
+}
+function addMaterial(sid){
+  var el=sheet('<div class="f jb aic mb4"><h3 class="txl semi">Add material</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div>'+
+    '<div class="fc g4"><div><label class="field-label">File name</label><input id="mtName" class="input" placeholder="e.g. Chapter 8 Slides"/></div>'+
+    '<div><label class="field-label">Type</label><select id="mtType" class="input"><option>PDF</option><option>Doc</option><option>Video</option><option>Worksheet</option><option>Link</option><option>Reference</option></select></div>'+
+    '<button class="btn btn-primary btn-block" data-save>Add material</button></div>');
+  el.querySelector('[data-cancel]').onclick=closeTop;
+  el.querySelector('[data-save]').onclick=function(){
+    var v=el.querySelector('#mtName').value.trim();if(!v){toast('Enter a file name');return;}
+    subjectById(sid).materials.push({n:v,t:el.querySelector('#mtType').value,s:'—'});
+    save();closeTop();toast('Material added');render();
+  };
+}
+
+/* ---------- LOCK-IN ---------- */
+function vLockIn(subjectId){
+  if(!LOCK.subjectId||LOCK.subjectId!==subjectId){
+    LOCK.subjectId=subjectId;LOCK.duration=S.settings.defaultLength*60;LOCK.left=LOCK.duration;
+    LOCK.strict=S.settings.strictDefault;LOCK.chime=S.settings.chime;LOCK.phase='setup';LOCK.running=false;LOCK.mode='solo';
+  }
+  var s=subjectById(subjectId);
+  if(!s)return '<div class="lockin pad pt center txm muted">Subject not found.<br><button class="mt3 med" style="color:#5B8DEF" onclick="go(\'/study\')">Back</button></div>';
+  if(LOCK.phase==='setup')return lockSetup(s);
+  if(LOCK.phase==='running')return lockRunner(s);
+  return lockDone(s);
+}
+function lockSetup(s){
+  var durs=[15,25,45,60];
+  return '<div class="lockin">'+
+    '<div class="hdr"><button class="iconbtn" onclick="go(\'/study/'+s.id+'\')">'+ic('chevL',20)+'</button>'+
+    '<div class="grow minw"><h1 class="txl semi">Lock-In Workspace</h1><p class="txs muted">'+esc(s.code)+' · '+esc(s.name)+'</p></div></div>'+
+    '<div class="main" style="padding:20px;display:flex;flex-direction:column;gap:20px">'+
+    '<div class="card padc center" style="padding:24px;border-color:'+s.color+'44;background:'+s.color+'0A">'+
+      '<span class="iconbtn" style="height:52px;width:52px;margin:0 auto 12px;background:'+s.color+'20;color:'+s.color+'">'+ic('zap',24)+'</span>'+
+      '<h2 class="txl bold">Focus on '+esc(s.code)+'</h2>'+
+      '<p class="txs muted mt1">Every completed minute is logged to the subject automatically.</p></div>'+
+    '<div><p class="txs semi muted mb2">DURATION</p><div class="grid2">'+
+      durs.map(function(d){
+        var on=LOCK.duration===d*60;
+        return '<button class="btn" style="height:52px;'+(on?'background:'+s.color+';color:#fff;border:none':'background:var(--card);border:1px solid var(--border);color:var(--muted-fg)')+'" onclick="setLockDuration('+d+')">'+d+' min</button>';}).join('')+'</div></div>'+
+    '<div><p class="txs semi muted mb2">MODE</p><div class="f g2">'+
+      '<button class="modebtn'+(LOCK.mode==='solo'?' on':'')+'" style="'+(LOCK.mode==='solo'?'background:'+s.color:'')+'" onclick="setLockMode(\'solo\')">'+ic('brain',18)+'<span>Solo Lock-In</span></button>'+
+      '<button class="modebtn'+(LOCK.mode==='room'?' on':'')+'" style="'+(LOCK.mode==='room'?'background:'+s.color:'')+'" onclick="setLockMode(\'room\')">'+ic('users',18)+'<span>Room Focus</span></button>'+
+    '</div></div>'+
+    '<div class="card padc">'+
+      '<div class="prow"><div><p class="txm med">Strict Mode</p><p class="txs muted">Blocks navigation until the timer ends</p></div>'+
+      '<button class="toggle'+(LOCK.strict?' on':'')+'" onclick="LOCK.strict=!LOCK.strict;render()"><span></span></button></div>'+
+      '<div class="hr"></div>'+
+      '<div class="prow"><div><p class="txm med">Chime</p><p class="txs muted">Play a sound when the session ends</p></div>'+
+      '<button class="toggle'+(LOCK.chime?' on':'')+'" onclick="LOCK.chime=!LOCK.chime;render()"><span></span></button></div>'+
+    '</div>'+
+    '<div class="card padc f g3 aic">'+
+      '<span class="iconbtn" style="height:44px;width:44px;background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',20)+'</span>'+
+      '<div class="grow minw"><p class="txs muted">Music</p><p class="txm semi trunc">'+(currentTrackName()||'Nothing playing')+'</p></div>'+
+      (S.music.active==='local'
+        ?'<button class="playbtn" style="height:40px;width:40px;background:#A78BFA" onclick="musicTogglePlay()">'+(S.music.playing?icf('pause',16):icf('play',16))+'</button>'
+        :'<button class="playbtn" style="height:40px;width:40px;background:#A78BFA" onclick="go(\'/music\')">'+ic('chevR',16)+'</button>')+
+    '</div>'+
+    '<button class="btn btn-primary btn-lg btn-block" onclick="startLock()">'+ic('play',20)+' Start '+Math.round(LOCK.duration/60)+'-minute session</button>'+
+    '</div></div>';
+}
+function lockRunner(s){
+  var R=130,C=2*Math.PI*R;
+  var pct=(LOCK.duration-LOCK.left)/LOCK.duration;
+  var bg=LOCK.strict?'lockin lockin-strict':'lockin';
+  return '<div class="'+bg+'">'+
+    '<div class="hdr" style="border-color:rgba(255,255,255,.06)">'+
+      '<div class="grow minw"><h1 class="txl semi trunc" style="color:'+s.color+'">'+esc(s.code)+' · '+esc(s.name)+'</h1>'+
+      '<p class="txs muted">'+(LOCK.strict?'Strict Mode · ':'')+(LOCK.mode==='room'?'Room Focus':'Solo Lock-In')+'</p></div>'+
+      (LOCK.strict?'':'<button class="iconbtn" onclick="abandonLock()">'+ic('x',18)+'</button>')+
+    '</div>'+
+    '<div class="main fc aic jc" style="padding:24px">'+
+      '<div class="ring-wrap"><svg viewBox="0 0 300 300">'+
+        '<circle cx="150" cy="150" r="'+R+'" fill="none" stroke="rgba(148,163,184,.22)" stroke-width="14"/>'+
+        '<circle id="ring" cx="150" cy="150" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="14" stroke-linecap="round" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C-pct*C)+'"/></svg>'+
+        '<div class="ring-center"><span id="timerText" class="ring-time" style="color:'+s.color+'">'+fmtTime(LOCK.left)+'</span>'+
+        '<span class="txs muted mt1">'+Math.round(LOCK.duration/60)+'-minute session</span></div></div>'+
+      '<div class="f g4 aic mt6">'+
+        '<button class="iconbtn" style="height:56px;width:56px" onclick="resetLock()">'+ic('reset',22)+'</button>'+
+        '<button class="playbtn" style="width:72px;height:72px;background:'+s.color+';box-shadow:0 10px 30px '+s.color+'55" onclick="toggleLockRun()">'+(LOCK.running?icf('pause',28):icf('play',28))+'</button>'+
+        '<button class="iconbtn" style="height:56px;width:56px" onclick="'+(S.music.active==='local'?'musicTogglePlay()':'go(\'/music\')')+'">'+ic('headphones',22)+'</button>'+
+      '</div>'+
+      '<div class="card padc mt6" style="width:100%;max-width:340px">'+
+        '<div class="f g3 aic"><span class="iconbtn" style="background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',18)+'</span>'+
+        '<div class="grow minw"><p class="txs muted">'+(currentTrackSub()||'Music')+'</p><p class="txm semi trunc">'+(currentTrackName()||'Nothing playing')+'</p></div>'+
+        (S.music.active==='local'
+          ?'<button class="iconbtn" onclick="musicTogglePlay()">'+(S.music.playing?ic('pause',16):ic('play',16))+'</button>'
+          :'<button class="iconbtn" onclick="go(\'/music\')">'+ic('chevR',16)+'</button>')+
+        '</div>'+
+      '</div>'+
+      (LOCK.strict?'<p class="txs muted mt5 center">Strict Mode active — stay with it until the timer ends.</p>':'')+
+    '</div></div>';
+}
+function lockDone(s){
+  var mins=Math.round(LOCK.duration/60);
+  return '<div class="lockin">'+
+    '<div class="hdr"><div class="grow"><h1 class="txl semi">Session complete</h1></div></div>'+
+    '<div class="main fc aic jc" style="padding:28px;text-align:center">'+
+      '<div style="font-size:56px">🎉</div>'+
+      '<h2 class="tx2 bold mt3">Nice work!</h2>'+
+      '<p class="txm muted mt2">Your '+mins+'-minute Lock-In was written to <span class="semi" style="color:'+s.color+'">'+esc(s.code)+'</span>.</p>'+
+      '<div class="card padc mt5" style="width:100%;max-width:340px">'+
+        '<div class="f jb aic mb2"><span class="txs muted">Session length</span><span class="txm semi">'+mins+' min</span></div>'+
+        '<div class="hr mb2"></div>'+
+        '<div class="f jb aic mb2"><span class="txs muted">Total logged</span><span class="txm semi">'+fmtHours(s.loggedSeconds)+'</span></div>'+
+        '<div class="hr mb2"></div>'+
+        '<div class="f jb aic"><span class="txs muted">Course progress</span><span class="txm semi" style="color:'+s.color+'">'+s.progress+'%</span></div>'+
+      '</div>'+
+      '<div class="f g3 mt6" style="width:100%;max-width:340px">'+
+        '<button class="btn btn-secondary grow" onclick="lockAgain()">'+ic('reset',18)+' Again</button>'+
+        '<button class="btn btn-primary grow" onclick="go(\'/study/'+s.id+'\')">Done</button>'+
+      '</div>'+
+    '</div></div>';
+}
+function setLockDuration(m){LOCK.duration=m*60;LOCK.left=m*60;render();}
+function setLockMode(m){LOCK.mode=m;render();}
+function startLock(){LOCK.phase='running';LOCK.left=LOCK.duration;LOCK.running=true;LOCK.startedAt=Date.now();persistLock();render();}
+function toggleLockRun(){LOCK.running=!LOCK.running;persistLock();render();}
+function resetLock(){LOCK.running=false;LOCK.left=LOCK.duration;persistLock();render();}
+function abandonLock(){
+  confirmSheet({title:'Abandon this session?',message:'Progress will not be logged to the subject.',confirmLabel:'Abandon',onConfirm:function(){
+    LOCK.running=false;LOCK.phase='setup';LOCK.left=LOCK.duration;persistLock();render();}});
+}
+function lockAgain(){LOCK.phase='setup';LOCK.left=LOCK.duration;LOCK.running=false;persistLock();render();}
+function mountLock(){
+  clearInterval(LOCK.interval);
+  if(LOCK.phase!=='running'||!LOCK.running)return;
+  var txt=document.getElementById('timerText'),ring=document.getElementById('ring');
+  var R=130,C=2*Math.PI*R;
+  LOCK.interval=setInterval(function(){
+    LOCK.left--;
+    if(LOCK.left<=0){LOCK.left=0;LOCK.running=false;clearInterval(LOCK.interval);completeLock();return;}
+    if(txt)txt.textContent=fmtTime(LOCK.left);
+    if(ring)ring.setAttribute('stroke-dashoffset',C-((LOCK.duration-LOCK.left)/LOCK.duration)*C);
+    if(LOCK.left%5===0)persistLock();
+  },1000);
+}
+function completeLock(){
+  var s=subjectById(LOCK.subjectId);if(!s)return;
+  s.loggedSeconds+=LOCK.duration;
+  s.progress=Math.min(100,Math.round((s.topics.length?s.topics.filter(function(t){return t.done;}).length/s.topics.length*100:0)+LOCK.duration/3600*2));
+  S.sessions.unshift({id:uid(),subjectId:s.id,seconds:LOCK.duration,mode:LOCK.mode,roomId:LOCK.roomId,time:'Today, '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})});
+  S.sessions=S.sessions.slice(0,60);
+  logActivity('Logged '+Math.round(LOCK.duration/60)+' min to '+s.code,s.color);
+  if(S.focus.streak<S.focus.bestStreak)S.focus.streak++;
+  save();LOCK.phase='done';
+  if(LOCK.chime)toast('🔔 Session complete!');
+  render();
+}
+restoreLock();
+
+/* ---------- ROOMS ---------- */
+function vRooms(){
+  var filters=[['live','Live'],['all','All Rooms'],['mine','Mine']];
+  var mine=S.rooms.filter(function(r){return r.isJoined;});
+  var live=S.rooms.filter(function(r){return r.status==='focus';});
+  var h='<div class="pad pt" style="padding-top:20px;padding-bottom:12px">'+
+    '<div class="f jb aic"><div><h1 class="tx2 bold">Study Rooms</h1>'+
+    '<p class="txm muted">'+live.length+' live · '+mine.length+' joined</p></div>'+
+    '<button class="btn btn-sm" style="background:#5B8DEF;color:#fff" onclick="openCreateRoom()">'+ic('plus',18)+' Create</button></div></div>';
+  h+='<div class="pad"><div class="searchbar">'+ic('search',18)+'<input id="roomSearch" placeholder="Search rooms…" oninput="filterRooms(this.value)"/></div></div>';
+  h+='<div class="pad mt3"><div class="card padc"><h2 class="txm semi mb2">Add a friend by user ID</h2><p class="txs muted mb2">Enter your friend\'s Supabase user UUID to prepare a private chat room.</p><input id="friendUserId" class="input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/><button class="btn btn-primary btn-block mt2" onclick="addFriendById()">Create private chat</button><p class="txs muted mt2">Note: cross-account live chat requires companion Supabase tables and policies.</p></div></div>';
+  h+='<div class="pad mt3"><div class="seg">'+filters.map(function(f){
+    return '<button class="'+(UI.roomFilter===f[0]?'on':'')+'" onclick="setRoomFilter(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+'</div></div>';
+  h+='<div class="pad mt4 pb" id="roomsList">'+roomCards()+'</div>';
+  return h;
+}
+function setRoomFilter(f){UI.roomFilter=f;render();}
+function roomCards(q){
+  q=(q||'').toLowerCase();
+  var list=S.rooms.filter(function(r){
+    if(UI.roomFilter==='live'&&r.status!=='focus')return false;
+    if(UI.roomFilter==='mine'&&!r.isJoined)return false;
+    return (r.name+' '+r.subjectTag).toLowerCase().indexOf(q)>=0;
+  });
+  if(!list.length)return '<div class="empty"><div class="em">👥</div><h3 class="txl semi mb1">No rooms found</h3><p class="txm muted">Try a different filter or create your own room.</p></div>';
+  return '<div class="fc g3">'+list.map(function(r){
+    var live=r.status==='focus';
+    return '<div class="card padc">'+
+      '<div class="f" style="align-items:flex-start;gap:12px"><span style="font-size:26px">'+r.emoji+'</span>'+
+      '<div class="grow minw"><div class="f g2 aic"><p class="txm semi trunc">'+esc(r.name)+'</p>'+
+      (r.isPrivate?'<span class="txs muted">'+ic('lock',12)+'</span>':'')+'</div>'+
+      '<p class="txs muted">'+esc(r.subjectTag)+'</p></div>'+
+      '<span class="badge" style="background:'+(live?'rgba(91,141,239,.15);color:#5B8DEF':'rgba(45,212,191,.15);color:#0f766e')+'">'+fmtTime(r.timer)+'</span></div>'+
+      '<div class="f g2 aic mt2">'+
+        '<span class="txs muted f g1 aic">'+ic('clock',12)+' Round '+r.round+'</span><span class="txs muted">·</span>'+
+        '<span class="txs muted f g1 aic">'+ic('users',12)+' '+r.members.length+'/'+r.maxCapacity+'</span>'+
+        '<span class="txs" style="color:'+(live?'#5B8DEF':'#2DD4BF')+'">'+(live?'● Focusing':'● On break')+'</span></div>'+
+      '<p class="txs muted mt2 clamp2">'+esc(r.description)+'</p>'+
+      '<div class="f jb aic mt3">'+
+        '<div class="f">'+r.members.slice(0,5).map(function(m,i){
+          return '<span style="margin-left:'+(i?'-8px':'0')+';border:2px solid var(--card);border-radius:999px">'+avatar(m.initials,m.color,26)+'</span>';}).join('')+'</div>'+
+        (r.isJoined
+          ?'<button class="btn btn-sm" style="background:'+r.color+';color:#fff" onclick="go(\'/room/'+r.id+'\')">Open</button>'
+          :'<button class="btn btn-sm" style="border:2px solid '+r.color+';color:'+r.color+'" onclick="joinRoom(\''+r.id+'\')">Join</button>')+
+      '</div></div>';}).join('')+'</div>';
+}
+function filterRooms(q){var el=document.getElementById('roomsList');if(!el)return;el.innerHTML=roomCards(q);}
+function joinRoom(id){
+  var r=S.rooms.filter(function(x){return x.id===id;})[0];if(!r)return;
+  if(r.members.length>=r.maxCapacity){toast('Room is full');return;}
+  r.isJoined=true;r.members.push({name:S.auth.user.name,initials:S.auth.user.initials,color:S.auth.user.color,role:'Member'});
+  logActivity('Joined "'+r.name+'"',r.color);save();toast('Joined "'+r.name+'"');go('/room/'+id);
+}
+function addFriendById(){
+  var input=document.getElementById('friendUserId');var friendId=(input&&input.value||'').trim();
+  var uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if(!uuid.test(friendId)){toast('Enter a valid Supabase user UUID.');return;}
+  if(friendId===S.auth.user.id){toast('You cannot add your own user ID.');return;}
+  var id=uid();
+  S.rooms.unshift({id:id,name:'Private chat',subjectTag:'Friend chat',emoji:'💬',color:'#5B8DEF',description:'Private conversation with user '+friendId,isPrivate:true,maxCapacity:2,status:'focus',round:1,timer:0,isJoined:true,ownerId:S.auth.user.id,friendUserId:friendId,members:[{name:S.auth.user.name,initials:S.auth.user.initials,color:S.auth.user.color,role:'Host'},{name:'Friend · '+friendId.slice(0,8),initials:'F',color:'#A78BFA',role:'Invited'}],messages:[],tasks:[],sharedNote:'',polls:[]});
+  save();toast('Private chat draft created in this account.');go('/room/'+id);
+}
+function openCreateRoom(){
+  var emojis=['📘','🧠','📐','🔬','🎨','🔢','💻','⚛️'];
+  var colors=['#5B8DEF','#A78BFA','#2DD4BF','#FBBF24','#FF7A7A','#34D399'];
+  var subjects=S.subjects.map(function(s){return s.code;});
+  var el=sheet('<div class="f jb aic mb4"><h3 class="txl semi">Create study room</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div>'+
+    '<div class="fc g4">'+
+    '<div><label class="field-label">Room name</label><input id="crName" class="input" placeholder="e.g. Algorithms Study Group"/></div>'+
+    '<div><label class="field-label">Subject tag</label><select id="crSubject" class="input">'+subjects.map(function(s){return '<option>'+esc(s)+'</option>';}).join('')+'</select></div>'+
+    '<div><label class="field-label">Icon</label><div class="f g2 wrapf mt1" id="crEmojis">'+emojis.map(function(e,i){
+      return '<button class="emoji-pick'+(i===0?' on':'')+'" data-emoji="'+e+'">'+e+'</button>';}).join('')+'</div></div>'+
+    '<div><label class="field-label">Color</label><div class="f g2 mt1" id="crColors">'+colors.map(function(c,i){
+      return '<button class="swatch'+(i===0?' on':'')+'" data-color="'+c+'" style="background:'+c+'"></button>';}).join('')+'</div></div>'+
+    '<div><label class="field-label">Description</label><textarea id="crDesc" class="input" rows="2" placeholder="What is this room about?"></textarea></div>'+
+    '<div class="f g3"><div class="grow"><label class="field-label">Capacity</label><input id="crCap" class="input" type="number" value="8" min="2"/></div>'+
+    '<div class="grow"><label class="field-label">Visibility</label><select id="crPriv" class="input"><option value="false">Public</option><option value="true">Private</option></select></div></div>'+
+    '<button class="btn btn-primary btn-block" data-create>Create room</button></div>');
+  var chosen={emoji:emojis[0],color:colors[0]};
+  el.querySelector('[data-cancel]').onclick=closeTop;
+  el.querySelectorAll('[data-emoji]').forEach(function(b){b.onclick=function(){chosen.emoji=b.dataset.emoji;el.querySelectorAll('[data-emoji]').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+  el.querySelectorAll('[data-color]').forEach(function(b){b.onclick=function(){chosen.color=b.dataset.color;el.querySelectorAll('[data-color]').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+  el.querySelector('[data-create]').onclick=function(){
+    var name=el.querySelector('#crName').value.trim();if(!name){toast('Please enter a room name');return;}
+    var id=uid();
+    S.rooms.unshift({id:id,name:name,subjectTag:el.querySelector('#crSubject').value,emoji:chosen.emoji,color:chosen.color,description:el.querySelector('#crDesc').value,isPrivate:el.querySelector('#crPriv').value==='true',maxCapacity:parseInt(el.querySelector('#crCap').value,10)||8,status:'focus',round:1,timer:25*60,isJoined:true,ownerId:S.auth.user.id,members:[{name:S.auth.user.name,initials:S.auth.user.initials,color:S.auth.user.color,role:'Host'}],messages:[],tasks:[],sharedNote:''});
+    save();closeTop();toast('Study room created! 🎉');go('/room/'+id);
+  };
+}
+
+/* ---------- ROOM DETAIL ---------- */
+function vRoom(id){
+  var r=S.rooms.filter(function(x){return x.id===id;})[0];
+  if(!r)return '<div class="main"><div class="pad pt center txm muted">Room not found.<br><button class="mt3 med" style="color:#5B8DEF" onclick="go(\'/rooms\')">Back to rooms</button></div></div>';
+  var tabs=[['chat','Chat','send'],['notes','Shared Notes','notebook'],['tasks','Tasks','listChecks'],['info','Info','info']];
+  var h='<div class="hdr"><button class="iconbtn" onclick="go(\'/rooms\')">'+ic('chevL',20)+'</button>'+
+    '<div class="grow minw"><h1 class="txl semi trunc" style="color:'+r.color+'">'+esc(r.name)+'</h1>'+
+    '<p class="txs muted trunc">'+r.members.length+'/'+r.maxCapacity+' · Round '+r.round+' · '+fmtTime(r.timer)+'</p></div>'+
+    (r.isJoined?'<button class="iconbtn" onclick="leaveRoom(\''+r.id+'\')">'+ic('logOut',16)+'</button>':'')+'</div>';
+  h+='<div class="tabs">'+tabs.map(function(t){
+    return '<button class="tab'+(UI.roomTab===t[0]?' on':'')+'" onclick="setRoomTab(\''+t[0]+'\')">'+ic(t[2],17)+'<span>'+t[1]+'</span>'+
+    (UI.roomTab===t[0]?'<span class="underline" style="background:'+r.color+'"></span>':'')+'</button>';}).join('')+'</div>';
+  h+='<div class="main" style="display:flex;flex-direction:column;width:100%;min-width:0;min-height:0">'+roomTabBody(r)+'</div>';
+  return h;
+}
+function setRoomTab(t){UI.roomTab=t;render();}
+function roomTabBody(r){
+  if(!r.isJoined&&UI.roomTab!=='info'){
+    return '<div class="empty"><div class="em">🔒</div><h3 class="txl semi mb1">Join to participate</h3>'+
+      '<p class="txm muted mb4">Join this room to chat, share notes, and sync focus sessions.</p>'+
+      '<button class="btn btn-primary" onclick="joinRoom(\''+r.id+'\')">Join room</button></div>';
+  }
+  if(UI.roomTab==='chat'){
+    var msgs=r.messages.length?r.messages.map(function(m,i){
+        var prev=r.messages[i-1];
+        var sameAuthor=prev&&prev.from===m.from&&prev.me===m.me;
+        return '<div class="msg '+(m.me?'me':'them')+'">'+
+            (sameAuthor?'<span style="width:30px;flex-shrink:0"></span>':avatar(m.initials,m.color,30)) +
+            '<div class="msg-content">'+
+                (!m.me&&!sameAuthor?'<p class="msg-author">'+esc(m.from)+'</p>':'')+
+                '<div class="bubble">'+roomMessageHtml(m)+'</div>'+
+                '<p class="msg-time">'+esc(m.time)+'</p>'+
+            '</div></div>';
+    }).join(''):'<div class="grow fc aic jc txm muted" style="padding:60px 0">No messages yet. Say hi! 👋</div>';
+    return '<div id="scrollArea" style="flex:1;overflow-y:auto;width:100%;display:flex;flex-direction:column;min-width:0">'+
+      '<div class="msgs" style="width:100%;display:flex;flex-direction:column;gap:12px;padding:16px">'+msgs+'</div></div>'+
+      '<div class="composer" style="width:100%;flex-shrink:0">'+
+      '<input id="roomMsg" placeholder="Message your study group…" style="flex:1;height:44px;border-radius:999px;background:var(--secondary);border:none;outline:none;padding:0 16px;font-size:14px;min-width:0" onkeydown="if(event.key===\'Enter\')sendRoomMsg(\''+r.id+'\')"/>'+
+      '<button class="iconbtn blue" style="height:44px;width:44px;flex-shrink:0" onclick="sendRoomMsg(\''+r.id+'\')">'+ic('send',18)+'</button></div>'+
+      '<div class="room-tools"><button class="chip" onclick="shareRoomLink(\''+r.id+'\')">🔗 Link</button><button class="chip" onclick="shareRoomFileLink(\''+r.id+'\')">📎 File link</button><button class="chip" onclick="createRoomPoll(\''+r.id+'\')">📊 Poll</button><button class="chip" onclick="pickRoomSticker(\''+r.id+'\')">😊 Sticker</button></div>';
+  }
+  if(UI.roomTab==='notes'){
+    return '<div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;width:100%">'+
+      '<p class="txs muted">Shared notes — everyone in the room can read and edit.</p>'+
+      '<textarea id="roomNote" class="input" rows="14" placeholder="Write shared notes here…">'+esc(r.sharedNote)+'</textarea>'+
+      '<button class="btn btn-block" style="background:'+r.color+';color:#fff" onclick="saveRoomNote(\''+r.id+'\')">'+ic('save',18)+' Save notes</button></div>';
+  }
+  if(UI.roomTab==='tasks'){
+    var items=r.tasks.length?r.tasks.map(function(t){
+      return '<button class="rowitem" onclick="toggleRoomTask(\''+r.id+'\',\''+t.id+'\')">'+
+      '<span class="checkbox'+(t.done?' on':'')+'">'+(t.done?ic('check',14):'')+'</span>'+
+      '<span class="txm'+(t.done?' muted" style="text-decoration:line-through':'')+'">'+esc(t.text)+'</span></button>';}).join('')
+      :'<p class="txm muted center" style="padding:32px 0">No shared tasks yet.</p>';
+    return '<div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;width:100%">'+
+      '<div class="f g2"><input id="roomTask" class="input" placeholder="Add a shared task…"/>'+
+      '<button class="iconbtn blue" style="height:44px;width:44px;border-radius:14px" onclick="addRoomTask(\''+r.id+'\')">'+ic('plus',20)+'</button></div>'+
+      items+'</div>';
+  }
+  return '<div style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px;width:100%">'+
+    '<div class="card padc center" style="padding:20px"><div style="font-size:36px" class="mb2">'+r.emoji+'</div>'+
+    '<h2 class="txl bold">'+esc(r.name)+'</h2><p class="txs muted">'+esc(r.subjectTag)+' · '+(r.isPrivate?'Private':'Public')+'</p>'+
+    '<p class="txm muted mt3">'+esc(r.description)+'</p>'+
+    '<div class="f jc g4 mt3">'+
+      '<div class="center"><p class="txl bold">'+fmtTime(r.timer)+'</p><p class="txs muted">Timer</p></div>'+
+      '<div class="center"><p class="txl bold">'+r.round+'</p><p class="txs muted">Round</p></div>'+
+      '<div class="center"><p class="txl bold">'+r.members.length+'/'+r.maxCapacity+'</p><p class="txs muted">Members</p></div>'+
+    '</div></div>'+
+    '<div><p class="txm semi mb2 f g2 aic">'+ic('users',16)+' Members</p><div class="fc g2">'+
+    r.members.map(function(m){return '<div class="rowitem">'+avatar(m.initials,m.color,36)+
+      '<div class="grow"><p class="txm med">'+esc(m.name)+'</p><p class="txs muted">'+esc(m.role)+'</p></div></div>';}).join('')+
+    '</div></div>'+
+    (r.isJoined?'<button class="btn btn-soft-danger" onclick="leaveRoom(\''+r.id+'\')">'+ic('logOut',18)+' Leave room</button>':'')+'</div>';
+}
+function roomMessageHtml(m){
+  if(m.kind==='link'||m.kind==='file')return '<p>'+esc(m.text||'')+'</p><a class="msg-link" href="'+esc(m.url||m.text||'#')+'" target="_blank" rel="noopener noreferrer">'+esc(m.url||m.text||'Open link')+'</a>';
+  if(m.kind==='sticker')return '<div style="font-size:34px">'+esc(m.text)+'</div>';
+  if(m.kind==='poll'){
+    var opts=m.options||[];
+    return '<div class="poll-card"><p class="semi">📊 '+esc(m.question||'Poll')+'</p>'+opts.map(function(o,i){var n=(m.votes&&m.votes[i])||0;return '<button class="rowitem mt1" onclick="voteRoomPoll(\''+m.id+'\','+i+')"><span class="grow">'+esc(o)+'</span><span class="badge">'+n+'</span></button>';}).join('')+'</div>';
+  }
+  return esc(m.text||'');
+}
+function shareRoomLink(id){var url=prompt('Paste the link to share:');if(!url)return;try{var u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw 0;}catch(e){toast('Please enter a valid http/https link.');return;}pushRoomMessage(id,{kind:'link',text:'Shared link',url:url});}
+function shareRoomFileLink(id){var url=prompt('Paste a share link for your file:');if(!url)return;try{var u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw 0;}catch(e){toast('Please enter a valid http/https file link.');return;}pushRoomMessage(id,{kind:'file',text:'📎 Shared file',url:url});}
+function pickRoomSticker(id){var choices=['😀','😂','🥹','🔥','💯','🎉','💪','📚','❤️','👏','👍','🤔','✨','😭','☕','🧠'];var choice=prompt('Choose a sticker by number:\n'+choices.map(function(x,i){return (i+1)+'. '+x;}).join('   '));var n=parseInt(choice,10);if(n>0&&n<=choices.length)pushRoomMessage(id,{kind:'sticker',text:choices[n-1]});}
+function createRoomPoll(id){var question=prompt('Poll question:');if(!question)return;var raw=prompt('Enter 2–6 options separated by commas:');if(!raw)return;var options=raw.split(',').map(function(x){return x.trim();}).filter(Boolean).slice(0,6);if(options.length<2){toast('A poll needs at least two options.');return;}pushRoomMessage(id,{kind:'poll',question:question,options:options,votes:options.map(function(){return 0;})});}
+function voteRoomPoll(messageId,index){
+  var R=resolve();if(R.view!=='room'||!R.id)return;
+  var r=S.rooms.filter(function(x){return x.id===R.id;})[0];if(!r)return;
+  var m=r.messages.filter(function(x){return x.id===messageId;})[0];
+  if(!m||m.kind!=='poll'||index<0||index>=m.options.length)return;
+  m.votes=m.votes||m.options.map(function(){return 0;});
+  m.votes[index]=(m.votes[index]||0)+1;save();render();
+}
+function pushRoomMessage(id,extra){
+  var r=S.rooms.filter(function(x){return x.id===id;})[0];if(!r)return;
+  r.messages.push(Object.assign({id:uid(),from:S.auth.user.name,initials:S.auth.user.initials,color:S.auth.user.color,time:'Now',me:true},extra));
+  save();render();
+}
+function sendRoomMsg(id){
+  var i=document.getElementById('roomMsg');var v=(i.value||'').trim();if(!v)return;
+  pushRoomMessage(id,{kind:'text',text:v});
+  setTimeout(function(){var sc=document.getElementById('scrollArea');if(sc)sc.scrollTop=sc.scrollHeight;},30);
+}
+function saveRoomNote(id){var v=document.getElementById('roomNote').value;S.rooms.filter(function(x){return x.id===id;})[0].sharedNote=v;save();toast('Shared notes saved');}
+function toggleRoomTask(rid,tid){var r=S.rooms.filter(function(x){return x.id===rid;})[0];var t=r.tasks.filter(function(x){return x.id===tid;})[0];t.done=!t.done;save();render();}
+function addRoomTask(rid){var i=document.getElementById('roomTask');var v=(i.value||'').trim();if(!v)return;S.rooms.filter(function(x){return x.id===rid;})[0].tasks.push({id:uid(),text:v,done:false});save();render();}
+function leaveRoom(id){
+  var r=S.rooms.filter(function(x){return x.id===id;})[0];
+  confirmSheet({title:'Leave this room?',message:"You'll need to rejoin to access shared content again.",confirmLabel:'Leave',onConfirm:function(){
+    r.isJoined=false;r.members=r.members.filter(function(m){return m.name!==S.auth.user.name;});save();toast('You left "'+r.name+'"');go('/rooms');
+  }});
+}
+
+/* ============================================================
+   MUSIC VIEW
+   ============================================================ */
+function setMusicTab(t){UI.musicTab=t;render();}
+function vMusic(){
+  var h='<div class="pad pt" style="padding-top:20px;padding-bottom:12px"><h1 class="tx2 bold">Music</h1><p class="txm muted">Offline library, Spotify, and YouTube — plays while you navigate.</p></div>';
+
+  /* Active player */
+  if(S.music.active!=='none') h+='<div class="pad">'+activePlayerCard()+'</div>';
+
+  /* Source tabs */
+  h+='<div class="pad '+(S.music.active!=='none'?'mt4':'mt2')+'"><div class="seg">'+
+    '<button class="'+(UI.musicTab==='offline'?'on':'')+'" onclick="setMusicTab(\'offline\')">'+ic('headphones',14)+' Offline</button>'+
+    '<button class="'+(UI.musicTab==='spotify'?'on':'')+'" onclick="setMusicTab(\'spotify\')">'+ic('music',14)+' Spotify</button>'+
+    '<button class="'+(UI.musicTab==='youtube'?'on':'')+'" onclick="setMusicTab(\'youtube\')">'+ic('play',14)+' YouTube</button>'+
+  '</div></div>';
+
+  if(UI.musicTab==='offline') h+=offlineTab();
+  else if(UI.musicTab==='spotify') h+=spotifyTab();
+  else h+=youtubeTab();
+
+  return h;
+}
+function activePlayerCard(){
+  if(S.music.active==='local'){
+    var t=S.offlineMusic.filter(function(x){return x.id===S.music.localId;})[0];
+    return '<div class="card padc" style="background:linear-gradient(135deg,#5B8DEF10,#A78BFA10);border-color:rgba(167,139,250,.35)">'+
+      '<div class="f g3 aic mb3">'+
+        '<span class="iconbtn" style="height:52px;width:52px;background:linear-gradient(135deg,#5B8DEF,#A78BFA);color:#fff">'+ic('headphones',22)+'</span>'+
+        '<div class="grow minw"><p class="txm semi trunc">'+esc(t?t.name:'Offline track')+'</p>'+
+        '<p class="txs muted">'+(S.music.playing?'Playing':'Paused')+' · '+(t?fmtSize(t.size):'')+'</p></div>'+
+        '<button class="iconbtn" onclick="stopMusic()" title="Stop">'+ic('x',16)+'</button>'+
+      '</div>'+
+      '<div class="f g2 aic mb2">'+
+        '<span class="txs muted" id="musicCurrentTime">0:00</span>'+
+        '<div class="bar grow" style="height:6px"><div id="musicProgressBar" style="width:0%;background:linear-gradient(90deg,#5B8DEF,#A78BFA)"></div></div>'+
+        '<span class="txs muted" id="musicDuration">0:00</span>'+
+      '</div>'+
+      '<div class="f jc g4 mt3">'+
+        '<button class="iconbtn" style="height:44px;width:44px" onclick="musicPrev()">'+ic('skipBack',20)+'</button>'+
+        '<button class="playbtn" id="musicBigPlay" style="height:64px;width:64px;background:linear-gradient(135deg,#5B8DEF,#A78BFA)" onclick="musicTogglePlay()">'+
+        (S.music.playing?icf('pause',26):icf('play',26))+'</button>'+
+        '<button class="iconbtn" style="height:44px;width:44px" onclick="musicNext()">'+ic('skipFwd',20)+'</button>'+
+      '</div>'+
+    '</div>';
+  }
+  if(S.music.active==='spotify'){
+    return '<div class="card padc">'+
+      '<div class="f jb aic mb2"><p class="txm semi">Spotify player</p><button class="iconbtn" onclick="stopMusic()" title="Stop">'+ic('x',16)+'</button></div>'+
+      '<div id="mediaHolder" style="width:100%;height:352px;border-radius:16px;background:var(--secondary)"></div>'+
+      '<p class="txs muted mt2">Use the controls inside the Spotify player. Playback continues when you switch tabs.</p>'+
+    '</div>';
+  }
+  if(S.music.active==='youtube'){
+    return '<div class="card padc">'+
+      '<div class="f jb aic mb2"><p class="txm semi">YouTube player</p><button class="iconbtn" onclick="stopMusic()" title="Stop">'+ic('x',16)+'</button></div>'+
+      '<div id="mediaHolder" style="width:100%;height:220px;border-radius:16px;background:var(--secondary)"></div>'+
+      '<p class="txs muted mt2">Use the controls inside the YouTube player. Playback continues when you switch tabs.</p>'+
+    '</div>';
+  }
+  return '';
+}
+function offlineTab(){
+  var h='<div class="pad mt4">'+
+    '<div class="card padc">'+
+      '<div class="f g3 aic mb2"><span class="iconbtn" style="height:44px;width:44px;background:rgba(167,139,250,.15);color:#8B5CF6">'+ic('headphones',20)+'</span>'+
+      '<div class="grow"><h2 class="txl semi">Your offline library</h2>'+
+      '<p class="txs muted">'+S.offlineMusic.length+' track'+(S.offlineMusic.length===1?'':'s')+' · stored on this device</p></div></div>'+
+      '<label class="btn btn-primary btn-block" for="localMusicInput">'+ic('upload',18)+' Add music files</label>'+
+      '<input id="localMusicInput" type="file" accept="audio/*" multiple style="display:none" onchange="addOfflineFiles(this)"/>'+
+      '<p class="txs muted mt2">Files are stored in this browser (IndexedDB). Only the track list syncs to your account — the audio itself stays on this device.</p>'+
+    '</div>'+
+  '</div>';
+  if(!S.offlineMusic.length){
+    h+='<div class="empty"><div class="em">🎧</div><h3 class="txl semi mb1">No offline tracks yet</h3>'+
+      '<p class="txm muted mb4">Add MP3, M4A, WAV, or any browser-supported audio file.</p></div>';
+  } else {
+    h+='<div class="pad mt4 pb"><div class="fc g2">'+S.offlineMusic.map(function(m){
+      var isCurrent=S.music.active==='local'&&S.music.localId===m.id;
+      return '<div class="rowitem" style="padding:10px 12px">'+
+        '<button onclick="playLocalMusic(\''+m.id+'\')" style="height:40px;width:40px;border-radius:12px;background:'+
+        (isCurrent?'linear-gradient(135deg,#5B8DEF,#A78BFA)':'var(--secondary)')+';color:'+(isCurrent?'#fff':'var(--muted-fg)')+
+        ';display:flex;align-items:center;justify-content:center;flex-shrink:0">'+
+        (isCurrent&&S.music.playing?icf('pause',16):icf('play',16))+'</button>'+
+        '<div class="grow minw" onclick="playLocalMusic(\''+m.id+'\')" style="cursor:pointer">'+
+        '<p class="txm med trunc">'+esc(m.name)+'</p>'+
+        '<p class="txs muted">'+fmtSize(m.size)+' · '+(isCurrent?(S.music.playing?'Playing now':'Paused'):'Tap to play')+'</p></div>'+
+        '<button class="iconbtn" style="background:rgba(239,68,68,.1);color:#EF4444" onclick="deleteOfflineFile(\''+m.id+'\')" title="Remove">'+ic('trash',14)+'</button>'+
+      '</div>';}).join('')+'</div></div>';
+  }
+  h+='<div class="pad mt4 pb"><div class="card padc"><h2 class="txm semi">Why offline?</h2>'+
+    '<p class="txs muted mt2">Offline tracks keep playing across every screen — Dashboard, Notes, Tasks, Lock-In. Switch views freely; the audio never stops. Only the mini-player follows you.</p></div></div>';
+  return h;
+}
+function spotifyTab(){
+  var h='<div class="pad mt4"><div class="card padc">'+
+    '<div class="f g3 aic mb2"><span class="iconbtn" style="height:44px;width:44px;background:#1DB95420;color:#1DB954">'+ic('music',20)+'</span>'+
+    '<div><h2 class="txl semi">Spotify</h2><p class="txs muted">Track, album, or playlist link</p></div></div>'+
+    '<label class="field-label" for="spotifyUrl">Paste a Spotify URL</label>'+
+    '<input id="spotifyUrl" class="input" value="'+esc(S.music.spotifyUrl||'')+'" placeholder="https://open.spotify.com/playlist/…"/>'+
+    '<div class="f g2 mt3">'+
+      '<button class="btn btn-secondary grow" onclick="saveSpotifyLink()">Save link</button>'+
+      '<button class="btn btn-primary grow" onclick="playSpotify()">'+(S.music.active==='spotify'?'Show player':'Load player')+'</button>'+
+    '</div>'+
+    (S.music.spotifyEmbed?'<p class="txs muted mt2">Saved. Tap "Load player" to open the embed. Playback continues across all screens.</p>':'<p class="txs muted mt2">Copy a link from Spotify using Share → Copy link.</p>')+
+  '</div></div>';
+  h+='<div class="pad mt4 pb"><div class="card padc"><h2 class="txm semi">How it plays across screens</h2>'+
+    '<p class="txs muted mt2">Once you start playback inside the Spotify embed, it keeps playing when you navigate to other views. A mini-player shows what\'s active. Return here to control it.</p></div></div>';
+  return h;
+}
+function youtubeTab(){
+  var h='<div class="pad mt4"><div class="card padc">'+
+    '<div class="f g3 aic mb2"><span class="iconbtn" style="height:44px;width:44px;background:#FF000020;color:#FF0000">'+ic('play',20)+'</span>'+
+    '<div><h2 class="txl semi">YouTube & YouTube Music</h2><p class="txs muted">Video, playlist, or YT Music link</p></div></div>'+
+    '<label class="field-label" for="youtubeUrl">Paste a YouTube or YouTube Music URL</label>'+
+    '<input id="youtubeUrl" class="input" value="'+esc(S.music.youtubeUrl||'')+'" placeholder="https://music.youtube.com/watch?v=…"/>'+
+    '<div class="f g2 mt3">'+
+      '<button class="btn btn-secondary grow" onclick="saveYoutubeLink()">Save link</button>'+
+      '<button class="btn btn-primary grow" onclick="playYoutube()">'+(S.music.active==='youtube'?'Show player':'Load player')+'</button>'+
+    '</div>'+
+    (S.music.youtubeEmbed?'<p class="txs muted mt2">Saved. Tap "Load player" to open the embed. Playback continues across all screens.</p>':'<p class="txs muted mt2">Accepts youtube.com/watch, youtu.be, music.youtube.com, and playlist links.</p>')+
+  '</div></div>';
+  h+='<div class="pad mt4 pb"><div class="card padc"><h2 class="txm semi">Note</h2>'+
+    '<p class="txs muted mt2">YouTube Music links are played through YouTube\'s embed player. Background audio may require the video tab to stay open in some browsers.</p></div></div>';
+  return h;
+}
+
+/* ---------- NOTES ---------- */
+function vNotes(){
+  var list=filteredNotes();
+  if(!UI.activeNoteId||!S.notes.filter(function(n){return n.id===UI.activeNoteId;}).length){
+    UI.activeNoteId=list.length?list[0].id:(S.notes.length?S.notes[0].id:null);
+  }
+  var active=S.notes.filter(function(n){return n.id===UI.activeNoteId;})[0];
+  var h='<div class="hdr"><div class="grow"><h1 class="txl semi">Notes</h1>'+
+    '<p class="txs muted">'+S.notes.length+' notes · Markdown knowledge base</p></div>'+
+    '<button class="iconbtn blue" onclick="newNote()">'+ic('plus',18)+'</button></div>';
+  h+='<div class="split">';
+  h+='<div class="split-rail">'+
+    '<div style="padding:8px"><div class="searchbar" style="height:36px;border-radius:12px">'+ic('search',15)+
+    '<input id="noteSearch" value="'+esc(UI.noteQuery)+'" oninput="onNoteSearch(this.value)" placeholder="Search…" style="font-size:12px"/></div>'+
+    '<div class="hscroll mt2" style="gap:4px">'+[['all','All'],['personal','Mine'],['room','Room']].map(function(f){
+      return '<button class="chip'+(UI.noteFilter===f[0]?' on':'')+'" style="padding:4px 9px;font-size:10px" onclick="setNoteFilter(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+'</div></div>'+
+    '<div class="rail-scroll" id="noteRail">'+railItems(list)+'</div></div>';
+  h+='<div class="split-main">'+(active?noteEditor(active):noteEmpty())+'</div></div>';
+  return h;
+}
+function filteredNotes(){
+  var q=UI.noteQuery.toLowerCase();
+  return S.notes.filter(function(n){
+    if(UI.noteFilter==='personal'&&n.visibility!=='personal')return false;
+    if(UI.noteFilter==='room'&&n.visibility!=='room')return false;
+    if(UI.noteSubject!=='All'){var s=subjectById(n.subjectId);if(!s||s.code!==UI.noteSubject)return false;}
+    return (n.title+' '+n.content+' '+n.tags.join(' ')).toLowerCase().indexOf(q)>=0;
+  });
+}
+function railItems(list){
+  if(!list.length)return '<p class="txs muted center" style="padding:24px 8px">No notes.</p>';
+  return list.map(function(n){
+    return '<button class="rail-item'+(n.id===UI.activeNoteId?' on':'')+'" onclick="selectNote(\''+n.id+'\')">'+
+      '<span class="stripe" style="background:'+n.color+'"></span>'+
+      '<p class="txs semi trunc" style="padding-left:6px">'+esc(n.title)+'</p>'+
+      '<p class="txs muted trunc" style="padding-left:6px;font-size:10px">'+esc(n.updatedAt)+'</p></button>';}).join('');
+}
+function noteEmpty(){
+  return '<div class="empty" style="padding:40px 16px"><div class="em">📝</div>'+
+    '<p class="txm muted">Select a note or create a new one.</p>'+
+    '<button class="btn btn-sm mt4" style="background:#5B8DEF;color:#fff" onclick="newNote()">'+ic('plus',16)+' New note</button></div>';
+}
+function noteEditor(n){
+  var subs=S.subjects;
+  var allTags=['exam','formulas','graphs','series','mechanics','ux','research','review'];
+  return '<div class="hdr" style="height:auto;padding:10px 14px">'+
+    '<div class="grow minw"><input id="noteTitle" value="'+esc(n.title)+'" oninput="scheduleSave()" '+
+    'style="background:none;border:none;outline:none;font-size:16px;font-weight:700;width:100%;font-family:Poppins,Inter,sans-serif" placeholder="Untitled note"/></div>'+
+    '<span id="saveState" class="autosave saved">'+ic('check',12)+' Saved</span></div>'+
+  '<div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px">'+
+    '<div class="f g2 wrapf">'+
+      '<select id="noteSubject" class="input" style="height:34px;border-radius:10px;font-size:12px;width:auto" onchange="changeNoteSubject(this.value)">'+
+      subs.map(function(s){return '<option value="'+s.id+'"'+(n.subjectId===s.id?' selected':'')+'>'+esc(s.code)+'</option>';}).join('')+'</select>'+
+      '<select id="noteVis" class="input" style="height:34px;border-radius:10px;font-size:12px;width:auto" onchange="changeNoteVis(this.value)">'+
+      '<option value="personal"'+(n.visibility==='personal'?' selected':'')+'>Personal</option>'+
+      '<option value="room"'+(n.visibility==='room'?' selected':'')+'>Room Shared</option></select>'+
+      '<div class="f g1">'+['#5B8DEF','#A78BFA','#2DD4BF','#FBBF24','#FF7A7A','#34D399'].map(function(c){
+        return '<button class="swatch'+(n.color===c?' on':'')+'" style="background:'+c+';height:26px;width:26px" onclick="setNoteColor(\''+c+'\')"></button>';}).join('')+'</div></div>'+
+    '<div class="f g1 wrapf">'+allTags.map(function(t){
+      var on=n.tags.indexOf(t)>=0;
+      return '<button class="tag" style="'+(on?'background:'+n.color+'22;color:'+n.color:'')+'" onclick="toggleTag(\''+t+'\')">'+esc(t)+'</button>';}).join('')+'</div>'+
+    '<textarea id="noteEditor" class="input" style="flex:1;min-height:280px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" oninput="scheduleSave()" placeholder="# Heading&#10;&#10;Write in Markdown…">'+esc(n.content)+'</textarea>'+
+    '<div class="f jb aic"><span class="txs muted">'+esc(n.updatedAt)+'</span>'+
+    '<button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#EF4444;height:34px" onclick="deleteNote(\''+n.id+'\')">'+ic('trash',14)+' Delete</button></div></div>';
+}
+function selectNote(id){UI.activeNoteId=id;render();}
+function onNoteSearch(v){UI.noteQuery=v;var list=filteredNotes();var rail=document.getElementById('noteRail');if(rail)rail.innerHTML=railItems(list);}
+function setNoteFilter(f){UI.noteFilter=f;render();}
+function setNoteColor(c){var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];if(!n)return;n.color=c;save();render();}
+function changeNoteSubject(id){var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];if(!n)return;n.subjectId=id;save();render();}
+function changeNoteVis(v){var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];if(!n)return;n.visibility=v;save();render();}
+function toggleTag(t){var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];if(!n)return;var i=n.tags.indexOf(t);if(i>=0)n.tags.splice(i,1);else n.tags.push(t);save();render();}
+var SAVE_TIMER=null;
+function scheduleSave(){
+  var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];if(!n)return;
+  var st=document.getElementById('saveState');
+  if(st){st.className='autosave saving';st.innerHTML=ic('clock',12)+' Saving…';}
+  clearTimeout(SAVE_TIMER);
+  SAVE_TIMER=setTimeout(function(){
+    if(!S.settings.autoSave){if(st){st.className='autosave';st.innerHTML='Auto-save off';}return;}
+    var t=document.getElementById('noteTitle'),c=document.getElementById('noteEditor');
+    if(t)n.title=t.value||'Untitled note';
+    if(c)n.content=c.value;
+    n.updatedAt='Just now';save();
+    if(st){st.className='autosave saved';st.innerHTML=ic('check',12)+' Saved';}
+    var rail=document.getElementById('noteRail');if(rail)rail.innerHTML=railItems(filteredNotes());
+  },700);
+}
+function newNote(){
+  var id=uid();
+  S.notes.unshift({id:id,title:'Untitled note',content:'',subjectId:S.subjects[0]?S.subjects[0].id:null,color:'#5B8DEF',visibility:'personal',tags:[],updatedAt:'Just now'});
+  UI.activeNoteId=id;save();render();
+  setTimeout(function(){var t=document.getElementById('noteTitle');if(t){t.focus();t.select();}},50);
+}
+function newNoteFor(subjectId){
+  var id=uid();var s=subjectById(subjectId);
+  S.notes.unshift({id:id,title:'Untitled note',content:'',subjectId:subjectId,color:s?s.color:'#5B8DEF',visibility:'personal',tags:[],updatedAt:'Just now'});
+  UI.activeNoteId=id;save();go('/notes');
+}
+function openNote(id){UI.activeNoteId=id;go('/notes');render();}
+function deleteNote(id){
+  confirmSheet({title:'Delete this note?',message:'This note will be permanently removed.',onConfirm:function(){
+    S.notes=S.notes.filter(function(n){return n.id!==id;});
+    if(UI.activeNoteId===id)UI.activeNoteId=null;
+    save();toast('Note deleted');render();
+  }});
+}
+
+/* ---------- TASKS ---------- */
+function vTasks(){
+  var c=taskCounts();
+  var h='<div class="pad pt" style="padding-top:20px;padding-bottom:12px">'+
+    '<div class="f jb aic"><div><h1 class="tx2 bold">Tasks</h1><p class="txm muted">'+c.done+' of '+c.all+' complete</p></div>'+
+    '<button class="btn btn-sm" style="background:#5B8DEF;color:#fff" onclick="openTaskSheet(null)">'+ic('plus',18)+' Add</button></div></div>';
+  h+='<div class="pad grid3">'+
+    '<div class="stat"><span class="si" style="background:rgba(91,141,239,.15);color:#5B8DEF">'+ic('calendar',16)+'</span><span class="txl bold">'+c.dueToday+'</span><span class="txs muted mt1">Due today</span></div>'+
+    '<div class="stat"><span class="si" style="background:rgba(251,191,36,.18);color:#b45309">'+ic('clock',16)+'</span><span class="txl bold">'+c.week+'</span><span class="txs muted mt1">This week</span></div>'+
+    '<div class="stat"><span class="si" style="background:rgba(239,68,68,.12);color:#dc2626">'+ic('alert',16)+'</span><span class="txl bold">'+c.overdue+'</span><span class="txs muted mt1">Overdue</span></div></div>';
+  h+='<div class="pad mt4"><div class="seg">'+
+    '<button class="'+(UI.taskView==='kanban'?'on':'')+'" onclick="setTaskView(\'kanban\')">'+ic('grid',14)+' Kanban</button>'+
+    '<button class="'+(UI.taskView==='list'?'on':'')+'" onclick="setTaskView(\'list\')">'+ic('rows',14)+' Deadline List</button></div></div>';
+  h+='<div class="pad mt3"><div class="hscroll">'+[['all','All'],['todo','To Do'],['progress','In Progress'],['done','Done']].map(function(f){
+    return '<button class="chip'+(UI.taskFilter===f[0]?' on':'')+'" onclick="setTaskFilter(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+'</div></div>';
+  h+=(UI.taskView==='kanban')?'<div class="mt4 pb">'+kanban()+'</div>':'<div class="pad mt4 pb">'+deadlineList()+'</div>';
+  return h;
+}
+function setTaskView(v){UI.taskView=v;render();}
+function setTaskFilter(f){UI.taskFilter=f;render();}
+function kanban(){
+  var cols=[['todo','To Do','#94A3B8'],['progress','In Progress','#FBBF24'],['done','Done','#2DD4BF']];
+  return '<div class="kanban">'+cols.map(function(col){
+    var list=S.tasks.filter(function(t){return t.status===col[0];});
+    return '<div class="kcol"><div class="kcol-head">'+
+      '<span class="f g2 aic"><span class="kdot" style="background:'+col[2]+'"></span>'+
+      '<span class="txm semi">'+col[1]+'</span></span>'+
+      '<span class="txs muted" style="background:var(--card);padding:2px 8px;border-radius:999px">'+list.length+'</span></div>'+
+      (list.length?list.map(function(t){
+        var s=subjectById(t.subjectId),d=dueLabel(t.dueDate);
+        return '<button class="kcard" onclick="openTaskSheet(\''+t.id+'\')">'+
+          '<div class="f jb aic mb1"><span class="badge pri-'+t.priority+'">'+t.priority.toUpperCase()+'</span>'+
+          '<span class="txs" style="color:'+(s?s.color:'var(--muted-fg)')+'">'+esc(s?s.code:'')+'</span></div>'+
+          '<p class="txm med clamp2'+(t.status==='done'?' muted" style="text-decoration:line-through':'')+'">'+esc(t.title)+'</p>'+
+          '<div class="f g2 aic mt2"><span class="txs muted f g1 aic">'+ic('calendar',11)+' '+esc(t.dueDate)+'</span>'+
+          (d.over&&t.status!=='done'?'<span class="txs bold" style="color:#EF4444">OVERDUE</span>':'')+'</div>'+
+          '<p class="txs muted mt1">'+esc(t.type)+'</p></button>';}).join('')
+      :'<p class="txs muted center" style="padding:16px 0">Empty</p>')+'</div>';}).join('')+'</div>';
+}
+function deadlineList(){
+  var f=UI.taskFilter;
+  var list=S.tasks.filter(function(t){return f==='all'||t.status===f;}).sort(function(a,b){return a.dueDate<b.dueDate?-1:1;});
+  if(!list.length)return '<div class="empty"><div class="em">✅</div><h3 class="txl semi mb1">Nothing here</h3><p class="txm muted">Add a task to stay on top of your assignments.</p></div>';
+  var pr={high:'#FF7A7A',medium:'#FBBF24',low:'#2DD4BF'};
+  var st={todo:'#94A3B8',progress:'#FBBF24',done:'#2DD4BF'};
+  return '<div class="fc" style="gap:10px">'+list.map(function(t){
+    var s=subjectById(t.subjectId),d=dueLabel(t.dueDate);
+    return '<div class="card" style="padding:14px"><div class="f" style="align-items:flex-start;gap:12px">'+
+      '<button class="checkbox'+(t.status==='done'?' on':'')+'" style="margin-top:2px;border-color:'+(t.status==='done'?'var(--teal)':st[t.status])+'" onclick="cycleTask(\''+t.id+'\')">'+(t.status==='done'?ic('check',14):'')+'</button>'+
+      '<div class="grow minw"><p class="txm med'+(t.status==='done'?' muted" style="text-decoration:line-through':'')+'">'+esc(t.title)+'</p>'+
+      '<div class="f g2 wrapf mt1 aic"><span class="badge" style="background:'+pr[t.priority]+'20;color:'+pr[t.priority]+'">'+t.priority.toUpperCase()+'</span>'+
+      '<span class="txs muted">'+esc(t.type)+'</span><span class="txs muted">·</span>'+
+      '<span class="txs" style="color:'+(s?s.color:'inherit')+'">'+esc(s?s.code:'')+'</span>'+
+      '<span class="txs" style="color:'+(d.over&&t.status!=='done'?'#EF4444':'var(--muted-fg)')+'">'+d.text+'</span></div></div>'+
+      '<div class="fc g1"><button class="iconbtn" style="height:28px;width:28px" onclick="openTaskSheet(\''+t.id+'\')">'+ic('edit',13)+'</button>'+
+      '<button class="iconbtn" style="height:28px;width:28px;background:rgba(239,68,68,.1);color:#EF4444" onclick="askDeleteTask(\''+t.id+'\')">'+ic('trash',13)+'</button></div>'+
+    '</div></div>';}).join('')+'</div>';
+}
+function askDeleteTask(id){
+  confirmSheet({title:'Delete this task?',message:'This action cannot be undone.',onConfirm:function(){
+    S.tasks=S.tasks.filter(function(t){return t.id!==id;});save();toast('Task deleted');render();
+  }});
+}
+function openTaskSheet(editId,presetSubject){
+  var t=editId?S.tasks.filter(function(x){return x.id===editId;})[0]:null;
+  var types=['Assignment','Project','Reading','Lab','Review','Exam'];
+  var pri=[['high','High','#FF7A7A'],['medium','Medium','#FBBF24'],['low','Low','#2DD4BF']];
+  var stats=[['todo','To Do'],['progress','In Progress'],['done','Done']];
+  var cur=t?t.priority:'medium';
+  var curStat=t?t.status:'todo';
+  var curSub=t?t.subjectId:(presetSubject||(S.subjects[0]?S.subjects[0].id:null));
+  var curType=t?t.type:'Assignment';
+  var el=sheet('<div class="f jb aic mb4"><h3 class="txl semi">'+(t?'Edit task':'New task')+'</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div>'+
+    '<div class="fc g4">'+
+    '<div><label class="field-label">Task title</label><input id="tTitle" class="input" value="'+esc(t?t.title:'')+'" placeholder="e.g. Submit lab report"/></div>'+
+    '<div><label class="field-label">Description</label><textarea id="tDesc" class="input" rows="2" placeholder="Optional details…">'+esc(t?t.description:'')+'</textarea></div>'+
+    '<div class="f g3">'+
+      '<div class="grow"><label class="field-label">Subject</label><select id="tSubject" class="input">'+
+      S.subjects.map(function(s){return '<option value="'+s.id+'"'+(curSub===s.id?' selected':'')+'>'+esc(s.code)+'</option>';}).join('')+'</select></div>'+
+      '<div class="grow"><label class="field-label">Type</label><select id="tType" class="input">'+
+      types.map(function(x){return '<option'+(curType===x?' selected':'')+'>'+x+'</option>';}).join('')+'</select></div>'+
+    '</div>'+
+    '<div><label class="field-label">Due date</label><input id="tDue" class="input" type="date" value="'+esc(t?t.dueDate:todayISO())+'"/></div>'+
+    '<div><label class="field-label f g1 aic">'+ic('flag',12)+' Priority</label><div class="f g2" id="tPri">'+
+      pri.map(function(p){return '<button class="btn grow" data-p="'+p[0]+'" style="height:40px;border-radius:12px;font-size:13px;'+
+      (cur===p[0]?'background:'+p[2]+';color:#fff':'background:var(--card);border:1px solid var(--border);color:var(--muted-fg)')+'">'+p[1]+'</button>';}).join('')+'</div></div>'+
+    '<div><label class="field-label">Status</label><div class="seg" id="tStat">'+
+      stats.map(function(s){return '<button data-s="'+s[0]+'" class="'+(curStat===s[0]?'on':'')+'">'+s[1]+'</button>';}).join('')+'</div></div>'+
+    '<button class="btn btn-primary btn-block" data-save>'+(t?'Save changes':'Add task')+'</button></div>');
+  var chosen={p:cur,status:curStat};
+  el.querySelector('[data-cancel]').onclick=closeTop;
+  el.querySelectorAll('[data-p]').forEach(function(b){b.onclick=function(){chosen.p=b.dataset.p;
+    el.querySelectorAll('[data-p]').forEach(function(x){
+      var pc={high:'#FF7A7A',medium:'#FBBF24',low:'#2DD4BF'}[x.dataset.p];
+      var on=x.dataset.p===chosen.p;
+      x.style.background=on?pc:'var(--card)';x.style.color=on?'#fff':'var(--muted-fg)';
+      x.style.border=on?'none':'1px solid var(--border)';
+    });};});
+  el.querySelectorAll('#tStat button').forEach(function(b){b.onclick=function(){chosen.status=b.dataset.s;
+    el.querySelectorAll('#tStat button').forEach(function(x){x.classList.remove('on');});b.classList.add('on');};});
+  el.querySelector('[data-save]').onclick=function(){
+    var title=el.querySelector('#tTitle').value.trim();
+    var due=el.querySelector('#tDue').value;
+    if(!title){toast('Please enter a task title');return;}
+    if(!due){toast('Please choose a due date');return;}
+    var data={title:title,description:el.querySelector('#tDesc').value,subjectId:el.querySelector('#tSubject').value,type:el.querySelector('#tType').value,dueDate:due,priority:chosen.p,status:chosen.status};
+    if(t){Object.assign(t,data);toast('Task updated');}
+    else{S.tasks.unshift(Object.assign({id:uid()},data));toast('Task added');logActivity('Created "'+title+'"','#5B8DEF');}
+    save();closeTop();render();
+  };
+}
+
+/* ---------- PROFILE ---------- */
+function vProfile(){
+  var u=S.auth.user||{};
+  var h='<div style="padding:28px 20px 20px;background:linear-gradient(180deg,rgba(167,139,250,.15),transparent)">'+
+    '<div class="fc aic center">'+avatar(u.initials||'U',u.color||'#5B8DEF',84)+
+    '<h1 class="txxl bold mt3">'+esc(u.name)+'</h1><p class="txm muted">'+esc(u.email)+'</p>'+
+    '<div class="f g2 mt2 wrapf jc"><span class="txs med pill" style="padding:4px 10px;background:rgba(91,141,239,.15);color:#5B8DEF">'+esc(u.track)+'</span>'+
+    '<span class="txs med pill" style="padding:4px 10px;background:rgba(167,139,250,.15);color:#A78BFA">'+esc(u.grade)+'</span></div>'+
+    '<button class="btn btn-sm mt4" style="background:var(--card);border:1px solid var(--border);height:40px;border-radius:999px" onclick="openEditProfile()">'+ic('edit',15)+' Edit profile</button>'+
+    '</div></div>';
+  h+='<div class="pad"><div class="seg">'+
+    '<button class="'+(UI.profileTab==='overview'?'on':'')+'" onclick="setProfileTab(\'overview\')">'+ic('trending',14)+' Overview & Stats</button>'+
+    '<button class="'+(UI.profileTab==='settings'?'on':'')+'" onclick="setProfileTab(\'settings\')">'+ic('help',14)+' Settings</button></div></div>';
+  h+=(UI.profileTab==='overview')?profileOverview():profileSettings();
+  return h;
+}
+function setProfileTab(t){UI.profileTab=t;render();}
+function profileOverview(){
+  var totalSec=S.sessions.reduce(function(a,s){return a+s.seconds;},0);
+  var sessions=S.sessions.length;
+  var h='<div class="pad mt4 grid3">'+
+    statCard('clock','#5B8DEF',fmtHours(totalSec),'Total hours','#')+
+    statCard('brain','#A78BFA',sessions,'Sessions','#')+
+    statCard('flame','#FF7A7A',S.focus.streak,'Day streak','#')+'</div>';
+  h+='<div class="pgroup"><div class="pgroup-head">'+ic('calendar',15)+' 6-Month Activity</div>'+
+    '<div class="pgroup-body"><div class="heat">'+heatCells(168)+'</div>'+
+    '<div class="f jb aic mt3"><span class="txs muted">Less</span><div class="f g1">'+
+    '<i style="width:11px;height:11px;border-radius:3px;background:var(--muted);display:block"></i>'+
+    '<i class="hl1" style="width:11px;height:11px;border-radius:3px;display:block"></i>'+
+    '<i class="hl2" style="width:11px;height:11px;border-radius:3px;display:block"></i>'+
+    '<i class="hl3" style="width:11px;height:11px;border-radius:3px;display:block"></i>'+
+    '<i class="hl4" style="width:11px;height:11px;border-radius:3px;display:block"></i>'+
+    '</div><span class="txs muted">More</span></div></div></div>';
+  h+='<div class="pgroup"><div class="pgroup-head">'+ic('layers',15)+' Subject Breakdown</div>'+
+    '<div class="pgroup-body fc g3">'+S.subjects.map(function(s){
+      var pct=totalSec?Math.round(s.loggedSeconds/totalSec*100):0;
+      return '<div><div class="f jb aic mb1"><span class="txs med">'+esc(s.code)+' · '+esc(s.name)+'</span>'+
+      '<span class="txs semi" style="color:'+s.color+'">'+fmtHours(s.loggedSeconds)+'</span></div>'+
+      '<div class="bar" style="height:8px"><div style="width:'+pct+'%;background:'+s.color+'"></div></div></div>';}).join('')+'</div></div>';
+  var unlocked=S.achievements.filter(function(a){return a.unlocked;}).length;
+  h+='<div class="pgroup"><div class="pgroup-head">'+ic('award',15)+' Achievements · '+unlocked+'/'+S.achievements.length+'</div>'+
+    '<div class="badgegrid">'+S.achievements.map(function(a){
+      return '<div class="badgecell'+(a.unlocked?'':' locked')+'"><span>'+a.emoji+'</span>'+
+      '<span class="txs med">'+esc(a.name)+'</span></div>';}).join('')+'</div></div>';
+  h+='<div class="pgroup pb"><div class="pgroup-head">'+ic('clock',15)+' Recent Activity</div>'+
+    '<div class="pgroup-body fc">'+S.activities.map(function(a){
+      return '<div class="actrow"><span class="actdot" style="background:'+a.color+'18"><i style="background:'+a.color+'"></i></span>'+
+      '<p class="grow txm muted">'+esc(a.text)+'</p><span class="txs muted" style="white-space:nowrap">'+esc(a.time)+'</span></div>';}).join('')+'</div></div>';
+  return h;
+}
+function profileSettings(){
+  var u=S.auth.user||{};
+  var h='';
+  h+='<div class="pgroup"><div class="pgroup-head">'+ic('idcard',15)+' Account Settings</div><div class="pgroup-body">'+
+    infoRow('user','#5B8DEF','Name',u.name)+'<div class="hr"></div>'+
+    infoRow('mail','#A78BFA','Email',u.email)+'<div class="hr"></div>'+
+    infoRow('grad','#2DD4BF','School',u.school)+'<div class="hr"></div>'+
+    infoRow('layers','#FBBF24','Grade / Track',u.grade+' · '+u.track)+'<div class="hr"></div>'+
+    '<button class="arow" onclick="openEditProfile()"><span class="txm med">Edit bio & details</span>'+ic('chevR',18)+'</button></div></div>';
+
+  h+='<div class="pgroup"><div class="pgroup-head">'+ic('zap',15)+' Study & Lock-In Defaults</div><div class="pgroup-body">'+
+    '<div class="prow"><div><p class="txm med">Default session length</p><p class="txs muted">Applied to every new Lock-In</p></div></div>'+
+    '<div class="f g2">'+[15,25,45,60].map(function(d){
+      var on=S.settings.defaultLength===d;
+      return '<button class="btn grow" style="height:40px;border-radius:12px;font-size:13px;'+
+      (on?'background:#5B8DEF;color:#fff':'background:var(--card);border:1px solid var(--border);color:var(--muted-fg)')+
+      '" onclick="setDefaultLength('+d+')">'+d+'m</button>';}).join('')+'</div>'+
+    '<div class="hr mt3"></div>'+
+    '<div class="prow"><div><p class="txm med">Strict Mode by default</p><p class="txs muted">Block navigation during focus</p></div>'+
+    '<button class="toggle'+(S.settings.strictDefault?' on':'')+'" onclick="toggleSetting(\'strictDefault\')"><span></span></button></div>'+
+    '<div class="hr"></div>'+
+    '<div class="prow"><div><p class="txm med">Chime on completion</p><p class="txs muted">Play a sound when a session ends</p></div>'+
+    '<button class="toggle'+(S.settings.chime?' on':'')+'" onclick="toggleSetting(\'chime\')"><span></span></button></div>'+
+  '</div></div>';
+
+  /* Music settings */
+  h+='<div class="pgroup"><div class="pgroup-head">'+ic('music',15)+' Music</div><div class="pgroup-body">'+
+    '<div class="prow"><div><p class="txm med">Offline tracks</p><p class="txs muted">'+S.offlineMusic.length+' file'+(S.offlineMusic.length===1?'':'s')+' on this device</p></div>'+
+    '<button class="btn btn-sm" style="background:var(--secondary);color:var(--fg)" onclick="go(\'/music\')">Manage</button></div>'+
+    '<div class="hr"></div>'+
+    '<div class="prow"><div><p class="txm med">Now playing</p><p class="txs muted">'+(currentTrackName()||'Nothing playing')+'</p></div>'+
+    (S.music.active!=='none'?'<button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#EF4444" onclick="stopMusic()">Stop</button>':'')+'</div>'+
+  '</div></div>';
+
+  h+='<div class="pgroup"><div class="pgroup-head">'+ic('moon',15)+' Appearance & Notifications</div><div class="pgroup-body">'+
+    '<div class="prow"><div class="f g3 aic"><span class="iconbtn" style="background:var(--secondary);color:'+(S.theme==='dark'?'#A78BFA':'#FBBF24')+'">'+ic(S.theme==='dark'?'moon':'sun',17)+'</span>'+
+    '<span class="txm med">Dark mode</span></div><button class="toggle purple'+(S.theme==='dark'?' on':'')+'" onclick="toggleTheme()"><span></span></button></div>'+
+    '<div class="hr"></div>'+
+    [['roomUpdates','Room updates'],['taskReminders','Task reminders'],['chatMessages','Chat messages'],['weeklyProgress','Weekly progress']].map(function(n){
+      return '<div class="prow"><span class="txm med">'+n[1]+'</span>'+
+      '<button class="toggle'+(S.notifications[n[0]]?' on':'')+'" onclick="toggleNotif(\''+n[0]+'\')"><span></span></button></div>';}).join('')+
+    '<div class="hr"></div>'+
+    '<div class="prow"><div><p class="txm med">Auto-save notes</p><p class="txs muted">Persist edits as you type</p></div>'+
+    '<button class="toggle'+(S.settings.autoSave?' on':'')+'" onclick="toggleSetting(\'autoSave\')"><span></span></button></div>'+
+  '</div></div>';
+
+  h+='<div class="pgroup pb"><div class="pgroup-head">'+ic('lock',15)+' Session & Security</div><div class="pgroup-body">'+
+    '<button class="arow" onclick="downloadAppFile()"><span class="txm med">Download app file</span>'+ic('download',18)+'</button><div class="hr"></div>'+
+    '<button class="arow" onclick="clearWorkspace()"><span class="txm med">Clear my workspace</span>'+ic('reset',18)+'</button><div class="hr"></div>'+
+    '<button class="arow" onclick="openAbout()"><span class="txm med">About NEXBYTE</span>'+ic('info',18)+'</button><div class="hr"></div>'+
+    '<button class="arow" onclick="doLogout()"><span class="txm med">Sign out</span>'+ic('logOut',18)+'</button><div class="hr"></div>'+
+    '<button class="arow" onclick="deleteAccount()"><span class="txm med" style="color:#EF4444">Delete account</span>'+ic('trash',18)+'</button>'+
+  '</div></div>';
+  h+='<div class="pad mt5 pb"><p class="center txs muted">NEXBYTE · Academic Collaboration Environment · v3.2</p></div>';
+  return h;
+}
+function infoRow(icon,color,label,value){
+  return '<div class="f g3 aic" style="padding:8px 0"><span class="iconbtn" style="background:'+color+'15;color:'+color+'">'+ic(icon,17)+'</span>'+
+    '<div class="grow"><p class="txs muted">'+esc(label)+'</p><p class="txm med">'+esc(value)+'</p></div></div>';
+}
+function setDefaultLength(d){S.settings.defaultLength=d;save();render();toast('Default session length set to '+d+' min');}
+function toggleSetting(k){S.settings[k]=!S.settings[k];save();render();}
+function toggleNotif(k){S.notifications[k]=!S.notifications[k];save();render();}
+function toggleTheme(){S.theme=S.theme==='light'?'dark':'light';S.settings.theme=S.theme;applyTheme();save();render();}
+function applyTheme(){document.documentElement.classList.toggle('dark',S.theme==='dark');}
+function clearWorkspace(){
+  confirmSheet({title:'Clear your workspace?',message:'This permanently clears your saved subjects, tasks, notes, rooms, and sessions. Offline music files also need to be cleared manually from the browser.',confirmLabel:'Clear workspace',onConfirm:function(){
+    var user=S.auth.user;S=defaultState();S.auth={isAuthenticated:true,user:user};save();applyTheme();render();toast('Workspace cleared');
+  }});
+}
+function resetPassword(){var email=prompt('Enter your account email to receive a reset link:');if(!email)return;if(!dbClient){toast('Configure Supabase first.');return;}dbClient.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname}).then(function(r){toast(r.error?'Could not send reset email. Check setup.':'If the account exists, a reset email has been sent.');});}
+function deleteAccount(){
+  confirmSheet({title:'Account deletion',message:'For safety, account deletion requires a server-side function.',confirmLabel:'Sign out',danger:false,onConfirm:async function(){
+    stopMusic();if(dbClient)await dbClient.auth.signOut();S=defaultState();render();go('/welcome');
+  }});
+}
+function openEditProfile(){
+  var u=S.auth.user;
+  var el=sheet('<div class="f jb aic mb4"><h3 class="txl semi">Edit profile</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div>'+
+    '<div class="fc g4">'+
+    '<div><label class="field-label">Full name</label><input id="pfName" class="input" value="'+esc(u.name)+'"/></div>'+
+    '<div><label class="field-label">School</label><input id="pfSchool" class="input" value="'+esc(u.school)+'"/></div>'+
+    '<div class="f g3"><div class="grow"><label class="field-label">Grade</label><input id="pfGrade" class="input" value="'+esc(u.grade)+'"/></div>'+
+    '<div class="grow"><label class="field-label">Track</label><input id="pfTrack" class="input" value="'+esc(u.track)+'"/></div></div>'+
+    '<div><label class="field-label">Bio</label><textarea id="pfBio" class="input" rows="3">'+esc(u.bio)+'</textarea></div>'+
+    '<button class="btn btn-primary btn-block" data-save>Save changes</button></div>');
+  el.querySelector('[data-cancel]').onclick=closeTop;
+  el.querySelector('[data-save]').onclick=function(){
+    var name=el.querySelector('#pfName').value.trim()||u.name;
+    S.auth.user=Object.assign({},S.auth.user,{name:name,school:el.querySelector('#pfSchool').value,grade:el.querySelector('#pfGrade').value,track:el.querySelector('#pfTrack').value,bio:el.querySelector('#pfBio').value,initials:name.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase()});
+    save();closeTop();toast('Profile updated');render();
+  };
+}
+function openAbout(){
+  var el=sheet('<div class="fc aic center">'+logo(64)+'<h3 class="txl bold mt3">NEXBYTE</h3>'+
+    '<p class="txs muted" style="letter-spacing:.2em;text-transform:uppercase">Academic Collaboration Environment</p>'+
+    '<p class="txm muted mt4">An all-in-one academic workspace. Subject-bound Lock-In sessions, synchronized study rooms, a Markdown knowledge base, focus audio, and task telemetry — all in one place.</p>'+
+    '<p class="txs muted mt4">Version 3.2 · Account-based workspace</p></div>'+
+    '<button class="btn btn-secondary btn-block mt5" data-close>Close</button>');
+  el.querySelector('[data-close]').onclick=closeTop;
+}
+function downloadAppFile(){
+  var html=document.documentElement.outerHTML;
+  var blob=new Blob([html],{type:'text/html'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download='nexbyte_app.html';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('App file downloaded 📥');
+}
+
+/* ---------- boot ---------- */
+applyTheme();
+ensureMediaHost();
+if(!location.hash)location.hash='#/welcome';
+bootstrapAuth();
+</script>
+</body>
+</html>
