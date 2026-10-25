@@ -385,25 +385,43 @@ function defaultState(){return{
   settings:{defaultLength:25,strictDefault:false,chime:true,autoSave:true,theme:'light'},
   subjects:[],tasks:[],notes:[],rooms:[],activities:[],sessions:[],weekly:[],
   achievements:ACHIEVEMENTS.map(function(a){return Object.assign({},a,{unlocked:false});}),
-  focus:{streak:0,bestStreak:0},
+  focus:{streak:0,bestStreak:0,lastStreakDate:null},
   offlineMusic:[],
   music:{active:'none',localId:null,spotifyUrl:'',spotifyEmbed:'',youtubeUrl:'',youtubeEmbed:'',playing:false}
 };}
 var S=defaultState(),saveTimer=null;
+/* FIX 1: track unsaved notes globally so logout/clear can reset it */
+var NOTE_DIRTY=false;
 
 function profileFromUser(user){var md=user.user_metadata||{},name=md.full_name||user.email||'Student';var ini=name.split(/\s+/).map(function(p){return p[0]||'';}).join('').slice(0,2).toUpperCase()||'U';return {id:user.id,name:name,email:user.email||'',school:md.school||'',grade:md.grade||'',track:md.track||'',initials:ini,color:'#5B8DEF',avatar:ini,bio:md.bio||''};}
 
+async function saveWorkspaceNow(){
+  if(!dbClient||!S.auth.user||!S.auth.user.id){
+    return {ok:false,error:new Error('You are not signed in or Supabase is not configured.')};
+  }
+  clearTimeout(saveTimer);
+  try{
+    var userId=S.auth.user.id;
+    var payload=clone(S);
+    payload.auth={isAuthenticated:true,user:S.auth.user};
+    var result=await dbClient.from('user_workspaces').upsert(
+      {user_id:userId,state:payload,updated_at:new Date().toISOString()},
+      {onConflict:'user_id'}
+    );
+    if(result.error) throw result.error;
+    return {ok:true};
+  }catch(e){
+    console.error('Workspace sync failed',e);
+    return {ok:false,error:e};
+  }
+}
 function save(){
   try{localStorage.setItem(KEY,JSON.stringify({theme:S.theme,settings:S.settings,notifications:S.notifications}));}catch(e){}
   if(!dbClient||!S.auth.user||!S.auth.user.id)return;
   clearTimeout(saveTimer);
   saveTimer=setTimeout(async function(){
-    try{
-      var payload=clone(S);
-      payload.auth={isAuthenticated:true,user:S.auth.user};
-      var {error}=await dbClient.from('user_workspaces').upsert({user_id:S.auth.user.id,state:payload,updated_at:new Date().toISOString()},{onConflict:'user_id'});
-      if(error)console.error('Workspace sync failed',error.message);
-    }catch(e){console.error('Workspace sync failed',e);}
+    var result=await saveWorkspaceNow();
+    if(!result.ok) toast('Could not sync workspace. Check your connection and try saving again.');
   },350);
 }
 
@@ -424,6 +442,11 @@ async function loadWorkspace(user){
       S.offlineMusic=Array.isArray(p.offlineMusic)?p.offlineMusic:[];
     }
   }catch(e){console.error(e);toast('Could not load saved workspace. Check database setup.');}
+  /* FIX 4: backfill session.date so the heatmap works for older accounts */
+  if(Array.isArray(S.sessions)){
+    var _todayISO=new Date().toISOString().slice(0,10);
+    S.sessions=S.sessions.map(function(s){if(!s.date)s.date=_todayISO;return s;});
+  }
   applyTheme();restoreIframes();render();
 }
 
@@ -435,27 +458,34 @@ async function loadWorkspace(user){
    ============================================================ */
 async function bootstrapAuth(){
   if(!dbClient){render();return;}
-  var {data}=await dbClient.auth.getSession();
-  if(data.session){
-    await loadWorkspace(data.session.user);
-    if(location.hash==='#/login'||location.hash==='#/welcome'||!location.hash){
-      go('/dashboard');
+  try{
+    var result=await dbClient.auth.getSession();
+    if(result.error)throw result.error;
+    if(result.data&&result.data.session){
+      await loadWorkspace(result.data.session.user);
+      if(location.hash==='#/login'||location.hash==='#/welcome'||!location.hash)go('/dashboard');
+    }else{
+      S=defaultState();
+      render();
     }
-  }else{
-    S=defaultState();
+    dbClient.auth.onAuthStateChange(function(event,session){
+      if(event==='SIGNED_OUT'){
+        clearTimeout(saveTimer);clearTimeout(SAVE_TIMER);
+        S=defaultState();NOTE_DIRTY=false;render();
+      }else if(session&&event==='SIGNED_IN'){
+        setTimeout(async function(){
+          try{
+            await loadWorkspace(session.user);
+            if(location.hash==='#/login'||location.hash==='#/welcome'||!location.hash)go('/dashboard');
+          }catch(e){console.error('Session restore failed',e);toast('Signed in, but the workspace could not be loaded.');}
+        },0);
+      }
+    });
+  }catch(e){
+    console.error('Authentication bootstrap failed',e);
+    toast('Could not restore your session. Please refresh or sign in again.');
     render();
   }
-  dbClient.auth.onAuthStateChange(function(event,session){
-    if(event==='SIGNED_OUT'){S=defaultState();render();}
-    else if(session&&event==='SIGNED_IN'){
-      setTimeout(async function(){
-        await loadWorkspace(session.user);
-        if(location.hash==='#/login'||location.hash==='#/welcome'||!location.hash){
-          go('/dashboard');
-        }
-      },0);
-    }
-  });
 }
 
 var MUSIC_DB=null;
@@ -482,6 +512,11 @@ function ensureMediaHost(){
     '<iframe id="nbSpotify" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>'+
     '<iframe id="nbYoutube" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe>';
   document.body.appendChild(host);
+  /* FIX 8: surface embed failures instead of showing a silent blank box */
+  var _sp=host.querySelector('#nbSpotify');
+  if(_sp){_sp.addEventListener('error',function(){toast('Spotify embed failed to load. Check the link or disable your ad blocker.');});}
+  var _yt=host.querySelector('#nbYoutube');
+  if(_yt){_yt.addEventListener('error',function(){toast('YouTube embed failed. The video may be private, region-locked, or have embedding disabled.');});}
   var a=host.querySelector('#nbAudio');
   a.addEventListener('play',function(){S.music.playing=true;updateMusicUI();});
   a.addEventListener('pause',function(){S.music.playing=false;updateMusicUI();});
@@ -538,8 +573,10 @@ function playSpotify(){
   var a=getAudio();if(a){a.pause();a.removeAttribute('src');a.load();}
   S.music.active='spotify';save();render();
 }
+/* FIX 8: warn on Shorts URLs before trying to embed */
 function playYoutube(){
   if(!S.music.youtubeEmbed){toast('Save a YouTube link first.');return;}
+  if(/\/shorts\//.test(S.music.youtubeUrl||'')){toast('YouTube Shorts do not play in embeds. Use a regular watch link.');return;}
   var f=document.getElementById('nbYoutube');if(f&&f.getAttribute('src')!==S.music.youtubeEmbed)f.src=S.music.youtubeEmbed;
   var sp=document.getElementById('nbSpotify');if(sp)sp.removeAttribute('src');
   var a=getAudio();if(a){a.pause();a.removeAttribute('src');a.load();}
@@ -547,7 +584,7 @@ function playYoutube(){
 }
 
 /* ============================================================
-   MEDIA URL PARSER — final fix
+   MEDIA URL PARSER
    Handles Spotify embeds + all common YouTube / YT Music URLs:
    watch, youtu.be (with list), Shorts, Live, Embed, playlists,
    music.youtube.com. Does NOT bypass Spotify playback rules.
@@ -560,47 +597,26 @@ function parseMediaUrl(raw) {
     /* ---------- Spotify ---------- */
     if (host === 'open.spotify.com' || host === 'spotify.com') {
       var parts = u.pathname.split('/').filter(Boolean);
-
-      if (parts[0] === 'embed' && parts[1] && parts[2]) {
-        return { type: 'spotify', embed: u.href };
-      }
-
-      if (
-        ['track', 'album', 'playlist', 'episode', 'show'].indexOf(parts[0]) !== -1 &&
-        parts[1]
-      ) {
+      if (parts[0] === 'embed' && parts[1] && parts[2]) return { type: 'spotify', embed: u.href };
+      if (['track', 'album', 'playlist', 'episode', 'show'].indexOf(parts[0]) !== -1 && parts[1]) {
         return {
           type: 'spotify',
-          embed:
-            'https://open.spotify.com/embed/' +
-            parts[0] +
-            '/' +
-            encodeURIComponent(parts[1]) +
-            '?utm_source=generator&theme=0'
+          embed: 'https://open.spotify.com/embed/' + parts[0] + '/' + encodeURIComponent(parts[1]) + '?utm_source=generator&theme=0'
         };
       }
       return null;
     }
 
     /* ---------- YouTube / YouTube Music ---------- */
-    var isYouTube =
-      host === 'youtube.com' ||
-      host === 'music.youtube.com' ||
-      host === 'm.youtube.com' ||
-      host === 'youtu.be';
-
+    var isYouTube = host === 'youtube.com' || host === 'music.youtube.com' || host === 'm.youtube.com' || host === 'youtu.be';
     if (!isYouTube) return null;
 
     var videoId = '';
     var listId = u.searchParams.get('list') || '';
 
-    if (host === 'youtu.be') {
-      videoId = u.pathname.split('/').filter(Boolean)[0] || '';
-    } else if (u.pathname === '/watch') {
-      videoId = u.searchParams.get('v') || '';
-    } else if (/^\/(shorts|live|embed)\//.test(u.pathname)) {
-      videoId = u.pathname.split('/')[2] || '';
-    }
+    if (host === 'youtu.be') videoId = u.pathname.split('/').filter(Boolean)[0] || '';
+    else if (u.pathname === '/watch') videoId = u.searchParams.get('v') || '';
+    else if (/^\/(shorts|live|embed)\//.test(u.pathname)) videoId = u.pathname.split('/')[2] || '';
 
     if (videoId) {
       if (!/^[A-Za-z0-9_-]{6,}$/.test(videoId)) return null;
@@ -608,15 +624,7 @@ function parseMediaUrl(raw) {
       if (listId) embedVid += '?list=' + encodeURIComponent(listId);
       return { type: 'youtube', embed: embedVid };
     }
-
-    if (listId) {
-      return {
-        type: 'youtube',
-        embed:
-          'https://www.youtube.com/embed/videoseries?list=' +
-          encodeURIComponent(listId)
-      };
-    }
+    if (listId) return { type: 'youtube', embed: 'https://www.youtube.com/embed/videoseries?list=' + encodeURIComponent(listId) };
   } catch (e) {}
   return null;
 }
@@ -690,7 +698,7 @@ function updateMusicUI(){
 
 var UI={loginErr:{},regErr:{},showPw:false,roomQuery:'',roomFilter:'live',noteQuery:'',noteFilter:'all',noteSubject:'All',activeNoteId:null,noteSaveState:'saved',taskView:'kanban',taskFilter:'all',roomTab:'chat',subjectTab:'syllabus',profileTab:'overview',musicTab:'offline',searchQuery:''};
 
-var LOCK={subjectId:null,phase:'setup',duration:25*60,left:25*60,running:false,strict:false,chime:true,mode:'solo',roomId:null,interval:null,startedAt:null};
+var LOCK={subjectId:null,phase:'setup',duration:25*60,left:25*60,running:false,strict:false,chime:true,mode:'solo',roomId:null,interval:null,startedAt:null,_logged:false};
 function persistLock(){try{sessionStorage.setItem('nb_lock',JSON.stringify({subjectId:LOCK.subjectId,phase:LOCK.phase,duration:LOCK.duration,left:LOCK.left,running:LOCK.running,strict:LOCK.strict,chime:LOCK.chime,mode:LOCK.mode,roomId:LOCK.roomId,startedAt:LOCK.startedAt}));}catch(e){}}
 function restoreLock(){try{var r=sessionStorage.getItem('nb_lock');if(r){var p=JSON.parse(r);Object.assign(LOCK,p);LOCK.interval=null;}}catch(e){}}
 
@@ -847,31 +855,53 @@ async function doGoogleLogin(){
 }
 
 async function doLogin(){
-  var email=document.getElementById('lgEmail').value.trim(),pw=document.getElementById('lgPw').value,e={};
+  var email=(document.getElementById('lgEmail')||{}).value||'';
+  var pw=(document.getElementById('lgPw')||{}).value||'';
+  email=email.trim();
+  var e={};
   if(!email)e.email='Email is required';else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))e.email='Enter a valid email';
   if(!pw)e.password='Password is required';
   UI.loginErr=e;if(Object.keys(e).length){render();return;}
   if(!dbClient){toast('Setup required: configure Supabase first.');return;}
-  var r=await dbClient.auth.signInWithPassword({email:email,password:pw});
-  if(r.error){UI.loginErr={password:r.error.message};render();return;}
-  await loadWorkspace(r.data.user);toast('Signed in successfully');go('/dashboard');
+  try{
+    var r=await dbClient.auth.signInWithPassword({email:email,password:pw});
+    if(r.error){UI.loginErr={password:r.error.message||'Could not sign in.'};render();return;}
+    await loadWorkspace(r.data.user);
+    toast('Signed in successfully');go('/dashboard');
+  }catch(err){
+    console.error('Login failed',err);
+    UI.loginErr={password:'Unable to sign in right now. Check your connection and try again.'};
+    render();
+  }
 }
 async function doRegister(){
-  var name=document.getElementById('rgName').value.trim(),email=document.getElementById('rgEmail').value.trim(),pw=document.getElementById('rgPw').value,cf=document.getElementById('rgCf').value,e={};
+  var name=((document.getElementById('rgName')||{}).value||'').trim();
+  var email=((document.getElementById('rgEmail')||{}).value||'').trim();
+  var pw=(document.getElementById('rgPw')||{}).value||'';
+  var cf=(document.getElementById('rgCf')||{}).value||'';
+  var e={};
   if(!name)e.name='Full name is required';
   if(!email)e.email='Email is required';else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))e.email='Enter a valid email';
   if(!pw||pw.length<8)e.password='Use at least 8 characters';
   if(cf!==pw)e.confirm='Passwords do not match';
   UI.regErr=e;if(Object.keys(e).length){render();return;}
   if(!dbClient){toast('Setup required: configure Supabase first.');return;}
-  var r=await dbClient.auth.signUp({email:email,password:pw,options:{data:{full_name:name}}});
-  if(r.error){UI.regErr={email:r.error.message};render();return;}
-  if(r.data.session&&r.data.user){await loadWorkspace(r.data.user);toast('Account created');go('/dashboard');}
-  else{toast('Check your email to confirm your account, then log in.');go('/login');}
+  try{
+    var r=await dbClient.auth.signUp({email:email,password:pw,options:{data:{full_name:name}}});
+    if(r.error){UI.regErr={email:r.error.message||'Could not create account.'};render();return;}
+    if(r.data.session&&r.data.user){await loadWorkspace(r.data.user);toast('Account created');go('/dashboard');}
+    else{toast('Check your email to confirm your account, then log in.');go('/login');}
+  }catch(err){
+    console.error('Registration failed',err);
+    UI.regErr={email:'Unable to register right now. Check your connection and try again.'};
+    render();
+  }
 }
 async function doLogout(){
   confirmSheet({title:'Sign out?',message:'Your saved workspace remains in your account.',confirmLabel:'Sign out',danger:false,onConfirm:async function(){
-    stopMusic();if(dbClient)await dbClient.auth.signOut();S=defaultState();render();go('/welcome');
+    stopMusic();
+    NOTE_DIRTY=false;                /* FIX 10 */
+    if(dbClient)await dbClient.auth.signOut();S=defaultState();render();go('/welcome');
   }});
 }
 
@@ -927,11 +957,31 @@ function todayISO(){return new Date().toISOString().slice(0,10);}
 function dueLabel(d){var today=todayISO();var t=new Date(today+'T00:00:00'),x=new Date(d+'T00:00:00');var diff=Math.round((x-t)/86400000);if(diff<0)return{text:Math.abs(diff)+'d overdue',over:true};if(diff===0)return{text:'Due today',over:false,today:true};if(diff===1)return{text:'Due tomorrow',over:false};if(diff<=7)return{text:'Due in '+diff+'d',over:false};return{text:x.toLocaleDateString('en-US',{month:'short',day:'numeric'}),over:false};}
 function taskCounts(){var today=todayISO();return{all:S.tasks.length,todo:S.tasks.filter(function(t){return t.status==='todo';}).length,progress:S.tasks.filter(function(t){return t.status==='progress';}).length,done:S.tasks.filter(function(t){return t.status==='done';}).length,dueToday:S.tasks.filter(function(t){return t.status!=='done'&&t.dueDate===today;}).length,week:S.tasks.filter(function(t){var d=new Date(t.dueDate+'T00:00:00');var n=new Date();var diff=(d-n)/86400000;return t.status!=='done'&&diff>=0&&diff<=7;}).length,overdue:S.tasks.filter(function(t){return t.status!=='done'&&t.dueDate<today;}).length};}
 
+/* FIX 3: heatmap driven by real session data */
+function heatCells(n){
+  var byDay={};
+  (S.sessions||[]).forEach(function(s){
+    if(!s.date||!s.seconds)return;
+    byDay[s.date]=(byDay[s.date]||0)+s.seconds;
+  });
+  var out='';
+  var today=new Date();
+  for(var i=n-1;i>=0;i--){
+    var d=new Date(today);
+    d.setDate(today.getDate()-i);
+    var iso=d.toISOString().slice(0,10);
+    var sec=byDay[iso]||0;
+    var lv=sec===0?0:sec<900?1:sec<1800?2:sec<3600?3:4;
+    out+='<i class="'+(lv?'hl'+lv:'')+'" title="'+iso+' · '+Math.round(sec/60)+' min"></i>';
+  }
+  return out;
+}
+
 function vDashboard(){
   var u=S.auth.user||{};
   var joined=S.rooms.filter(function(r){return r.isJoined;});
   var counts=taskCounts();
-  var todayMin=Math.round(S.sessions.filter(function(s){return s.time.indexOf('Today')===0;}).reduce(function(a,s){return a+s.seconds;},0)/60);
+  var todayMin=Math.round(S.sessions.filter(function(s){return s.date===todayISO();}).reduce(function(a,s){return a+s.seconds;},0)/60);
   var goal=120,pct=Math.min(100,Math.round(todayMin/goal*100));
   var hour=new Date().getHours();var greet=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
   var upcoming=S.tasks.filter(function(t){return t.status!=='done';}).sort(function(a,b){return a.dueDate<b.dueDate?-1:1;}).slice(0,4);
@@ -959,7 +1009,6 @@ function vDashboard(){
 }
 function quickAction(icon,color,label,fn){return '<button class="qbtn" onclick="'+fn+'"><span class="qi" style="background:'+color+'15;color:'+color+'">'+ic(icon,20)+'</span><span class="txs med">'+label+'</span></button>';}
 function statCard(icon,color,value,label,to){return '<button class="stat" onclick="go(\''+to+'\')"><span class="si" style="background:'+color+'15;color:'+color+'">'+ic(icon,16)+'</span><span class="txl bold">'+value+'</span><span class="txs muted mt1">'+label+'</span></button>';}
-function heatCells(n){var out='',seed=7;function rnd(){seed=(seed*9301+49297)%233280;return seed/233280;}for(var i=0;i<n;i++){var v=rnd();var lv=v<0.4?0:v<0.62?1:v<0.8?2:v<0.93?3:4;out+='<i class="'+(lv?'hl'+lv:'')+'"></i>';}return out;}
 function cycleTask(id){var t=S.tasks.filter(function(x){return x.id===id;})[0];if(!t)return;t.status=t.status==='todo'?'progress':t.status==='progress'?'done':'todo';if(t.status==='done'){logActivity('Completed "'+t.title+'"','#2DD4BF');}save();render();toast(t.status==='done'?'Task completed ✅':'Task moved to '+t.status);}
 function logActivity(text,color){S.activities.unshift({id:uid(),text:text,time:'Just now',color:color||'#5B8DEF'});S.activities=S.activities.slice(0,20);}
 function openPlanDay(){
@@ -1013,7 +1062,8 @@ function subjectTabBody(s){
   }
   if(UI.subjectTab==='materials'){
     if(!s.materials.length)return '<p class="txm muted center" style="padding:32px 0">No materials uploaded.</p>';
-    return '<div class="fc g2">'+s.materials.map(function(m){return '<div class="rowitem"><span class="iconbtn" style="background:'+s.color+'18;color:'+s.color+'">'+ic('file',17)+'</span><div class="grow minw"><p class="txm med trunc">'+esc(m.n)+'</p><p class="txs muted">'+esc(m.t)+' · '+esc(m.s)+'</p></div><button class="iconbtn" onclick="toast(\'Opening '+esc(m.n)+'\')">'+ic('download',15)+'</button></div>';}).join('')+'</div><button class="btn btn-secondary btn-block mt4" onclick="addMaterial(\''+s.id+'\')">'+ic('plus',18)+' Add material</button>';
+    /* FIX 6: no more fake download — shows an honest info sheet */
+    return '<div class="fc g2">'+s.materials.map(function(m){return '<div class="rowitem"><span class="iconbtn" style="background:'+s.color+'18;color:'+s.color+'">'+ic('file',17)+'</span><div class="grow minw"><p class="txm med trunc">'+esc(m.n)+'</p><p class="txs muted">'+esc(m.t)+' · '+esc(m.s)+'</p></div><button class="iconbtn" onclick="showMaterialInfo(\''+esc(m.n).replace(/'/g,"\\'")+'\',\''+esc(m.t)+'\')" title="Material info">'+ic('info',15)+'</button></div>';}).join('')+'</div><button class="btn btn-secondary btn-block mt4" onclick="addMaterial(\''+s.id+'\')">'+ic('plus',18)+' Add material</button>';
   }
   if(UI.subjectTab==='tasks'){
     var list=S.tasks.filter(function(t){return t.subjectId===s.id;});
@@ -1030,9 +1080,13 @@ function subjectTabBody(s){
 function toggleTopic(sid,i){var s=subjectById(sid);s.topics[i].done=!s.topics[i].done;s.progress=Math.round(s.topics.filter(function(t){return t.done;}).length/s.topics.length*100);save();render();}
 function addTopic(sid){var el=sheet('<div class="f jb aic mb4"><h3 class="txl semi">Add topic</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div><div class="fc g4"><div><label class="field-label">Topic name</label><input id="tpName" class="input" placeholder="e.g. Binary Search Trees"/></div><button class="btn btn-primary btn-block" data-save>Add topic</button></div>');el.querySelector('[data-cancel]').onclick=closeTop;el.querySelector('[data-save]').onclick=function(){var v=el.querySelector('#tpName').value.trim();if(!v){toast('Enter a topic name');return;}var s=subjectById(sid);s.topics.push({t:v,done:false});s.progress=Math.round(s.topics.filter(function(t){return t.done;}).length/s.topics.length*100);save();closeTop();render();};}
 function addMaterial(sid){var el=sheet('<div class="f jb aic mb4"><h3 class="txl semi">Add material</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div><div class="fc g4"><div><label class="field-label">File name</label><input id="mtName" class="input" placeholder="e.g. Chapter 8 Slides"/></div><div><label class="field-label">Type</label><select id="mtType" class="input"><option>PDF</option><option>Doc</option><option>Video</option><option>Worksheet</option><option>Link</option><option>Reference</option></select></div><button class="btn btn-primary btn-block" data-save>Add material</button></div>');el.querySelector('[data-cancel]').onclick=closeTop;el.querySelector('[data-save]').onclick=function(){var v=el.querySelector('#mtName').value.trim();if(!v){toast('Enter a file name');return;}subjectById(sid).materials.push({n:v,t:el.querySelector('#mtType').value,s:'—'});save();closeTop();toast('Material added');render();};}
+/* FIX 6: honest material info sheet */
+function showMaterialInfo(name,type){
+  sheet('<div class="f jb aic mb4"><h3 class="txl semi">'+esc(name)+'</h3><button class="iconbtn" data-close>'+ic('x',18)+'</button></div><p class="txm muted">Type: '+esc(type)+'</p><p class="txm muted mt3">File storage is not yet connected in this build. To make this downloadable, upload the file to Supabase Storage and store the resulting public URL on the material record.</p><button class="btn btn-secondary btn-block mt5" data-close>Got it</button>').querySelectorAll('[data-close]').forEach(function(b){b.onclick=closeTop;});
+}
 
 function vLockIn(subjectId){
-  if(!LOCK.subjectId||LOCK.subjectId!==subjectId){LOCK.subjectId=subjectId;LOCK.duration=S.settings.defaultLength*60;LOCK.left=LOCK.duration;LOCK.strict=S.settings.strictDefault;LOCK.chime=S.settings.chime;LOCK.phase='setup';LOCK.running=false;LOCK.mode='solo';}
+  if(!LOCK.subjectId||LOCK.subjectId!==subjectId){LOCK.subjectId=subjectId;LOCK.duration=S.settings.defaultLength*60;LOCK.left=LOCK.duration;LOCK.strict=S.settings.strictDefault;LOCK.chime=S.settings.chime;LOCK.phase='setup';LOCK.running=false;LOCK.mode='solo';LOCK._logged=false;}
   var s=subjectById(subjectId);
   if(!s)return '<div class="lockin pad pt center txm muted">Subject not found.<br><button class="mt3 med" style="color:#5B8DEF" onclick="go(\'/study\')">Back</button></div>';
   if(LOCK.phase==='setup')return lockSetup(s);
@@ -1053,11 +1107,11 @@ function lockDone(s){
 }
 function setLockDuration(m){LOCK.duration=m*60;LOCK.left=m*60;render();}
 function setLockMode(m){LOCK.mode=m;render();}
-function startLock(){LOCK.phase='running';LOCK.left=LOCK.duration;LOCK.running=true;LOCK.startedAt=Date.now();persistLock();render();}
+function startLock(){LOCK.phase='running';LOCK.left=LOCK.duration;LOCK.running=true;LOCK.startedAt=Date.now();LOCK._logged=false;persistLock();render();}
 function toggleLockRun(){LOCK.running=!LOCK.running;persistLock();render();}
 function resetLock(){LOCK.running=false;LOCK.left=LOCK.duration;persistLock();render();}
-function abandonLock(){confirmSheet({title:'Abandon this session?',message:'Progress will not be logged to the subject.',confirmLabel:'Abandon',onConfirm:function(){LOCK.running=false;LOCK.phase='setup';LOCK.left=LOCK.duration;persistLock();render();}});}
-function lockAgain(){LOCK.phase='setup';LOCK.left=LOCK.duration;LOCK.running=false;persistLock();render();}
+function abandonLock(){confirmSheet({title:'Abandon this session?',message:'Progress will not be logged to the subject.',confirmLabel:'Abandon',onConfirm:function(){LOCK.running=false;LOCK.phase='setup';LOCK.left=LOCK.duration;LOCK._logged=false;persistLock();render();}});}
+function lockAgain(){LOCK.phase='setup';LOCK.left=LOCK.duration;LOCK.running=false;LOCK._logged=false;persistLock();render();}
 function mountLock(){
   clearInterval(LOCK.interval);if(LOCK.phase!=='running'||!LOCK.running)return;
   var txt=document.getElementById('timerText'),ring=document.getElementById('ring');var R=130,C=2*Math.PI*R;
@@ -1069,14 +1123,24 @@ function mountLock(){
     if(LOCK.left%5===0)persistLock();
   },1000);
 }
+/* FIX 3: guard against double logging + write date + per-day streak */
 function completeLock(){
-  var s=subjectById(LOCK.subjectId);if(!s)return;
+  var s=subjectById(LOCK.subjectId);
+  if(!s)return;
+  if(LOCK._logged)return;
+  LOCK._logged=true;
   s.loggedSeconds+=LOCK.duration;
   s.progress=Math.min(100,Math.round((s.topics.length?s.topics.filter(function(t){return t.done;}).length/s.topics.length*100:0)+LOCK.duration/3600*2));
-  S.sessions.unshift({id:uid(),subjectId:s.id,seconds:LOCK.duration,mode:LOCK.mode,roomId:LOCK.roomId,time:'Today, '+new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})});
+  var now=new Date();
+  S.sessions.unshift({id:uid(),subjectId:s.id,seconds:LOCK.duration,mode:LOCK.mode,roomId:LOCK.roomId,date:now.toISOString().slice(0,10),time:'Today, '+now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})});
   S.sessions=S.sessions.slice(0,60);
   logActivity('Logged '+Math.round(LOCK.duration/60)+' min to '+s.code,s.color);
-  if(S.focus.streak<S.focus.bestStreak)S.focus.streak++;
+  var today=now.toISOString().slice(0,10);
+  if(S.focus.lastStreakDate!==today){
+    S.focus.streak=Math.min(S.focus.streak+1,S.focus.bestStreak+1);
+    if(S.focus.streak>S.focus.bestStreak)S.focus.bestStreak=S.focus.streak;
+    S.focus.lastStreakDate=today;
+  }
   save();LOCK.phase='done';
   if(LOCK.chime)toast('🔔 Session complete!');
   render();
@@ -1088,6 +1152,8 @@ function vRooms(){
   var mine=S.rooms.filter(function(r){return r.isJoined;});
   var live=S.rooms.filter(function(r){return r.status==='focus';});
   var h='<div class="pad pt" style="padding-top:20px;padding-bottom:12px"><div class="f jb aic"><div><h1 class="tx2 bold">Study Rooms</h1><p class="txm muted">'+live.length+' live · '+mine.length+' joined</p></div><button class="btn btn-sm" style="background:#5B8DEF;color:#fff" onclick="openCreateRoom()">'+ic('plus',18)+' Create</button></div></div>';
+  /* FIX 7: honest banner about per-account rooms */
+  h+='<div class="pad mt2"><div class="card padc" style="background:rgba(251,191,36,.10);border-color:rgba(251,191,36,.35)"><p class="txs" style="color:#b45309;display:flex;gap:6px;align-items:flex-start">'+ic('info',14)+'<span>Study rooms and messages are currently stored per-account. True multi-user collaboration requires Supabase tables for rooms, memberships, and messages with row-level security.</span></p></div></div>';
   h+='<div class="pad"><div class="searchbar">'+ic('search',18)+'<input id="roomSearch" placeholder="Search rooms…" oninput="filterRooms(this.value)"/></div></div>';
   h+='<div class="pad mt3"><div class="card padc"><h2 class="txm semi mb2">Add a friend by user ID</h2><p class="txs muted mb2">Enter your friend\'s Supabase user UUID to prepare a private chat room.</p><input id="friendUserId" class="input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/><button class="btn btn-primary btn-block mt2" onclick="addFriendById()">Create private chat</button><p class="txs muted mt2">Note: cross-account live chat requires companion Supabase tables and policies.</p></div></div>';
   h+='<div class="pad mt3"><div class="seg">'+filters.map(function(f){return '<button class="'+(UI.roomFilter===f[0]?'on':'')+'" onclick="setRoomFilter(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+'</div></div>';
@@ -1226,19 +1292,124 @@ function noteEditor(n){
   var subs=S.subjects;var allTags=['exam','formulas','graphs','series','mechanics','ux','research','review'];
   return '<div class="hdr" style="height:auto;padding:10px 14px"><div class="grow minw"><input id="noteTitle" value="'+esc(n.title)+'" oninput="scheduleSave()" style="background:none;border:none;outline:none;font-size:16px;font-weight:700;width:100%;font-family:Poppins,Inter,sans-serif" placeholder="Untitled note"/></div><span id="saveState" class="autosave saved">'+ic('check',12)+' Saved</span></div><div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px"><div class="f g2 wrapf"><select id="noteSubject" class="input" style="height:34px;border-radius:10px;font-size:12px;width:auto" onchange="changeNoteSubject(this.value)">'+subs.map(function(s){return '<option value="'+s.id+'"'+(n.subjectId===s.id?' selected':'')+'>'+esc(s.code)+'</option>';}).join('')+'</select><select id="noteVis" class="input" style="height:34px;border-radius:10px;font-size:12px;width:auto" onchange="changeNoteVis(this.value)"><option value="personal"'+(n.visibility==='personal'?' selected':'')+'>Personal</option><option value="room"'+(n.visibility==='room'?' selected':'')+'>Room Shared</option></select><div class="f g1">'+['#5B8DEF','#A78BFA','#2DD4BF','#FBBF24','#FF7A7A','#34D399'].map(function(c){return '<button class="swatch'+(n.color===c?' on':'')+'" style="background:'+c+';height:26px;width:26px" onclick="setNoteColor(\''+c+'\')"></button>';}).join('')+'</div></div><div class="f g1 wrapf">'+allTags.map(function(t){var on=n.tags.indexOf(t)>=0;return '<button class="tag" style="'+(on?'background:'+n.color+'22;color:'+n.color:'')+'" onclick="toggleTag(\''+t+'\')">'+esc(t)+'</button>';}).join('')+'</div><textarea id="noteEditor" class="input" style="flex:1;min-height:280px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" oninput="scheduleSave()" placeholder="# Heading&#10;&#10;Write in Markdown…">'+esc(n.content)+'</textarea><div class="f jb aic"><span class="txs muted">'+esc(n.updatedAt)+'</span><button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#EF4444;height:34px" onclick="deleteNote(\''+n.id+'\')">'+ic('trash',14)+' Delete</button></div></div>';
 }
-function selectNote(id){UI.activeNoteId=id;render();}
+/* FIX 1: dirty-check when leaving a note */
+function selectNote(id){
+  if(NOTE_DIRTY&&UI.activeNoteId&&UI.activeNoteId!==id){
+    confirmSheet({title:'Discard unsaved changes?',message:'You have edits that are not saved. Leave this note?',confirmLabel:'Discard',onConfirm:function(){NOTE_DIRTY=false;UI.activeNoteId=id;render();}});
+    return;
+  }
+  UI.activeNoteId=id;render();
+}
 function onNoteSearch(v){UI.noteQuery=v;var list=filteredNotes();var rail=document.getElementById('noteRail');if(rail)rail.innerHTML=railItems(list);}
 function setNoteFilter(f){UI.noteFilter=f;render();}
 function setNoteColor(c){var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];if(!n)return;n.color=c;save();render();}
 function changeNoteSubject(id){var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];if(!n)return;n.subjectId=id;save();render();}
 function changeNoteVis(v){var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];if(!n)return;n.visibility=v;save();render();}
 function toggleTag(t){var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];if(!n)return;var i=n.tags.indexOf(t);if(i>=0)n.tags.splice(i,1);else n.tags.push(t);save();render();}
+
+/* ============================================================
+   FIX 1: Notes save — keep in-memory note current while typing.
+   Auto-save ON  → debounce persistence.
+   Auto-save OFF → keep edits in memory, show a manual Save button,
+   and warn beforeunload if unsaved. No silent data loss.
+   ============================================================ */
 var SAVE_TIMER=null;
-function scheduleSave(){var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];if(!n)return;var st=document.getElementById('saveState');if(st){st.className='autosave saving';st.innerHTML=ic('clock',12)+' Saving…';}clearTimeout(SAVE_TIMER);SAVE_TIMER=setTimeout(function(){if(!S.settings.autoSave){if(st){st.className='autosave';st.innerHTML='Auto-save off';}return;}var t=document.getElementById('noteTitle'),c=document.getElementById('noteEditor');if(t)n.title=t.value||'Untitled note';if(c)n.content=c.value;n.updatedAt='Just now';save();if(st){st.className='autosave saved';st.innerHTML=ic('check',12)+' Saved';}var rail=document.getElementById('noteRail');if(rail)rail.innerHTML=railItems(filteredNotes());},700);}
-function newNote(){var id=uid();S.notes.unshift({id:id,title:'Untitled note',content:'',subjectId:S.subjects[0]?S.subjects[0].id:null,color:'#5B8DEF',visibility:'personal',tags:[],updatedAt:'Just now'});UI.activeNoteId=id;save();render();setTimeout(function(){var t=document.getElementById('noteTitle');if(t){t.focus();t.select();}},50);}
-function newNoteFor(subjectId){var id=uid();var s=subjectById(subjectId);S.notes.unshift({id:id,title:'Untitled note',content:'',subjectId:subjectId,color:s?s.color:'#5B8DEF',visibility:'personal',tags:[],updatedAt:'Just now'});UI.activeNoteId=id;save();go('/notes');}
-function openNote(id){UI.activeNoteId=id;go('/notes');render();}
-function deleteNote(id){confirmSheet({title:'Delete this note?',message:'This note will be permanently removed.',onConfirm:function(){S.notes=S.notes.filter(function(n){return n.id!==id;});if(UI.activeNoteId===id)UI.activeNoteId=null;save();toast('Note deleted');render();}});}
+var NOTE_EDIT_VERSION=0;
+function _syncNoteFromDOM(){
+  var n=S.notes.filter(function(x){return x.id===UI.activeNoteId;})[0];
+  if(!n)return null;
+  var t=document.getElementById('noteTitle');
+  var c=document.getElementById('noteEditor');
+  if(t)n.title=(t.value||'').trim()||'Untitled note';
+  if(c)n.content=c.value;
+  n.updatedAt='Just now';
+  return n;
+}
+function ensureManualSaveButton(){
+  if(document.getElementById('noteSaveBar'))return;
+  var host=document.getElementById('saveState');
+  if(!host||!host.parentNode)return;
+  var btn=document.createElement('button');
+  btn.id='noteSaveBar';
+  btn.textContent='Save';
+  btn.style.cssText='background:#5B8DEF;color:#fff;height:26px;padding:0 12px;border-radius:999px;font-size:11px;font-weight:600;margin-left:8px;flex-shrink:0';
+  btn.onclick=manualSaveNote;
+  host.parentNode.appendChild(btn);
+}
+async function manualSaveNote(){
+  var n=_syncNoteFromDOM();if(!n)return;
+  var saveVersion=NOTE_EDIT_VERSION;
+  var st=document.getElementById('saveState');
+  var btn=document.getElementById('noteSaveBar');
+  if(st){st.className='autosave saving';st.innerHTML=ic('clock',12)+' Saving…';}
+  if(btn){btn.disabled=true;btn.textContent='Saving…';}
+  clearTimeout(SAVE_TIMER);
+  var result=await saveWorkspaceNow();
+  if(!result.ok){
+    NOTE_DIRTY=true;
+    if(st){st.className='autosave';st.innerHTML=ic('alert',12)+' Save failed';}
+    if(btn){btn.disabled=false;btn.textContent='Retry save';}
+    toast('Note was not saved to the cloud. Check your connection and retry.');
+    return;
+  }
+  if(saveVersion===NOTE_EDIT_VERSION)NOTE_DIRTY=false;
+  if(st){st.className='autosave saved';st.innerHTML=ic('check',12)+' Saved';}
+  btn=document.getElementById('noteSaveBar');if(btn)btn.remove();
+  var rail=document.getElementById('noteRail');if(rail)rail.innerHTML=railItems(filteredNotes());
+  toast('Note saved');
+}
+function scheduleSave(){
+  var n=_syncNoteFromDOM();
+  if(!n)return;
+  NOTE_EDIT_VERSION++;
+  var scheduledVersion=NOTE_EDIT_VERSION;
+  NOTE_DIRTY=true;
+  var st=document.getElementById('saveState');
+  if(!S.settings.autoSave){
+    if(st){st.className='autosave';st.innerHTML=ic('edit',12)+' Unsaved changes';}
+    ensureManualSaveButton();
+    return;
+  }
+  if(st){st.className='autosave saving';st.innerHTML=ic('clock',12)+' Saving…';}
+  clearTimeout(SAVE_TIMER);
+  SAVE_TIMER=setTimeout(async function(){
+    var again=_syncNoteFromDOM();if(!again)return;
+    var result=await saveWorkspaceNow();
+    if(!result.ok){
+      NOTE_DIRTY=true;
+      var failed=document.getElementById('saveState');
+      if(failed){failed.className='autosave';failed.innerHTML=ic('alert',12)+' Save failed';}
+      ensureManualSaveButton();
+      toast('Autosave failed. Your edits are still here; use Save to retry.');
+      return;
+    }
+    if(scheduledVersion===NOTE_EDIT_VERSION)NOTE_DIRTY=false;
+    var s2=document.getElementById('saveState');
+    if(s2){s2.className='autosave saved';s2.innerHTML=ic('check',12)+' Saved';}
+    var btn=document.getElementById('noteSaveBar');if(btn)btn.remove();
+    var rail=document.getElementById('noteRail');if(rail)rail.innerHTML=railItems(filteredNotes());
+  },700);
+}
+window.addEventListener('beforeunload',function(e){
+  if(!NOTE_DIRTY)return;
+  e.preventDefault();e.returnValue='';
+});
+
+/* FIX 1: also guard newNote and openNote against losing dirty edits */
+function newNote(){
+  if(NOTE_DIRTY){confirmSheet({title:'Discard unsaved changes?',message:'You have edits that are not saved. Create a new note anyway?',confirmLabel:'Discard',onConfirm:function(){NOTE_DIRTY=false;UI.activeNoteId=null;go('/notes');render();setTimeout(function(){var t=document.getElementById('noteTitle');if(t){t.focus();t.select();}},50);}});return;}
+  var id=uid();S.notes.unshift({id:id,title:'Untitled note',content:'',subjectId:S.subjects[0]?S.subjects[0].id:null,color:'#5B8DEF',visibility:'personal',tags:[],updatedAt:'Just now'});UI.activeNoteId=id;save();render();setTimeout(function(){var t=document.getElementById('noteTitle');if(t){t.focus();t.select();}},50);
+}
+function newNoteFor(subjectId){
+  if(NOTE_DIRTY){confirmSheet({title:'Discard unsaved changes?',message:'You have edits that are not saved. Create a new note anyway?',confirmLabel:'Discard',onConfirm:function(){NOTE_DIRTY=false;_createNoteFor(subjectId);}});return;}
+  _createNoteFor(subjectId);
+}
+function _createNoteFor(subjectId){var id=uid();var s=subjectById(subjectId);S.notes.unshift({id:id,title:'Untitled note',content:'',subjectId:subjectId,color:s?s.color:'#5B8DEF',visibility:'personal',tags:[],updatedAt:'Just now'});UI.activeNoteId=id;save();go('/notes');}
+function openNote(id){
+  if(NOTE_DIRTY&&UI.activeNoteId&&UI.activeNoteId!==id){confirmSheet({title:'Discard unsaved changes?',message:'You have edits that are not saved. Open the other note?',confirmLabel:'Discard',onConfirm:function(){NOTE_DIRTY=false;UI.activeNoteId=id;go('/notes');render();}});return;}
+  UI.activeNoteId=id;go('/notes');render();
+}
+function deleteNote(id){confirmSheet({title:'Delete this note?',message:'This note will be permanently removed.',onConfirm:function(){S.notes=S.notes.filter(function(n){return n.id!==id;});if(UI.activeNoteId===id)UI.activeNoteId=null;NOTE_DIRTY=false;save();toast('Note deleted');render();}});}
 
 function vTasks(){
   var c=taskCounts();
@@ -1302,8 +1473,10 @@ function profileSettings(){
   h+='<div class="pgroup"><div class="pgroup-head">'+ic('idcard',15)+' Account Settings</div><div class="pgroup-body">'+infoRow('user','#5B8DEF','Name',u.name)+'<div class="hr"></div>'+infoRow('mail','#A78BFA','Email',u.email)+'<div class="hr"></div>'+infoRow('grad','#2DD4BF','School',u.school)+'<div class="hr"></div>'+infoRow('layers','#FBBF24','Grade / Track',u.grade+' · '+u.track)+'<div class="hr"></div><button class="arow" onclick="openEditProfile()"><span class="txm med">Edit bio & details</span>'+ic('chevR',18)+'</button></div></div>';
   h+='<div class="pgroup"><div class="pgroup-head">'+ic('zap',15)+' Study & Lock-In Defaults</div><div class="pgroup-body"><div class="prow"><div><p class="txm med">Default session length</p><p class="txs muted">Applied to every new Lock-In</p></div></div><div class="f g2">'+[15,25,45,60].map(function(d){var on=S.settings.defaultLength===d;return '<button class="btn grow" style="height:40px;border-radius:12px;font-size:13px;'+(on?'background:#5B8DEF;color:#fff':'background:var(--card);border:1px solid var(--border);color:var(--muted-fg)')+'" onclick="setDefaultLength('+d+')">'+d+'m</button>';}).join('')+'</div><div class="hr mt3"></div><div class="prow"><div><p class="txm med">Strict Mode by default</p><p class="txs muted">Block navigation during focus</p></div><button class="toggle'+(S.settings.strictDefault?' on':'')+'" onclick="toggleSetting(\'strictDefault\')"><span></span></button></div><div class="hr"></div><div class="prow"><div><p class="txm med">Chime on completion</p><p class="txs muted">Play a sound when a session ends</p></div><button class="toggle'+(S.settings.chime?' on':'')+'" onclick="toggleSetting(\'chime\')"><span></span></button></div></div></div>';
   h+='<div class="pgroup"><div class="pgroup-head">'+ic('music',15)+' Music</div><div class="pgroup-body"><div class="prow"><div><p class="txm med">Offline tracks</p><p class="txs muted">'+S.offlineMusic.length+' file'+(S.offlineMusic.length===1?'':'s')+' on this device</p></div><button class="btn btn-sm" style="background:var(--secondary);color:var(--fg)" onclick="go(\'/music\')">Manage</button></div><div class="hr"></div><div class="prow"><div><p class="txm med">Now playing</p><p class="txs muted">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active!=='none'?'<button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#EF4444" onclick="stopMusic()">Stop</button>':'')+'</div></div></div>';
-  h+='<div class="pgroup"><div class="pgroup-head">'+ic('moon',15)+' Appearance & Notifications</div><div class="pgroup-body"><div class="prow"><div class="f g3 aic"><span class="iconbtn" style="background:var(--secondary);color:'+(S.theme==='dark'?'#A78BFA':'#FBBF24')+'">'+ic(S.theme==='dark'?'moon':'sun',17)+'</span><span class="txm med">Dark mode</span></div><button class="toggle purple'+(S.theme==='dark'?' on':'')+'" onclick="toggleTheme()"><span></span></button></div><div class="hr"></div>'+[['roomUpdates','Room updates'],['taskReminders','Task reminders'],['chatMessages','Chat messages'],['weeklyProgress','Weekly progress']].map(function(n){return '<div class="prow"><span class="txm med">'+n[1]+'</span><button class="toggle'+(S.notifications[n[0]]?' on':'')+'" onclick="toggleNotif(\''+n[0]+'\')"><span></span></button></div>';}).join('')+'<div class="hr"></div><div class="prow"><div><p class="txm med">Auto-save notes</p><p class="txs muted">Persist edits as you type</p></div><button class="toggle'+(S.settings.autoSave?' on':'')+'" onclick="toggleSetting(\'autoSave\')"><span></span></button></div></div></div>';
-  h+='<div class="pgroup pb"><div class="pgroup-head">'+ic('lock',15)+' Session & Security</div><div class="pgroup-body"><button class="arow" onclick="downloadAppFile()"><span class="txm med">Download app file</span>'+ic('download',18)+'</button><div class="hr"></div><button class="arow" onclick="clearWorkspace()"><span class="txm med">Clear my workspace</span>'+ic('reset',18)+'</button><div class="hr"></div><button class="arow" onclick="openAbout()"><span class="txm med">About NEXBYTE</span>'+ic('info',18)+'</button><div class="hr"></div><button class="arow" onclick="doLogout()"><span class="txm med">Sign out</span>'+ic('logOut',18)+'</button><div class="hr"></div><button class="arow" onclick="deleteAccount()"><span class="txm med" style="color:#EF4444">Delete account</span>'+ic('trash',18)+'</button></div></div>';
+  /* FIX 9: honest note about notification toggles */
+  h+='<div class="pgroup"><div class="pgroup-head">'+ic('moon',15)+' Appearance & Notifications</div><div class="pgroup-body"><p class="txs muted" style="padding:4px 0 6px">Preferences below are saved to your account. Actual delivery (in-app, email, or push) must be wired to a backend before these fire.</p><div class="prow"><div class="f g3 aic"><span class="iconbtn" style="background:var(--secondary);color:'+(S.theme==='dark'?'#A78BFA':'#FBBF24')+'">'+ic(S.theme==='dark'?'moon':'sun',17)+'</span><span class="txm med">Dark mode</span></div><button class="toggle purple'+(S.theme==='dark'?' on':'')+'" onclick="toggleTheme()"><span></span></button></div><div class="hr"></div>'+[['roomUpdates','Room updates'],['taskReminders','Task reminders'],['chatMessages','Chat messages'],['weeklyProgress','Weekly progress']].map(function(n){return '<div class="prow"><span class="txm med">'+n[1]+'</span><button class="toggle'+(S.notifications[n[0]]?' on':'')+'" onclick="toggleNotif(\''+n[0]+'\')"><span></span></button></div>';}).join('')+'<div class="hr"></div><div class="prow"><div><p class="txm med">Auto-save notes</p><p class="txs muted">Persist edits as you type</p></div><button class="toggle'+(S.settings.autoSave?' on':'')+'" onclick="toggleSetting(\'autoSave\')"><span></span></button></div></div></div>';
+  /* FIX 5: relabelled "Delete account" → honest sign-out */
+  h+='<div class="pgroup pb"><div class="pgroup-head">'+ic('lock',15)+' Session & Security</div><div class="pgroup-body"><button class="arow" onclick="downloadAppFile()"><span class="txm med">Download app file</span>'+ic('download',18)+'</button><div class="hr"></div><button class="arow" onclick="clearWorkspace()"><span class="txm med">Clear my workspace</span>'+ic('reset',18)+'</button><div class="hr"></div><button class="arow" onclick="openAbout()"><span class="txm med">About NEXBYTE</span>'+ic('info',18)+'</button><div class="hr"></div><button class="arow" onclick="doLogout()"><span class="txm med">Sign out</span>'+ic('logOut',18)+'</button></div></div>';
   h+='<div class="pad mt5 pb"><p class="center txs muted">NEXBYTE · Academic Collaboration Environment · v3.6</p></div>';
   return h;
 }
@@ -1313,14 +1486,34 @@ function toggleSetting(k){S.settings[k]=!S.settings[k];save();render();}
 function toggleNotif(k){S.notifications[k]=!S.notifications[k];save();render();}
 function toggleTheme(){S.theme=S.theme==='light'?'dark':'light';S.settings.theme=S.theme;applyTheme();save();render();}
 function applyTheme(){document.documentElement.classList.toggle('dark',S.theme==='dark');}
-function clearWorkspace(){confirmSheet({title:'Clear your workspace?',message:'This permanently clears your saved subjects, tasks, notes, rooms, and sessions. Offline music files also need to be cleared manually from the browser.',confirmLabel:'Clear workspace',onConfirm:function(){var user=S.auth.user;S=defaultState();S.auth={isAuthenticated:true,user:user};save();applyTheme();render();toast('Workspace cleared');}});}
+function clearWorkspace(){confirmSheet({title:'Clear your workspace?',message:'This permanently clears your saved subjects, tasks, notes, rooms, and sessions. Offline music files also need to be cleared manually from the browser.',confirmLabel:'Clear workspace',onConfirm:function(){var user=S.auth.user;NOTE_DIRTY=false;S=defaultState();S.auth={isAuthenticated:true,user:user};save();applyTheme();render();toast('Workspace cleared');}});}
 function resetPassword(){var email=prompt('Enter your account email to receive a reset link:');if(!email)return;if(!dbClient){toast('Configure Supabase first.');return;}dbClient.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname}).then(function(r){toast(r.error?'Could not send reset email. Check setup.':'If the account exists, a reset email has been sent.');});}
-function deleteAccount(){confirmSheet({title:'Account deletion',message:'For safety, account deletion requires a server-side function.',confirmLabel:'Sign out',danger:false,onConfirm:async function(){stopMusic();if(dbClient)await dbClient.auth.signOut();S=defaultState();render();go('/welcome');}});}
+/* FIX 5: honest label — this signs out, does not delete the account */
+function deleteAccount(){confirmSheet({title:'Sign out of this account?',message:'Full account deletion requires a server-side function that is not part of this build. This button only signs you out — your data remains on the server.',confirmLabel:'Sign out',danger:false,onConfirm:async function(){stopMusic();NOTE_DIRTY=false;if(dbClient)await dbClient.auth.signOut();S=defaultState();render();go('/welcome');}});}
+
+/* FIX 2: openEditProfile now persists to Supabase auth metadata */
 function openEditProfile(){
   var u=S.auth.user;
   var el=sheet('<div class="f jb aic mb4"><h3 class="txl semi">Edit profile</h3><button class="iconbtn" data-cancel>'+ic('x',18)+'</button></div><div class="fc g4"><div><label class="field-label">Full name</label><input id="pfName" class="input" value="'+esc(u.name)+'"/></div><div><label class="field-label">School</label><input id="pfSchool" class="input" value="'+esc(u.school)+'"/></div><div class="f g3"><div class="grow"><label class="field-label">Grade</label><input id="pfGrade" class="input" value="'+esc(u.grade)+'"/></div><div class="grow"><label class="field-label">Track</label><input id="pfTrack" class="input" value="'+esc(u.track)+'"/></div></div><div><label class="field-label">Bio</label><textarea id="pfBio" class="input" rows="3">'+esc(u.bio)+'</textarea></div><button class="btn btn-primary btn-block" data-save>Save changes</button></div>');
   el.querySelector('[data-cancel]').onclick=closeTop;
-  el.querySelector('[data-save]').onclick=function(){var name=el.querySelector('#pfName').value.trim()||u.name;S.auth.user=Object.assign({},S.auth.user,{name:name,school:el.querySelector('#pfSchool').value,grade:el.querySelector('#pfGrade').value,track:el.querySelector('#pfTrack').value,bio:el.querySelector('#pfBio').value,initials:name.split(' ').map(function(p){return p[0];}).join('').slice(0,2).toUpperCase()});save();closeTop();toast('Profile updated');render();};
+  el.querySelector('[data-save]').onclick=async function(){
+    var btn=el.querySelector('[data-save]');
+    var name=el.querySelector('#pfName').value.trim()||u.name;
+    var school=el.querySelector('#pfSchool').value.trim();
+    var grade=el.querySelector('#pfGrade').value.trim();
+    var track=el.querySelector('#pfTrack').value.trim();
+    var bio=el.querySelector('#pfBio').value.trim();
+    var initials=name.split(/\s+/).map(function(p){return p[0]||'';}).join('').slice(0,2).toUpperCase();
+    btn.disabled=true;btn.textContent='Saving…';
+    if(dbClient){
+      try{
+        var r=await dbClient.auth.updateUser({data:{full_name:name,school:school,grade:grade,track:track,bio:bio}});
+        if(r.error){btn.disabled=false;btn.textContent='Save changes';toast('Could not save profile: '+r.error.message);return;}
+      }catch(e){btn.disabled=false;btn.textContent='Save changes';toast('Profile save failed: '+(e&&e.message?e.message:'network error'));return;}
+    }
+    S.auth.user=Object.assign({},S.auth.user,{name:name,school:school,grade:grade,track:track,bio:bio,initials:initials});
+    save();closeTop();toast('Profile updated');render();
+  };
 }
 function openAbout(){var el=sheet('<div class="fc aic center">'+logo(64)+'<h3 class="txl bold mt3">NEXBYTE</h3><p class="txs muted" style="letter-spacing:.2em;text-transform:uppercase">Academic Collaboration Environment</p><p class="txm muted mt4">An all-in-one academic workspace. Subject-bound Lock-In sessions, synchronized study rooms, a Markdown knowledge base, focus audio, and task telemetry — all in one place.</p><p class="txs muted mt4">Version 3.6 · Account-based workspace</p></div><button class="btn btn-secondary btn-block mt5" data-close>Close</button>');el.querySelector('[data-close]').onclick=closeTop;}
 function downloadAppFile(){var html=document.documentElement.outerHTML;var blob=new Blob([html],{type:'text/html'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='nexbyte_app.html';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);toast('App file downloaded 📥');}
