@@ -1167,7 +1167,7 @@ function roomCards(q){
   if(!list.length)return '<div class="empty"><div class="em">👥</div><h3 class="txl semi mb1">No rooms found</h3><p class="txm muted">Try a different filter or create your own room.</p></div>';
   return '<div class="fc g3">'+list.map(function(r){
     var live=r.status==='focus';
-    return '<div class="card padc"><div class="f" style="align-items:flex-start;gap:12px"><span style="font-size:26px">'+r.emoji+'</span><div class="grow minw"><div class="f g2 aic"><p class="txm semi trunc">'+esc(r.name)+'</p>'+(r.isPrivate?'<span class="txs muted">'+ic('lock',12)+'</span>':'')+'</div><p class="txs muted">'+esc(r.subjectTag)+'</p></div><span class="badge" style="background:'+(live?'rgba(91,141,239,.15);color:#5B8DEF':'rgba(45,212,191,.15);color:#0f766e')+'">'+fmtTime(r.timer)+'</span></div><div class="f g2 aic mt2"><span class="txs muted f g1 aic">'+ic('clock',12)+' Round '+r.round+'</span><span class="txs muted">·</span><span class="txs muted f g1 aic">'+ic('users',12)+' '+r.members.length+'/'+r.maxCapacity+'</span><span class="txs" style="color:'+(live?'#5B8DEF':'#2DD4BF')+'">'+(live?'● Focusing':'● On break')+'</span></div><p class="txs muted mt2 clamp2">'+esc(r.description)+'</p><div class="f jb aic mt3"><div class="f">'+r.members.slice(0,5).map(function(m,i){return '<span style="margin-left:'+(i?'-8px':'0')+';border:2px solid var(--card);border-radius:999px">'+avatar(m.initials,m.color,26)+'</span>';}).join('')+'</div>'+(r.isJoined?'<button class="btn btn-sm" style="background:'+r.color+';color:#fff" onclick="go(\'/room/'+r.id+'\')">Open</button>':'<button class="btn btn-sm" style="border:2px solid '+r.color+';color:'+r.color+'" onclick="joinRoom(\''+r.id+'\')">Join</button>')+'</div></div>';}).join('')+'</div>';
+    return '<div class="card padc"><div class="f" style="align-items:flex-start;gap:12px"><span style="font-size:26px">'+r.emoji+'</span><div class="grow minw"><div class="f g2 aic"><p class="txm semi trunc">'+esc(r.name)+'</p>'+(r.isPrivate?'<span class="txs muted">'+ic('lock',12)+'</span>':'')+'</div><p class="txs muted">'+esc(r.subjectTag)+'</p></div><span class="badge" style="background:'+(live?'rgba(91,141,239,.15);color:#5B8DEF':'rgba(45,212,191,.15);color:#0f766e')+'">'+fmtTime(r.timer)+'</span></div><div class="f g2 aic mt2"><span class="txs muted f g1 aic">'+ic('clock',12)+' Round '+r.round+'</span><span class="txs muted">·</span><span class="txs muted f g1 aic">'+ic('users',12)+' '+r.members.length+'/'+r.maxCapacity+'</span><span class="txs" style="color:'+(live?'#5B8DEF':'#2DD4BF')+'">'+(live?'● Focusing':'● On break')+'</span></div><p class="txs muted mt2 clamp2">'+esc(r.description)+'</p><div class="f jb aic mt3"><div class="f">'+r.members.slice(0,5).map(function(m,i){return '<span style="margin-left:'+(i?'-8px':'0')+';border:2px solid var(--card);border-radius:999px">'+avatar(m.initials,m.color,26)+'</span>';}).join('')+'</div>'+(r.isJoined?'<button class="btn btn-sm" style="background:'+r.color+';color:#fff" onclick="go(\'/room/'+r.id+'\')">Open</button>':'<button class="btn btn-sm" style="border:2px solid '+r.color+';color:'+r.color+'" onclick="joinRoom(\''+r.id+'\')">Join</button>')+(r.isShared&&r.ownerId===nbCurrentUserId()?'<button class="btn btn-sm" style="border:1px solid #ef4444;color:#ef4444;margin-left:8px" onclick="deleteSharedRoom(\''+r.id+'\')">Delete</button>':'')+'</div></div>';}).join('')+'</div>';
 }
 function filterRooms(q){var el=document.getElementById('roomsList');if(!el)return;el.innerHTML=roomCards(q);}
 function joinRoom(id){var r=S.rooms.filter(function(x){return x.id===id;})[0];if(!r)return;if(r.members.length>=r.maxCapacity){toast('Room is full');return;}r.isJoined=true;r.members.push({name:S.auth.user.name,initials:S.auth.user.initials,color:S.auth.user.color,role:'Member'});logActivity('Joined "'+r.name+'"',r.color);save();toast('Joined "'+r.name+'"');go('/room/'+id);}
@@ -1586,6 +1586,22 @@ applyTheme();
 ensureMediaHost();
 if(!location.hash)location.hash='#/welcome';
 bootstrapAuth();
+
+async function deleteSharedRoom(id){
+ var room=S.rooms.filter(function(r){return r.id===id&&r.isShared;})[0];
+ if(!room){toast('Shared room not found.');return;}
+ if(room.ownerId!==nbCurrentUserId()){toast('Only the room creator can delete this room.');return;}
+ confirmSheet({title:'Delete this room?',message:'This permanently deletes the shared room, its memberships, and all chat messages for everyone. This cannot be undone.',confirmLabel:'Delete room',onConfirm:async function(){
+  try{
+   var out=await dbClient.from('study_rooms').delete().eq('id',id).eq('owner_id',nbCurrentUserId());
+   if(out.error)throw out.error;
+   S.rooms=S.rooms.filter(function(r){return r.id!==id;});
+   if(NB_SHARED_CHANNEL){dbClient.removeChannel(NB_SHARED_CHANNEL);NB_SHARED_CHANNEL=null;}
+   toast('Shared room deleted.');
+   go('/rooms');
+  }catch(e){console.error(e);toast('Could not delete room: '+nbErr(e));}
+ }});
+}
 </script>
 </body>
 </html>
