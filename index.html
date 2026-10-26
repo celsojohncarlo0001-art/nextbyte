@@ -1518,6 +1518,70 @@ function openEditProfile(){
 function openAbout(){var el=sheet('<div class="fc aic center">'+logo(64)+'<h3 class="txl bold mt3">NEXBYTE</h3><p class="txs muted" style="letter-spacing:.2em;text-transform:uppercase">Academic Collaboration Environment</p><p class="txm muted mt4">An all-in-one academic workspace. Subject-bound Lock-In sessions, synchronized study rooms, a Markdown knowledge base, focus audio, and task telemetry — all in one place.</p><p class="txs muted mt4">Version 3.6 · Account-based workspace</p></div><button class="btn btn-secondary btn-block mt5" data-close>Close</button>');el.querySelector('[data-close]').onclick=closeTop;}
 function downloadAppFile(){var html=document.documentElement.outerHTML;var blob=new Blob([html],{type:'text/html'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='nexbyte_app.html';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);toast('App file downloaded 📥');}
 
+/* NEXTBYTE shared study rooms patch: Supabase-backed invite-only rooms and chat. */
+var NB_SHARED_PREFIX='nb_shared_';
+var NB_SHARED_CHANNEL=null;
+function nbErr(e, fallback){return (e&&e.message)||fallback||'Unknown error';}
+function nbCurrentUserId(){return S&&S.auth&&S.auth.user&&S.auth.user.id;}
+function nbRoomFromRow(row,members){
+ var ms=(members||[]).map(function(m){var isMe=m.user_id===nbCurrentUserId();return {userId:m.user_id,name:isMe?(S.auth.user.name||'You'):'Member '+String(m.user_id).slice(0,8),initials:isMe?(S.auth.user.initials||'ME'):'M',color:isMe?(S.auth.user.color||'#5B8DEF'):'#A78BFA',role:m.role==='owner'?'Host':'Member'};});
+ return {id:row.id,name:row.name,subjectTag:row.subject_tag||'Study group',emoji:row.emoji||'📘',color:row.color||'#5B8DEF',description:row.description||'Invite-only shared study room',isPrivate:true,isShared:true,inviteCode:row.invite_code,ownerId:row.owner_id,maxCapacity:row.max_capacity||8,status:'focus',round:1,timer:0,isJoined:true,members:ms,messages:[],tasks:[],sharedNote:'',polls:[],createdAt:row.created_at};
+}
+async function nbLoadSharedRooms(silent){
+ if(!dbClient||!nbCurrentUserId())return;
+ try{
+  var mr=await dbClient.from('study_room_members').select('room_id,user_id,role,joined_at').eq('user_id',nbCurrentUserId());
+  if(mr.error)throw mr.error;
+  var ids=(mr.data||[]).map(function(x){return x.room_id;});
+  S.rooms=S.rooms.filter(function(r){return !r.isShared;});
+  if(!ids.length){if(!silent)render();return;}
+  var rr=await dbClient.from('study_rooms').select('id,name,subject_tag,description,emoji,color,owner_id,invite_code,max_capacity,created_at').in('id',ids);
+  if(rr.error)throw rr.error;
+  var members=await dbClient.from('study_room_members').select('room_id,user_id,role').in('room_id',ids);
+  if(members.error)throw members.error;
+  S.rooms=(rr.data||[]).map(function(row){return nbRoomFromRow(row,(members.data||[]).filter(function(m){return m.room_id===row.id;}));}).concat(S.rooms);
+  if(!silent)render();
+ }catch(e){console.error('Shared room load failed',e);if(!silent)toast('Could not load shared rooms: '+nbErr(e));}
+}
+async function nbLoadMessages(room,quiet){
+ if(!room||!room.isShared||!dbClient)return;
+ try{
+  var res=await dbClient.from('study_room_messages').select('id,room_id,user_id,body,created_at').eq('room_id',room.id).order('created_at',{ascending:true}).limit(300);
+  if(res.error)throw res.error;
+  var old=room.messages||[];
+  room.messages=(res.data||[]).map(function(m){var me=m.user_id===nbCurrentUserId();var member=room.members.filter(function(x){return x.userId===m.user_id;})[0];return {id:m.id,from:me?(S.auth.user.name||'You'):(member?member.name:'Member '+m.user_id.slice(0,8)),initials:me?(S.auth.user.initials||'ME'):(member?member.initials:'M'),color:me?(S.auth.user.color||'#5B8DEF'):(member?member.color:'#A78BFA'),time:new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),me:me,kind:'text',text:m.body};});
+  if(!quiet)render();
+ }catch(e){console.error('Shared messages load failed',e);if(!quiet)toast('Could not load room messages: '+nbErr(e));}
+}
+function nbSubscribeRoom(room){
+ if(!dbClient||!room||!room.isShared)return;
+ if(NB_SHARED_CHANNEL){try{dbClient.removeChannel(NB_SHARED_CHANNEL);}catch(e){}}
+ NB_SHARED_CHANNEL=dbClient.channel('nb-room-'+room.id).on('postgres_changes',{event:'INSERT',schema:'public',table:'study_room_messages',filter:'room_id=eq.'+room.id},function(){var r=S.rooms.filter(function(x){return x.id===room.id;})[0];if(r)nbLoadMessages(r,true).then(function(){if(resolve().view==='room'&&resolve().id===room.id)render();});}).subscribe();
+}
+var nbOriginalGo=go;
+go=function(path){nbOriginalGo(path);if(path==='/rooms'){setTimeout(function(){nbLoadSharedRooms(true);},0);}var match=String(path).match(/^\/room\/([0-9a-f-]{36})$/i);if(match){setTimeout(async function(){await nbLoadSharedRooms(true);var r=S.rooms.filter(function(x){return x.id===match[1];})[0];if(r&&r.isShared){await nbLoadMessages(r,true);nbSubscribeRoom(r);render();}},0);}};
+var nbOriginalVRooms=vRooms;
+vRooms=function(){var filters=[['live','Live'],['all','All Rooms'],['mine','Mine']];var mine=S.rooms.filter(function(r){return r.isJoined;});var h='<div class="pad pt" style="padding-top:20px;padding-bottom:12px"><div class="f jb aic"><div><h1 class="tx2 bold">Study Rooms</h1><p class="txm muted">'+mine.length+' joined · invite-only shared rooms</p></div><button class="btn btn-sm" style="background:#5B8DEF;color:#fff" onclick="openCreateRoom()">'+ic('plus',18)+' Create</button></div></div>';
+ h+='<div class="pad mt2"><div class="card padc"><h2 class="txm semi mb2">Join with invite code</h2><p class="txs muted mb2">Ask the room owner for the invite code.</p><div class="f g2"><input id="nbInviteCode" class="input" placeholder="Enter invite code" autocapitalize="characters"/><button class="btn btn-primary" onclick="nbJoinByCode()">Join</button></div></div></div>';
+ h+='<div class="pad"><div class="searchbar">'+ic('search',18)+'<input id="roomSearch" placeholder="Search your rooms…" oninput="filterRooms(this.value)"/></div></div><div class="pad mt3"><div class="seg">'+filters.map(function(f){return '<button class="'+(UI.roomFilter===f[0]?'on':'')+'" onclick="setRoomFilter(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+'</div></div><div class="pad mt4 pb" id="roomsList">'+roomCards()+'</div>';return h;};
+var nbOriginalRoomCards=roomCards;
+roomCards=function(q){q=(q||'').toLowerCase();var list=S.rooms.filter(function(r){if(UI.roomFilter==='live'&&r.status!=='focus')return false;if(UI.roomFilter==='mine'&&!r.isJoined)return false;return (r.name+' '+r.subjectTag).toLowerCase().indexOf(q)>=0;});if(!list.length)return '<div class="empty"><div class="em">👥</div><h3 class="txl semi mb1">No rooms found</h3><p class="txm muted">Create a room or join with an invite code.</p></div>';return '<div class="fc g3">'+list.map(function(r){return '<div class="card padc"><div class="f" style="align-items:flex-start;gap:12px"><span style="font-size:26px">'+esc(r.emoji)+'</span><div class="grow minw"><div class="f g2 aic"><p class="txm semi trunc">'+esc(r.name)+'</p><span class="txs muted">'+ic('lock',12)+'</span></div><p class="txs muted">'+esc(r.subjectTag)+(r.isShared?' · Shared':' · Personal')+'</p></div></div><p class="txs muted mt2">'+esc(r.description||'')+'</p><div class="f jb aic mt3"><span class="txs muted">'+ic('users',12)+' '+r.members.length+'/'+r.maxCapacity+'</span>'+(r.isJoined?'<button class="btn btn-sm" style="background:'+r.color+';color:#fff" onclick="go(\'/room/'+r.id+'\')">Open</button>':'<button class="btn btn-sm" onclick="joinRoom(\''+r.id+'\')">Join</button>')+'</div>'+(r.isShared&&r.ownerId===nbCurrentUserId()?'<p class="txs mt2"><b>Invite code:</b> <code>'+esc(r.inviteCode||'')+'</code> <button class="chip" onclick="navigator.clipboard.writeText(\''+esc(r.inviteCode||'')+'\').then(function(){toast(\'Invite code copied\')})">Copy</button></p>':'')+'</div>';}).join('')+'</div>';};
+async function openCreateRoom(){if(!dbClient||!nbCurrentUserId()){toast('Sign in with Supabase to create a shared room.');return;}var name=prompt('Room name:');if(!name||!name.trim())return;var subject=prompt('Subject tag (e.g. Math, Science):','Study Group')||'Study Group';var description=prompt('Room description:','Invite-only study room')||'';var capacity=parseInt(prompt('Maximum members (2–100):','8'),10)||8;capacity=Math.max(2,Math.min(100,capacity));var emojis=['📘','🧠','📐','🔬','🎨','🔢','💻','⚛️'];var emoji=prompt('Choose an icon: '+emojis.join(' '),'📘')||'📘';var color='#5B8DEF';try{var res=await dbClient.from('study_rooms').insert({name:name.trim(),subject_tag:subject.trim(),description:description.trim(),emoji:emoji,color:color,owner_id:nbCurrentUserId(),max_capacity:capacity}).select('id,name,subject_tag,description,emoji,color,owner_id,invite_code,max_capacity,created_at').single();if(res.error)throw res.error;var mem=await dbClient.from('study_room_members').insert({room_id:res.data.id,user_id:nbCurrentUserId(),role:'owner'});if(mem.error){await dbClient.from('study_rooms').delete().eq('id',res.data.id);throw mem.error;}await nbLoadSharedRooms(true);var r=S.rooms.filter(function(x){return x.id===res.data.id;})[0];toast('Room created! Invite code: '+res.data.invite_code);alert('Room created successfully!\n\nInvite code: '+res.data.invite_code+'\n\nShare this code with the other account.');go('/room/'+res.data.id);}catch(e){console.error(e);toast('Could not create shared room: '+nbErr(e,'Check Supabase schema and RLS policies.'));}}
+async function nbJoinByCode(){var input=document.getElementById('nbInviteCode');var code=(input&&input.value||'').trim().toUpperCase();if(!code){toast('Enter the invite code first.');return;}if(!dbClient||!nbCurrentUserId()){toast('Please sign in first.');return;}try{var result=await dbClient.rpc('join_study_room_by_code',{p_invite_code:code});if(result.error)throw result.error;var roomId=result.data;if(Array.isArray(roomId))roomId=roomId[0];if(roomId&&typeof roomId==='object')roomId=roomId.room_id||roomId.id;if(!roomId)throw new Error('Invite code did not return a room.');await nbLoadSharedRooms(true);var r=S.rooms.filter(function(x){return x.id===roomId;})[0];if(!r)throw new Error('Joined, but the room did not load. Check member SELECT policies.');toast('Joined shared room!');go('/room/'+roomId);}catch(e){console.error(e);toast('Could not join room: '+nbErr(e,'Check the invite code and room policies.'));}}
+var nbOriginalJoinRoom=joinRoom;
+joinRoom=function(id){var r=S.rooms.filter(function(x){return x.id===id;})[0];if(r&&r.isShared){go('/room/'+id);return;}return nbOriginalJoinRoom(id);};
+var nbOriginalRoomTabBody=roomTabBody;
+roomTabBody=function(r){if(r&&r.isShared&&UI.roomTab!=='chat'&&UI.roomTab!=='info'){return '<div class="empty"><div class="em">☁️</div><h3 class="txl semi mb1">Shared '+(UI.roomTab==='notes'?'notes':'tasks')+' not enabled</h3><p class="txm muted">Room chat is synchronized across members. Notes and tasks remain personal until shared tables are added.</p></div>';}return nbOriginalRoomTabBody(r);};
+var nbOriginalSendRoomMsg=sendRoomMsg;
+sendRoomMsg=async function(id){var r=S.rooms.filter(function(x){return x.id===id;})[0];var input=document.getElementById('roomMsg');var body=(input&&input.value||'').trim();if(!body)return;if(r&&r.isShared){if(!dbClient||!nbCurrentUserId()){toast('Please sign in again.');return;}input.value='';try{var out=await dbClient.from('study_room_messages').insert({room_id:r.id,user_id:nbCurrentUserId(),body:body});if(out.error)throw out.error;await nbLoadMessages(r,true);render();var sc=document.getElementById('scrollArea');if(sc)sc.scrollTop=sc.scrollHeight;}catch(e){console.error(e);if(input)input.value=body;toast('Message not sent: '+nbErr(e));}return;}return nbOriginalSendRoomMsg(id);};
+var nbOriginalPushRoomMessage=pushRoomMessage;
+pushRoomMessage=function(id,extra){var r=S.rooms.filter(function(x){return x.id===id;})[0];if(r&&r.isShared){if(extra&&extra.kind==='text'){sendRoomMsg(id);return;}toast('Only text chat is synced for shared rooms right now.');return;}return nbOriginalPushRoomMessage(id,extra);};
+var nbOriginalLeaveRoom=leaveRoom;
+leaveRoom=function(id){var r=S.rooms.filter(function(x){return x.id===id;})[0];if(r&&r.isShared){confirmSheet({title:'Leave this shared room?',message:'You will need the invite code to join again.',confirmLabel:'Leave',onConfirm:async function(){try{var out=await dbClient.from('study_room_members').delete().eq('room_id',id).eq('user_id',nbCurrentUserId());if(out.error)throw out.error;S.rooms=S.rooms.filter(function(x){return x.id!==id;});if(NB_SHARED_CHANNEL){dbClient.removeChannel(NB_SHARED_CHANNEL);NB_SHARED_CHANNEL=null;}toast('You left the room');go('/rooms');}catch(e){toast('Could not leave room: '+nbErr(e));}}});return;}return nbOriginalLeaveRoom(id);};
+/* Load memberships after auth/workspace bootstrap, and on returning to rooms. */
+var nbOriginalBootstrapAuth=bootstrapAuth;
+bootstrapAuth=async function(){await nbOriginalBootstrapAuth();setTimeout(function(){nbLoadSharedRooms(true);},1200);if(dbClient){dbClient.auth.onAuthStateChange(function(event,session){if(session&&session.user){setTimeout(function(){nbLoadSharedRooms(true);},500);}else if(event==='SIGNED_OUT'){if(NB_SHARED_CHANNEL){dbClient.removeChannel(NB_SHARED_CHANNEL);NB_SHARED_CHANNEL=null;}}});}};
+
 applyTheme();
 ensureMediaHost();
 if(!location.hash)location.hash='#/welcome';
