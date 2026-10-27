@@ -1235,7 +1235,27 @@ function sendRoomMsg(id){var i=document.getElementById('roomMsg');var v=(i.value
 function saveRoomNote(id){var v=document.getElementById('roomNote').value;S.rooms.filter(function(x){return x.id===id;})[0].sharedNote=v;save();toast('Shared notes saved');}
 function toggleRoomTask(rid,tid){var r=S.rooms.filter(function(x){return x.id===rid;})[0];var t=r.tasks.filter(function(x){return x.id===tid;})[0];t.done=!t.done;save();render();}
 function addRoomTask(rid){var i=document.getElementById('roomTask');var v=(i.value||'').trim();if(!v)return;S.rooms.filter(function(x){return x.id===rid;})[0].tasks.push({id:uid(),text:v,done:false});save();render();}
-function leaveRoom(id){var r=S.rooms.filter(function(x){return x.id===id;})[0];confirmSheet({title:'Leave this room?',message:"You'll need to rejoin to access shared content again.",confirmLabel:'Leave',onConfirm:function(){r.isJoined=false;r.members=r.members.filter(function(m){return m.name!==S.auth.user.name;});save();toast('You left "'+r.name+'"');go('/rooms');}});}
+function leaveRoom(id){
+ var r=S.rooms.filter(function(x){return x.id===id;})[0];
+ if(!r){toast('Room not found.');return;}
+ if(r.isShared&&r.ownerId&&String(r.ownerId)===String(nbCurrentUserId())){toast('You are the room owner. Delete the room from the Info tab if you want to close it for everyone.');return;}
+ confirmSheet({title:'Leave this room?',message:"You'll need to rejoin to access this shared room again.",confirmLabel:'Leave',onConfirm:async function(){
+  try{
+   if(r.isShared){
+    if(!dbClient||!nbCurrentUserId())throw new Error('Please sign in again before leaving this shared room.');
+    var out=await dbClient.from('study_room_members').delete().eq('room_id',r.id).eq('user_id',nbCurrentUserId()).select('room_id');
+    if(out.error)throw out.error;
+    if(!out.data||!out.data.length)throw new Error('Membership was not removed. Check your Supabase DELETE policy for study_room_members.');
+    S.rooms=S.rooms.filter(function(x){return x.id!==r.id;});
+    if(NB_SHARED_CHANNEL){dbClient.removeChannel(NB_SHARED_CHANNEL);NB_SHARED_CHANNEL=null;}
+    await nbLoadSharedRooms(true);
+   }else{
+    r.isJoined=false;r.members=r.members.filter(function(m){return m.name!==S.auth.user.name;});save();
+   }
+   toast('You left \"'+r.name+'\"');go('/rooms');
+  }catch(e){console.error(e);toast('Could not leave room: '+nbErr(e,'Check your room membership permissions.'));}
+ }});
+}
 
 function setMusicTab(t){UI.musicTab=t;render();}
 function vMusic(){
@@ -1591,16 +1611,23 @@ bootstrapAuth();
 async function deleteRoomAny(id){
  var room=S.rooms.filter(function(r){return r.id===id;})[0];
  if(!room){toast('Room not found. Refresh the room list and try again.');return;}
- var isOwner=room.isShared ? room.ownerId===nbCurrentUserId() : (!room.ownerId || room.ownerId===S.auth.user.id);
+ var currentId=nbCurrentUserId();
+ var isOwner=room.isShared ? (!!currentId && String(room.ownerId)===String(currentId)) : (!room.ownerId || String(room.ownerId)===String(S.auth.user.id));
  if(!isOwner){toast('Only the room creator can delete this room.');return;}
+ if(room.isShared&&(!dbClient||!currentId)){toast('Please sign in again before deleting this shared room.');return;}
  confirmSheet({title:'Delete this room?',message:room.isShared?'This permanently deletes the shared room, its memberships, and all chat messages for everyone. This cannot be undone.':'This removes the room from your personal workspace. This cannot be undone.',confirmLabel:'Delete room',onConfirm:async function(){
   try{
-   if(room.isShared){var out=await dbClient.from('study_rooms').delete().eq('id',id).eq('owner_id',nbCurrentUserId());if(out.error)throw out.error;}
+   if(room.isShared){
+    /* Request the deleted row back so an RLS denial/zero-row delete cannot look successful. */
+    var out=await dbClient.from('study_rooms').delete().eq('id',id).eq('owner_id',currentId).select('id');
+    if(out.error)throw out.error;
+    if(!out.data||!out.data.length)throw new Error('No room was deleted. You may not be the owner, or Supabase DELETE permissions/RLS may be blocking this action.');
+   }
    S.rooms=S.rooms.filter(function(r){return r.id!==id;});
    if(!room.isShared)save();
    if(NB_SHARED_CHANNEL&&room.isShared){dbClient.removeChannel(NB_SHARED_CHANNEL);NB_SHARED_CHANNEL=null;}
    toast('Room deleted.');go('/rooms');
-  }catch(e){console.error(e);toast('Could not delete room: '+nbErr(e));}
+  }catch(e){console.error(e);toast('Could not delete room: '+nbErr(e,'Check your room permissions and Supabase RLS policies.'));}
  }});
 }
 
