@@ -696,7 +696,7 @@ function updateMusicUI(){
   var dbBtn=document.getElementById('dashMusicBtn');if(dbBtn)dbBtn.innerHTML=S.music.playing?icf('pause',16):icf('play',16);
 }
 
-var UI={loginErr:{},regErr:{},showPw:false,roomQuery:'',roomFilter:'live',noteQuery:'',noteFilter:'all',noteSubject:'All',activeNoteId:null,noteSaveState:'saved',taskView:'kanban',taskFilter:'all',roomTab:'chat',subjectTab:'syllabus',profileTab:'overview',musicTab:'offline',searchQuery:''};
+var UI={loginErr:{},regErr:{},showPw:false,roomQuery:'',roomFilter:'live',noteQuery:'',noteFilter:'all',noteSubject:'All',activeNoteId:null,noteSaveState:'saved',taskView:'kanban',taskFilter:'all',roomTab:'chat',sharedFiles:[],subjectTab:'syllabus',profileTab:'overview',musicTab:'offline',searchQuery:''};
 
 var LOCK={subjectId:null,phase:'setup',duration:25*60,left:25*60,running:false,strict:false,chime:true,mode:'solo',roomId:null,interval:null,startedAt:null,_logged:false};
 function persistLock(){try{sessionStorage.setItem('nb_lock',JSON.stringify({subjectId:LOCK.subjectId,phase:LOCK.phase,duration:LOCK.duration,left:LOCK.left,running:LOCK.running,strict:LOCK.strict,chime:LOCK.chime,mode:LOCK.mode,roomId:LOCK.roomId,startedAt:LOCK.startedAt}));}catch(e){}}
@@ -1194,7 +1194,7 @@ function openCreateRoom(){
 function vRoom(id){
   var r=S.rooms.filter(function(x){return x.id===id;})[0];
   if(!r)return '<div class="main"><div class="pad pt center txm muted">Room not found.<br><button class="mt3 med" style="color:#5B8DEF" onclick="go(\'/rooms\')">Back to rooms</button></div></div>';
-  var tabs=[['chat','Chat','send'],['notes','Shared Notes','notebook'],['tasks','Tasks','listChecks'],['info','Info','info']];
+  var tabs=[['chat','Chat','send'],['notes','Shared Notes','notebook'],['tasks','Tasks','listChecks'],['files','Files','upload'],['info','Info','info']];
   var h='<div class="hdr"><button class="iconbtn" onclick="go(\'/rooms\')">'+ic('chevL',20)+'</button><div class="grow minw"><h1 class="txl semi trunc" style="color:'+r.color+'">'+esc(r.name)+'</h1><p class="txs muted trunc">'+r.members.length+'/'+r.maxCapacity+' · Round '+r.round+' · '+fmtTime(r.timer)+'</p></div>'+(r.isJoined?'<button class="iconbtn" onclick="leaveRoom(\''+r.id+'\')">'+ic('logOut',16)+'</button>':'')+'</div>';
   h+='<div class="tabs">'+tabs.map(function(t){return '<button class="tab'+(UI.roomTab===t[0]?' on':'')+'" onclick="setRoomTab(\''+t[0]+'\')">'+ic(t[2],17)+'<span>'+t[1]+'</span>'+(UI.roomTab===t[0]?'<span class="underline" style="background:'+r.color+'"></span>':'')+'</button>';}).join('')+'</div>';
   h+='<div class="main" style="display:flex;flex-direction:column;width:100%;min-width:0;min-height:0">'+roomTabBody(r)+'</div>';
@@ -1205,8 +1205,24 @@ function roomTabBody(r){
   if(!r.isJoined&&UI.roomTab!=='info'){
     return '<div class="empty"><div class="em">🔒</div><h3 class="txl semi mb1">Join to participate</h3><p class="txm muted mb4">Join this room to chat, share notes, and sync focus sessions.</p><button class="btn btn-primary" onclick="joinRoom(\''+r.id+'\')">Join room</button></div>';
   }
+
+  if(UI.roomTab==='notes'){
+    var sharedNotes=(r.messages||[]).filter(function(m){return m.kind==='shared-note';});
+    var notesHtml=sharedNotes.length?sharedNotes.map(function(n){return '<article class="card pad mb3"><div class="row aic"><strong class="grow">'+esc(n.title||'Shared note')+'</strong><span class="txs muted">'+esc(n.from||'Room member')+'</span></div><p class="txm mt2" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(n.text||'')+'</p>'+(n.fileUrl?'<p class="mt2"><a target="_blank" rel="noopener" href="'+esc(n.fileUrl)+'">Open attachment</a></p>':'')+'</article>';}).join(''):'<p class="txm muted center pad">No shared notes yet. Add one below.</p>';
+    return '<div class="grow" style="overflow:auto;padding:16px">'+notesHtml+'</div><div class="pad fc g2"><input id="sharedNoteTitle" class="input" placeholder="Note title"><textarea id="sharedNoteText" class="input" rows="4" placeholder="Write notes to share with everyone in this room"></textarea><button class="btn btn-primary" onclick="nbPublishRoomNote(\''+r.id+'\')">Share note with room</button></div>';
+  }
+  if(UI.roomTab==='tasks'){
+    var sharedTasks=(r.messages||[]).filter(function(m){return m.kind==='shared-task';});
+    var tasksHtml=sharedTasks.length?sharedTasks.map(function(t){return '<article class="card pad mb2"><div class="row aic g2"><input type="checkbox" '+(t.done?'checked':'')+' onchange="nbToggleRoomTask(\''+r.id+'\',\''+t.id+'\')"><div class="grow"><strong>'+esc(t.title||'Task')+'</strong><p class="txs muted">'+esc(t.from||'Room member')+(t.due?' · Due '+esc(t.due):'')+'</p>'+(t.details?'<p class="txm mt2">'+esc(t.details)+'</p>':'')+'</div></div></article>';}).join(''):'<p class="txm muted center pad">No shared tasks yet. Create one below.</p>';
+    return '<div class="grow" style="overflow:auto;padding:16px">'+tasksHtml+'</div><div class="pad fc g2"><input id="sharedTaskTitle" class="input" placeholder="Task title"><input id="sharedTaskDue" class="input" type="date"><textarea id="sharedTaskDetails" class="input" rows="2" placeholder="Instructions or details (optional)"></textarea><button class="btn btn-primary" onclick="nbCreateRoomTask(\''+r.id+'\')">Create shared task</button></div>';
+  }
+  if(UI.roomTab==='files'){
+    var roomFiles=(r.messages||[]).filter(function(m){return m.kind==='shared-file';});
+    var filesHtml=roomFiles.length?roomFiles.map(function(f){return '<article class="card pad mb2"><div class="row aic g2"><span>'+ic('file',18)+'</span><div class="grow"><strong>'+esc(f.fileName||'Shared file')+'</strong><p class="txs muted">'+esc(f.from||'Room member')+' · '+esc(f.time||'')+'</p></div><a target="_blank" rel="noopener" href="'+esc(f.fileUrl||'#')+'">Open</a></div></article>';}).join(''):'<p class="txm muted center pad">No files shared yet.</p>';
+    return '<div class="grow" style="overflow:auto;padding:16px">'+filesHtml+'</div><div class="pad fc g2"><p class="txs muted">Upload a document to this room. Files are stored in the private Supabase Storage bucket configured for NEXTBYTE.</p><input id="roomFileInput" type="file" class="input" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.ppt,.pptx,.xls,.xlsx"><button class="btn btn-primary" onclick="nbUploadRoomFile(\''+r.id+'\')">Upload and share file</button></div>';
+  }
   if(UI.roomTab==='chat'){
-    var msgs=r.messages.length?r.messages.map(function(m,i){var prev=r.messages[i-1];var sameAuthor=prev&&prev.from===m.from&&prev.me===m.me;return '<div class="msg '+(m.me?'me':'them')+'">'+(sameAuthor?'<span style="width:30px;flex-shrink:0"></span>':avatar(m.initials,m.color,30))+'<div class="msg-content">'+(!m.me&&!sameAuthor?'<p class="msg-author">'+esc(m.from)+'</p>':'')+'<div class="bubble">'+roomMessageHtml(m)+'</div><p class="msg-time">'+esc(m.time)+'</p></div></div>';}).join(''):'<div class="grow fc aic jc txm muted" style="padding:60px 0">No messages yet. Say hi! 👋</div>';
+    var chatMessages=(r.messages||[]).filter(function(m){return m.kind==='text'||!m.kind;});var msgs=chatMessages.length?chatMessages.map(function(m,i){var prev=chatMessages[i-1];var sameAuthor=prev&&prev.from===m.from&&prev.me===m.me;return '<div class="msg '+(m.me?'me':'them')+'">'+(sameAuthor?'<span style="width:30px;flex-shrink:0"></span>':avatar(m.initials,m.color,30))+'<div class="msg-content">'+(!m.me&&!sameAuthor?'<p class="msg-author">'+esc(m.from)+'</p>':'')+'<div class="bubble">'+roomMessageHtml(m)+'</div><p class="msg-time">'+esc(m.time)+'</p></div></div>';}).join(''):'<div class="grow fc aic jc txm muted" style="padding:60px 0">No messages yet. Say hi! 👋</div>';
     return '<div id="scrollArea" style="flex:1;overflow-y:auto;width:100%;display:flex;flex-direction:column;min-width:0"><div class="msgs" style="width:100%;display:flex;flex-direction:column;gap:12px;padding:16px">'+msgs+'</div></div><div class="composer" style="width:100%;flex-shrink:0"><input id="roomMsg" placeholder="Message your study group…" style="flex:1;height:44px;border-radius:999px;background:var(--secondary);border:none;outline:none;padding:0 16px;font-size:14px;min-width:0" onkeydown="if(event.key===\'Enter\')sendRoomMsg(\''+r.id+'\')"/><button class="iconbtn blue" style="height:44px;width:44px;flex-shrink:0" onclick="sendRoomMsg(\''+r.id+'\')">'+ic('send',18)+'</button></div><div class="room-tools"><button class="chip" onclick="shareRoomLink(\''+r.id+'\')">🔗 Link</button><button class="chip" onclick="shareRoomFileLink(\''+r.id+'\')">📎 File link</button><button class="chip" onclick="createRoomPoll(\''+r.id+'\')">📊 Poll</button><button class="chip" onclick="pickRoomSticker(\''+r.id+'\')">😊 Sticker</button></div>';
   }
   if(UI.roomTab==='notes'){
@@ -1230,11 +1246,26 @@ function shareRoomFileLink(id){var url=prompt('Paste a share link for your file:
 function pickRoomSticker(id){var choices=['😀','😂','🥹','🔥','💯','🎉','💪','📚','❤️','👏','👍','🤔','✨','😭','☕','🧠'];var choice=prompt('Choose a sticker by number:\n'+choices.map(function(x,i){return (i+1)+'. '+x;}).join('   '));var n=parseInt(choice,10);if(n>0&&n<=choices.length)pushRoomMessage(id,{kind:'sticker',text:choices[n-1]});}
 function createRoomPoll(id){var question=prompt('Poll question:');if(!question)return;var raw=prompt('Enter 2–6 options separated by commas:');if(!raw)return;var options=raw.split(',').map(function(x){return x.trim();}).filter(Boolean).slice(0,6);if(options.length<2){toast('A poll needs at least two options.');return;}pushRoomMessage(id,{kind:'poll',question:question,options:options,votes:options.map(function(){return 0;})});}
 function voteRoomPoll(messageId,index){var R=resolve();if(R.view!=='room'||!R.id)return;var r=S.rooms.filter(function(x){return x.id===R.id;})[0];if(!r)return;var m=r.messages.filter(function(x){return x.id===messageId;})[0];if(!m||m.kind!=='poll'||index<0||index>=m.options.length)return;m.votes=m.votes||m.options.map(function(){return 0;});m.votes[index]=(m.votes[index]||0)+1;save();render();}
-function pushRoomMessage(id,extra){var r=S.rooms.filter(function(x){return x.id===id;})[0];if(!r)return;r.messages.push(Object.assign({id:uid(),from:S.auth.user.name,initials:S.auth.user.initials,color:S.auth.user.color,time:'Now',me:true},extra));save();render();}
+async function pushRoomMessage(id,extra){
+ var r=S.rooms.filter(function(x){return x.id===id;})[0];if(!r)return;
+ var msg=Object.assign({id:uid(),from:S.auth.user.name,initials:S.auth.user.initials,color:S.auth.user.color,time:'Now',me:true},extra||{});
+ /* Shared room text messages must be written to Supabase; local workspace saves do not sync them to other members. */
+ if(r.isShared){
+  if(!dbClient||!nbCurrentUserId()){toast('Sign in again to send a shared message.');return;}
+  if(msg.kind!=='text'||!String(msg.text||'').trim()) {toast('Only text messages are synchronized in shared rooms right now.');return;}
+  try{
+   var out=await dbClient.from('study_room_messages').insert({room_id:r.id,user_id:nbCurrentUserId(),body:String(msg.text).trim()});
+   if(out.error)throw out.error;
+   await nbLoadMessages(r,true);render();
+  }catch(e){console.error('Shared message send failed',e);toast('Message was not sent: '+nbErr(e,'Check study_room_messages permissions.'));}
+  return;
+ }
+ r.messages.push(msg);save();render();
+}
 function sendRoomMsg(id){var i=document.getElementById('roomMsg');var v=(i.value||'').trim();if(!v)return;pushRoomMessage(id,{kind:'text',text:v});setTimeout(function(){var sc=document.getElementById('scrollArea');if(sc)sc.scrollTop=sc.scrollHeight;},30);}
-function saveRoomNote(id){var v=document.getElementById('roomNote').value;S.rooms.filter(function(x){return x.id===id;})[0].sharedNote=v;save();toast('Shared notes saved');}
-function toggleRoomTask(rid,tid){var r=S.rooms.filter(function(x){return x.id===rid;})[0];var t=r.tasks.filter(function(x){return x.id===tid;})[0];t.done=!t.done;save();render();}
-function addRoomTask(rid){var i=document.getElementById('roomTask');var v=(i.value||'').trim();if(!v)return;S.rooms.filter(function(x){return x.id===rid;})[0].tasks.push({id:uid(),text:v,done:false});save();render();}
+function saveRoomNote(id){var r=S.rooms.filter(function(x){return x.id===id;})[0];if(!r)return;var v=(document.getElementById('roomNote')||{}).value||'';r.sharedNote=v;save();toast(r.isShared?'Note saved to your workspace only; shared-note sync is not configured yet.':'Room note saved.');}
+function toggleRoomTask(rid,tid){var r=S.rooms.filter(function(x){return x.id===rid;})[0];if(!r)return;var t=r.tasks.filter(function(x){return x.id===tid;})[0];if(!t)return;t.done=!t.done;save();render();if(r.isShared)toast('Task changed in your workspace only; shared-task sync is not configured yet.');}
+function addRoomTask(rid){var i=document.getElementById('roomTask');var v=(i&&i.value||'').trim();if(!v)return;var r=S.rooms.filter(function(x){return x.id===rid;})[0];if(!r)return;r.tasks.push({id:uid(),text:v,done:false});save();render();if(r.isShared)toast('Task added to your workspace only; shared-task sync is not configured yet.');}
 function leaveRoom(id){
  var r=S.rooms.filter(function(x){return x.id===id;})[0];
  if(!r){toast('Room not found.');return;}
@@ -1564,13 +1595,67 @@ async function nbLoadSharedRooms(silent){
   if(!silent)render();
  }catch(e){console.error('Shared room load failed',e);if(!silent)toast('Could not load shared rooms: '+nbErr(e));}
 }
+
+function nbParseSharedBody(body){
+  if(typeof body!=='string'||body.indexOf('NB_SHARED_V1:')!==0)return {kind:'text',text:body};
+  try{return JSON.parse(body.slice(13));}catch(e){return {kind:'text',text:body};}
+}
+function nbSharedPayload(kind,data){
+  return 'NB_SHARED_V1:'+JSON.stringify(Object.assign({kind:kind},data));
+}
+async function nbPublishRoomNote(roomId){
+  var r=S.rooms.filter(function(x){return x.id===roomId;})[0];
+  var title=(document.getElementById('sharedNoteTitle')||{}).value||'';
+  var text=(document.getElementById('sharedNoteText')||{}).value||'';
+  if(!r||!r.isShared||!dbClient||!nbCurrentUserId()){toast('Sign in to share notes in a shared room.');return;}
+  if(!title.trim()||!text.trim()){toast('Enter a title and note content first.');return;}
+  try{var q=await dbClient.from('study_room_messages').insert({room_id:r.id,user_id:nbCurrentUserId(),body:nbSharedPayload('shared-note',{id:uid(),title:title.trim(),text:text.trim(),from:S.auth.user.name||'Member'})});if(q.error)throw q.error;await nbLoadMessages(r,true);render();toast('Note shared with the room.');}
+  catch(e){console.error(e);toast('Could not share note: '+nbErr(e,'Check room message permissions.'));}
+}
+async function nbCreateRoomTask(roomId){
+  var r=S.rooms.filter(function(x){return x.id===roomId;})[0];
+  var title=(document.getElementById('sharedTaskTitle')||{}).value||'';
+  var due=(document.getElementById('sharedTaskDue')||{}).value||'';
+  var details=(document.getElementById('sharedTaskDetails')||{}).value||'';
+  if(!r||!r.isShared||!dbClient||!nbCurrentUserId()){toast('Sign in to create shared tasks.');return;}
+  if(!title.trim()){toast('Enter a task title first.');return;}
+  try{var q=await dbClient.from('study_room_messages').insert({room_id:r.id,user_id:nbCurrentUserId(),body:nbSharedPayload('shared-task',{id:uid(),title:title.trim(),due:due,details:details.trim(),done:false,from:S.auth.user.name||'Member'})});if(q.error)throw q.error;await nbLoadMessages(r,true);render();toast('Task shared with the room.');}
+  catch(e){console.error(e);toast('Could not create task: '+nbErr(e,'Check room message permissions.'));}
+}
+async function nbToggleRoomTask(roomId,taskId){
+  var r=S.rooms.filter(function(x){return x.id===roomId;})[0];if(!r)return;
+  var t=(r.messages||[]).filter(function(m){return m.kind==='shared-task'&&m.id===taskId;})[0];if(!t)return;
+  /* The task is represented by a message row. Update the row by its database ID when available. */
+  if(!t.dbId||!dbClient){toast('This task cannot be updated until the room data is refreshed.');return;}
+  try{var q=await dbClient.from('study_room_messages').update({body:nbSharedPayload('shared-task',{id:t.id,title:t.title,due:t.due||'',details:t.details||'',done:!t.done,from:t.from||'Member'})}).eq('id',t.dbId).eq('room_id',r.id);if(q.error)throw q.error;await nbLoadMessages(r,true);render();}
+  catch(e){console.error(e);toast('Could not update task: '+nbErr(e,'Check update permissions for room messages.'));}
+}
+async function nbUploadRoomFile(roomId){
+  var r=S.rooms.filter(function(x){return x.id===roomId;})[0], input=document.getElementById('roomFileInput'), file=input&&input.files&&input.files[0];
+  if(!r||!r.isShared||!dbClient||!nbCurrentUserId()){toast('Sign in to upload files to a shared room.');return;}
+  if(!file){toast('Choose a file first.');return;}
+  if(file.size>20*1024*1024){toast('Files must be 20 MB or smaller.');return;}
+  if(!dbClient.storage){toast('Supabase Storage is unavailable.');return;}
+  try{
+    var safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    var path=r.id+'/'+nbCurrentUserId()+'/'+Date.now()+'_'+safeName;
+    var up=await dbClient.storage.from('study-room-files').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+    if(up.error)throw up.error;
+    var signed=await dbClient.storage.from('study-room-files').createSignedUrl(path,60*60*24*7);
+    if(signed.error)throw signed.error;
+    var body=nbSharedPayload('shared-file',{id:uid(),fileName:file.name,filePath:path,fileUrl:signed.data.signedUrl,from:S.auth.user.name||'Member'});
+    var q=await dbClient.from('study_room_messages').insert({room_id:r.id,user_id:nbCurrentUserId(),body:body});
+    if(q.error)throw q.error;
+    await nbLoadMessages(r,true);render();toast('File uploaded and shared for 7 days.');
+  }catch(e){console.error(e);toast('Upload failed: '+nbErr(e,'Create the study-room-files bucket and apply the SQL setup provided with this file.'));}
+}
 async function nbLoadMessages(room,quiet){
  if(!room||!room.isShared||!dbClient)return;
  try{
   var res=await dbClient.from('study_room_messages').select('id,room_id,user_id,body,created_at').eq('room_id',room.id).order('created_at',{ascending:true}).limit(300);
   if(res.error)throw res.error;
   var old=room.messages||[];
-  room.messages=(res.data||[]).map(function(m){var me=m.user_id===nbCurrentUserId();var member=room.members.filter(function(x){return x.userId===m.user_id;})[0];return {id:m.id,from:me?(S.auth.user.name||'You'):(member?member.name:'Member '+m.user_id.slice(0,8)),initials:me?(S.auth.user.initials||'ME'):(member?member.initials:'M'),color:me?(S.auth.user.color||'#5B8DEF'):(member?member.color:'#A78BFA'),time:new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),me:me,kind:'text',text:m.body};});
+  room.messages=(res.data||[]).map(function(m){var me=m.user_id===nbCurrentUserId();var member=room.members.filter(function(x){return x.userId===m.user_id;})[0];var parsed=nbParseSharedBody(m.body);return Object.assign({dbId:m.id,from:me?(S.auth.user.name||'You'):(member?member.name:'Member '+String(m.user_id||'').slice(0,8)),initials:me?(S.auth.user.initials||'ME'):(member?member.initials:'M'),color:me?(S.auth.user.color||'#5B8DEF'):(member?member.color:'#A78BFA'),time:new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),me:me},parsed);});
   if(!quiet)render();
  }catch(e){console.error('Shared messages load failed',e);if(!quiet)toast('Could not load room messages: '+nbErr(e));}
 }
