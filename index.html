@@ -1208,18 +1208,18 @@ function roomTabBody(r){
 
   if(UI.roomTab==='notes'){
     var sharedNotes=(r.messages||[]).filter(function(m){return m.kind==='shared-note';});
-    var notesHtml=sharedNotes.length?sharedNotes.map(function(n){var canDelete=nbCanDeleteRoomMessage(r,n);return '<article class="card pad mb3"><div class="row aic"><strong class="grow">'+esc(n.title||'Shared note')+'</strong><span class="txs muted">'+esc(n.from||'Room member')+'</span></div><p class="txm mt2" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(n.text||'')+'</p>'+(n.filePath?'<p class="mt2"><button class="btn btn-sm" onclick="nbDownloadRoomFile(\''+r.id+'\',\''+esc(n.filePath)+'\')">Download attachment: '+esc(n.fileName||'file')+'</button></p>':'')+(canDelete?'<div class="f je mt2"><button class="btn btn-sm" onclick="nbDeleteRoomMessage(\''+r.id+'\',\''+n.dbId+'\')">Delete note</button></div>':'')+'</article>';}).join(''):'<p class="txm muted center pad">No shared notes yet. Add one below.</p>';
-    return '<div class="grow" style="overflow:auto;padding:16px">'+notesHtml+'</div><div class="pad fc g2"><input id="sharedNoteTitle" class="input" placeholder="Note title"><textarea id="sharedNoteText" class="input" rows="4" placeholder="Write notes to share with everyone in this room"></textarea><input id="sharedNoteFile" type="file" class="input" accept="image/*,.pdf,.doc,.docx,.txt,.ppt,.pptx,.xls,.xlsx,.zip,.csv"><button class="btn btn-primary" onclick="nbPublishRoomNote(\''+r.id+'\')">Share note with room</button></div>';
+    var notesHtml=sharedNotes.length?sharedNotes.map(function(n){return '<article class="card pad mb3"><div class="row aic"><strong class="grow">'+esc(n.title||'Shared note')+'</strong><span class="txs muted">'+esc(n.from||'Room member')+'</span></div><p class="txm mt2" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(n.text||'')+'</p>'+(n.filePath?'<p class="mt2"><a href="#" onclick="nbOpenRoomFile(&quot;\'+r.id+\'&quot;,&quot;\'+esc(n.filePath)+\'&quot;);return false">Open attachment: '+esc(n.fileName||'download')+'</a></p>':'')+'</article>';}).join(''):'<p class="txm muted center pad">No shared notes yet. Add one below.</p>';
+    return '<div class="grow" style="overflow:auto;padding:16px">'+notesHtml+'</div><div class="pad fc g2"><input id="sharedNoteTitle" class="input" placeholder="Note title"><textarea id="sharedNoteText" class="input" rows="4" placeholder="Write notes to share with everyone in this room"></textarea><input id="sharedNoteFile" type="file" class="input" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.ppt,.pptx,.xls,.xlsx"><button class="btn btn-primary" onclick="nbPublishRoomNote(\''+r.id+'\')">Share note with room</button></div>';
   }
   if(UI.roomTab==='tasks'){
     var sharedTasks=(r.messages||[]).filter(function(m){return m.kind==='shared-task';});
-    var tasksHtml=sharedTasks.length?sharedTasks.map(function(t){var canAdmin=nbIsRoomOwner(r);return '<article class="card pad mb2"><div class="row aic g2"><input type="checkbox" '+(t.done?'checked':'')+' onchange="nbToggleRoomTask(\''+r.id+'\',\''+t.id+'\')"><div class="grow"><strong style="'+(t.done?'text-decoration:line-through;opacity:.6;':'')+'">'+esc(t.title||'Task')+'</strong><p class="txs muted">'+esc(t.from||'Room member')+(t.due?' · Due '+esc(t.due):'')+(t.done?' · Completed':'')+'</p>'+(t.details?'<p class="txm mt2" style="'+(t.done?'text-decoration:line-through;opacity:.6;':'')+'">'+esc(t.details)+'</p>':'')+'</div>'+(canAdmin?'<button class="btn btn-sm" onclick="nbDeleteRoomMessage(\''+r.id+'\',\''+t.dbId+'\')">Delete</button>':'')+'</div></article>';}).join(''):'<p class="txm muted center pad">No shared tasks yet. Create one below.</p>';
+    var tasksHtml=sharedTasks.length?sharedTasks.map(function(t){return '<article class="card pad mb2"><div class="row aic g2"><input type="checkbox" '+(t.done?'checked':'')+' onchange="nbToggleRoomTask(\''+r.id+'\',\''+t.id+'\')"><div class="grow"><strong>'+esc(t.title||'Task')+'</strong><p class="txs muted">'+esc(t.from||'Room member')+(t.due?' · Due '+esc(t.due):'')+'</p>'+(t.details?'<p class="txm mt2">'+esc(t.details)+'</p>':'')+'</div></div></article>';}).join(''):'<p class="txm muted center pad">No shared tasks yet. Create one below.</p>';
     return '<div class="grow" style="overflow:auto;padding:16px">'+tasksHtml+'</div><div class="pad fc g2"><input id="sharedTaskTitle" class="input" placeholder="Task title"><input id="sharedTaskDue" class="input" type="date"><textarea id="sharedTaskDetails" class="input" rows="2" placeholder="Instructions or details (optional)"></textarea><button class="btn btn-primary" onclick="nbCreateRoomTask(\''+r.id+'\')">Create shared task</button></div>';
   }
   if(UI.roomTab==='files'){
     var roomFiles=(r.messages||[]).filter(function(m){return m.kind==='shared-file';});
-    var filesHtml=roomFiles.length?roomFiles.map(function(f){var canDelete=nbCanDeleteRoomMessage(r,f);return '<article class="card pad mb2"><div class="row aic g2"><span>'+ic('file',18)+'</span><div class="grow"><strong>'+esc(f.fileName||'Shared file')+'</strong><p class="txs muted">'+esc(f.from||'Room member')+' · '+esc(f.time||'')+'</p></div><button class="btn btn-sm" onclick="nbDownloadRoomFile(\''+r.id+'\',\''+esc(f.filePath||'')+'\')">Download</button>'+(canDelete?'<button class="btn btn-sm" onclick="nbDeleteRoomMessage(\''+r.id+'\',\''+f.dbId+'\')">Delete</button>':'')+'</div></article>';}).join(''):'<p class="txm muted center pad">No files shared yet.</p>';
-    return '<div class="grow" style="overflow:auto;padding:16px">'+filesHtml+'</div><div class="pad fc g2"><p class="txs muted">Upload a document to this room. Files are stored in the private Supabase Storage bucket configured for NEXTBYTE.</p><input id="roomFileInput" type="file" class="input" accept="image/*,.pdf,.doc,.docx,.txt,.ppt,.pptx,.xls,.xlsx,.zip,.csv" onchange="nbUploadRoomFile(\''+r.id+'\')"><p class="txs muted">Choose an image or file; it will upload and share automatically. Maximum 20 MB.</p><button class="btn btn-primary" onclick="nbUploadRoomFile(\''+r.id+'\')">Upload selected file</button></div>';
+    var filesHtml=roomFiles.length?roomFiles.map(function(f){return '<article class="card pad mb2"><div class="row aic g2"><span>'+ic('file',18)+'</span><div class="grow"><strong>'+esc(f.fileName||'Shared file')+'</strong><p class="txs muted">'+esc(f.from||'Room member')+' · '+esc(f.time||'')+'</p></div><a target="_blank" rel="noopener" href="#" onclick="nbOpenRoomFile(&quot;\'+r.id+\'&quot;,&quot;\'+esc(f.filePath||\'\')+\'&quot;);return false">Open</a></div></article>';}).join(''):'<p class="txm muted center pad">No files shared yet.</p>';
+    return '<div class="grow" style="overflow:auto;padding:16px">'+filesHtml+'</div><div class="pad fc g2"><p class="txs muted">Upload a document to this room. Files are stored in the private Supabase Storage bucket configured for NEXTBYTE.</p><input id="roomFileInput" type="file" class="input" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.ppt,.pptx,.xls,.xlsx"><button class="btn btn-primary" onclick="nbUploadRoomFile(\''+r.id+'\')">Upload and share file</button></div>';
   }
   if(UI.roomTab==='chat'){
     var chatMessages=(r.messages||[]).filter(function(m){return m.kind==='text'||!m.kind;});var msgs=chatMessages.length?chatMessages.map(function(m,i){var prev=chatMessages[i-1];var sameAuthor=prev&&prev.from===m.from&&prev.me===m.me;return '<div class="msg '+(m.me?'me':'them')+'">'+(sameAuthor?'<span style="width:30px;flex-shrink:0"></span>':avatar(m.initials,m.color,30))+'<div class="msg-content">'+(!m.me&&!sameAuthor?'<p class="msg-author">'+esc(m.from)+'</p>':'')+'<div class="bubble">'+roomMessageHtml(m)+'</div><p class="msg-time">'+esc(m.time)+'</p></div></div>';}).join(''):'<div class="grow fc aic jc txm muted" style="padding:60px 0">No messages yet. Say hi! 👋</div>';
@@ -1574,7 +1574,26 @@ function downloadAppFile(){var html=document.documentElement.outerHTML;var blob=
 var NB_SHARED_PREFIX='nb_shared_';
 var NB_SHARED_CHANNEL=null;
 function nbErr(e, fallback){return (e&&e.message)||fallback||'Unknown error';}
-function nbCurrentUserId(){return S&&S.auth&&S.auth.user&&S.auth.user.id;}
+function nbCurrentUserId(){return S&&S.auth&&S.auth.user&&S.auth.user.id?S.auth.user.id:null;}
+
+/* Resolve the identity from Supabase itself, not only from the UI workspace.
+   The workspace can render before its auth state has finished restoring. */
+async function nbRequireSupabaseUser(){
+ if(!dbClient) throw new Error('Supabase is not configured. Check the project URL and anon key.');
+ var result=await dbClient.auth.getSession();
+ if(result.error) throw result.error;
+ var session=result.data&&result.data.session;
+ if(!session||!session.user){
+  var userResult=await dbClient.auth.getUser();
+  if(userResult.error) throw userResult.error;
+  if(!userResult.data||!userResult.data.user) throw new Error('Your sign-in session has expired. Sign in again, then reopen this room.');
+  session={user:userResult.data.user};
+ }
+ var user=session.user;
+ if(!S.auth) S.auth={isAuthenticated:true,user:profileFromUser(user)};
+ else S.auth={isAuthenticated:true,user:profileFromUser(user)};
+ return user;
+}
 function nbRoomFromRow(row,members){
  var ms=(members||[]).map(function(m){var isMe=m.user_id===nbCurrentUserId();return {userId:m.user_id,name:isMe?(S.auth.user.name||'You'):'Member '+String(m.user_id).slice(0,8),initials:isMe?(S.auth.user.initials||'ME'):'M',color:isMe?(S.auth.user.color||'#5B8DEF'):'#A78BFA',role:m.role==='owner'?'Host':'Member'};});
  return {id:row.id,name:row.name,subjectTag:row.subject_tag||'Study group',emoji:row.emoji||'📘',color:row.color||'#5B8DEF',description:row.description||'Invite-only shared study room',isPrivate:true,isShared:true,inviteCode:row.invite_code,ownerId:row.owner_id,maxCapacity:row.max_capacity||8,status:'focus',round:1,timer:0,isJoined:true,members:ms,messages:[],tasks:[],sharedNote:'',polls:[],createdAt:row.created_at};
@@ -1602,40 +1621,6 @@ function nbParseSharedBody(body){
 }
 function nbSharedPayload(kind,data){
   return 'NB_SHARED_V1:'+JSON.stringify(Object.assign({kind:kind},data));
-}
-
-function nbIsRoomOwner(room){
- return !!(room&&nbCurrentUserId()&&String(room.ownerId)===String(nbCurrentUserId()));
-}
-function nbCanDeleteRoomMessage(room,message){
- return !!(message&&(message.me||nbIsRoomOwner(room)));
-}
-async function nbDeleteRoomMessage(roomId,messageId){
- var room=S.rooms.filter(function(x){return x.id===roomId;})[0];
- var message=(room&&room.messages||[]).filter(function(m){return String(m.dbId)===String(messageId);})[0];
- if(!room||!message||!dbClient||!nbCurrentUserId()){toast('Unable to delete this item.');return;}
- if(message.kind==='shared-task'&&!nbIsRoomOwner(room)){toast('Only the room admin can delete shared tasks.');return;}
- if(!nbCanDeleteRoomMessage(room,message)){toast('You can only delete your own shared notes or files.');return;}
- if(!confirm('Delete this '+(message.kind==='shared-note'?'note':message.kind==='shared-task'?'task':'file')+' from the room?'))return;
- try{
-  var del=await dbClient.from('study_room_messages').delete().eq('id',message.dbId).eq('room_id',roomId).select('id');
-  if(del.error)throw del.error;
-  if(!del.data||!del.data.length)throw new Error('No row was deleted. Check the room message DELETE policy.');
-  if(message.filePath){
-   var rm=await dbClient.storage.from('study-room-files').remove([message.filePath]);
-   if(rm.error)console.warn('Storage cleanup failed:',rm.error);
-  }
-  await nbLoadMessages(room,true);render();toast('Deleted from the room.');
- }catch(e){console.error(e);toast('Could not delete: '+nbErr(e,'Check room message and Storage DELETE permissions.'));}
-}
-async function nbDownloadRoomFile(roomId,path){
- if(!path||!dbClient||!nbCurrentUserId()){toast('Sign in to download this file.');return;}
- if(path.split('/')[0]!==roomId){toast('Invalid room file reference.');return;}
- try{
-  var result=await dbClient.storage.from('study-room-files').createSignedUrl(path,60*60,{download:true});
-  if(result.error)throw result.error;
-  window.open(result.data.signedUrl,'_blank','noopener');
- }catch(e){console.error(e);toast('Could not download file: '+nbErr(e,'Check room membership and Storage permissions.'));}
 }
 async function nbPublishRoomNote(roomId){
   var r=S.rooms.filter(function(x){return x.id===roomId;})[0];
@@ -1676,21 +1661,65 @@ async function nbToggleRoomTask(roomId,taskId){
   catch(e){console.error(e);toast('Could not update task: '+nbErr(e,'Check update permissions for room messages.'));}
 }
 async function nbUploadRoomFile(roomId){
-  var r=S.rooms.filter(function(x){return x.id===roomId;})[0], input=document.getElementById('roomFileInput'), file=input&&input.files&&input.files[0], path=null;
-  if(!r||!r.isShared||!dbClient||!nbCurrentUserId()){toast('Sign in to upload files to a shared room.');return;}
-  if(!file){toast('Choose a file first.');return;}
-  if(file.size>20*1024*1024){toast('Files must be 20 MB or smaller.');return;}
-  if(!dbClient.storage){toast('Supabase Storage is unavailable.');return;}
-  try{
-    var safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-    path=r.id+'/'+nbCurrentUserId()+'/'+Date.now()+'_'+safeName;
-    var up=await dbClient.storage.from('study-room-files').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
-    if(up.error)throw up.error;
-    var body=nbSharedPayload('shared-file',{id:uid(),fileName:file.name,filePath:path,from:S.auth.user.name||'Member'});
-    var q=await dbClient.from('study_room_messages').insert({room_id:r.id,user_id:nbCurrentUserId(),body:body});
-    if(q.error){await dbClient.storage.from('study-room-files').remove([path]);throw q.error;}
-    await nbLoadMessages(r,true);render();toast('File uploaded and shared with the room.');
-  }catch(e){console.error(e);toast('Upload failed: '+nbErr(e,'Check the bucket and room-member Storage policies.'));}
+ var input=document.getElementById('roomFileInput');
+ var file=input&&input.files&&input.files[0];
+ var path=null, uploaded=false;
+ try{
+  if(!dbClient) throw new Error('Supabase is not configured. Check the project URL and anon key.');
+  var user=await nbRequireSupabaseUser();
+  var userId=user.id;
+  var room=S.rooms.filter(function(x){return String(x.id)===String(roomId);})[0];
+  if(!room||!room.isShared) throw new Error('This room is not loaded as a shared room. Refresh the page and reopen it.');
+  if(!file) throw new Error('Choose an image or document first.');
+  if(file.size===0) throw new Error('The selected file is empty.');
+  if(file.size>20*1024*1024) throw new Error('Files must be 20 MB or smaller.');
+  if(!dbClient.storage) throw new Error('Supabase Storage is unavailable.');
+
+  /* Confirm membership against Supabase before attempting Storage upload. */
+  var membership=await dbClient.from('study_room_members')
+    .select('room_id')
+    .eq('room_id',room.id)
+    .eq('user_id',userId)
+    .maybeSingle();
+  if(membership.error) throw membership.error;
+  if(!membership.data) throw new Error('Your account is not a member of this room. Join the room again using its invite code.');
+
+  var safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_').slice(-120)||'upload';
+  path=room.id+'/'+userId+'/'+Date.now()+'_'+safeName;
+  var bucket=dbClient.storage.from('study-room-files');
+  var up=await bucket.upload(path,file,{
+    upsert:false,
+    contentType:file.type||'application/octet-stream',
+    cacheControl:'3600'
+  });
+  if(up.error) throw up.error;
+  uploaded=true;
+
+  var body=nbSharedPayload('shared-file',{
+    id:uid(),
+    fileName:file.name,
+    filePath:path,
+    fileType:file.type||'application/octet-stream',
+    fileSize:file.size,
+    from:S.auth.user.name||user.email||'Member'
+  });
+  var message=await dbClient.from('study_room_messages')
+    .insert({room_id:room.id,user_id:userId,body:body})
+    .select('id')
+    .single();
+  if(message.error) throw message.error;
+
+  await nbLoadMessages(room,true);
+  render();
+  toast('File uploaded and shared with the room.');
+ }catch(e){
+  if(uploaded&&path&&dbClient){
+    try{await dbClient.storage.from('study-room-files').remove([path]);}
+    catch(cleanupError){console.warn('Could not clean up failed upload:',cleanupError);}
+  }
+  console.error('NEXTBYTE room file upload failed:',e);
+  toast('Upload failed: '+nbErr(e,'Check Storage and room-message permissions.'));
+ }
 }
 async function nbOpenRoomFile(roomId,path){
   if(!path||!dbClient||!nbCurrentUserId()){toast('Sign in to open this shared file.');return;}
@@ -1714,7 +1743,7 @@ async function nbLoadMessages(room,quiet){
 function nbSubscribeRoom(room){
  if(!dbClient||!room||!room.isShared)return;
  if(NB_SHARED_CHANNEL){try{dbClient.removeChannel(NB_SHARED_CHANNEL);}catch(e){}}
- NB_SHARED_CHANNEL=dbClient.channel('nb-room-'+room.id).on('postgres_changes',{event:'*',schema:'public',table:'study_room_messages',filter:'room_id=eq.'+room.id},function(){var r=S.rooms.filter(function(x){return x.id===room.id;})[0];if(r)nbLoadMessages(r,true).then(function(){if(resolve().view==='room'&&resolve().id===room.id)render();});}).subscribe();
+ NB_SHARED_CHANNEL=dbClient.channel('nb-room-'+room.id).on('postgres_changes',{event:'INSERT',schema:'public',table:'study_room_messages',filter:'room_id=eq.'+room.id},function(){var r=S.rooms.filter(function(x){return x.id===room.id;})[0];if(r)nbLoadMessages(r,true).then(function(){if(resolve().view==='room'&&resolve().id===room.id)render();});}).subscribe();
 }
 var nbOriginalGo=go;
 go=function(path){nbOriginalGo(path);if(path==='/rooms'){setTimeout(function(){nbLoadSharedRooms(true);},0);}var match=String(path).match(/^\/room\/([0-9a-f-]{36})$/i);if(match){setTimeout(async function(){await nbLoadSharedRooms(true);var r=S.rooms.filter(function(x){return x.id===match[1];})[0];if(r&&r.isShared){await nbLoadMessages(r,true);nbSubscribeRoom(r);render();}},0);}};
@@ -1729,9 +1758,7 @@ async function nbJoinByCode(){var input=document.getElementById('nbInviteCode');
 var nbOriginalJoinRoom=joinRoom;
 joinRoom=function(id){var r=S.rooms.filter(function(x){return x.id===id;})[0];if(r&&r.isShared){go('/room/'+id);return;}return nbOriginalJoinRoom(id);};
 var nbOriginalRoomTabBody=roomTabBody;
-/* Shared-room notes, tasks, and files are stored as typed messages in
-   study_room_messages. Do not replace their working UI with a disabled state. */
-roomTabBody=function(r){return nbOriginalRoomTabBody(r);};
+roomTabBody=function(r){if(r&&r.isShared&&UI.roomTab!=='chat'&&UI.roomTab!=='info'){return '<div class="empty"><div class="em">☁️</div><h3 class="txl semi mb1">Shared '+(UI.roomTab==='notes'?'notes':'tasks')+' not enabled</h3><p class="txm muted">Room chat is synchronized across members. Notes and tasks remain personal until shared tables are added.</p></div>';}return nbOriginalRoomTabBody(r);};
 var nbOriginalSendRoomMsg=sendRoomMsg;
 sendRoomMsg=async function(id){var r=S.rooms.filter(function(x){return x.id===id;})[0];var input=document.getElementById('roomMsg');var body=(input&&input.value||'').trim();if(!body)return;if(r&&r.isShared){if(!dbClient||!nbCurrentUserId()){toast('Please sign in again.');return;}input.value='';try{var out=await dbClient.from('study_room_messages').insert({room_id:r.id,user_id:nbCurrentUserId(),body:body});if(out.error)throw out.error;await nbLoadMessages(r,true);render();var sc=document.getElementById('scrollArea');if(sc)sc.scrollTop=sc.scrollHeight;}catch(e){console.error(e);if(input)input.value=body;toast('Message not sent: '+nbErr(e));}return;}return nbOriginalSendRoomMsg(id);};
 var nbOriginalPushRoomMessage=pushRoomMessage;
