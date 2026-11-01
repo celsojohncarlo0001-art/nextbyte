@@ -1680,7 +1680,7 @@ async function nbLoadMessages(room,quiet){
 function nbSubscribeRoom(room){
  if(!dbClient||!room||!room.isShared)return;
  if(NB_SHARED_CHANNEL){try{dbClient.removeChannel(NB_SHARED_CHANNEL);}catch(e){}}
- NB_SHARED_CHANNEL=dbClient.channel('nb-room-'+room.id).on('postgres_changes',{event:'INSERT',schema:'public',table:'study_room_messages',filter:'room_id=eq.'+room.id},function(){var r=S.rooms.filter(function(x){return x.id===room.id;})[0];if(r)nbLoadMessages(r,true).then(function(){if(resolve().view==='room'&&resolve().id===room.id)render();});}).subscribe();
+ NB_SHARED_CHANNEL=dbClient.channel('nb-room-'+room.id).on('postgres_changes',{event:'*',schema:'public',table:'study_room_messages',filter:'room_id=eq.'+room.id},function(){var r=S.rooms.filter(function(x){return x.id===room.id;})[0];if(r)nbLoadMessages(r,true).then(function(){if(resolve().view==='room'&&resolve().id===room.id)render();});}).subscribe();
 }
 var nbOriginalGo=go;
 go=function(path){nbOriginalGo(path);if(path==='/rooms'){setTimeout(function(){nbLoadSharedRooms(true);},0);}var match=String(path).match(/^\/room\/([0-9a-f-]{36})$/i);if(match){setTimeout(async function(){await nbLoadSharedRooms(true);var r=S.rooms.filter(function(x){return x.id===match[1];})[0];if(r&&r.isShared){await nbLoadMessages(r,true);nbSubscribeRoom(r);render();}},0);}};
@@ -1695,7 +1695,9 @@ async function nbJoinByCode(){var input=document.getElementById('nbInviteCode');
 var nbOriginalJoinRoom=joinRoom;
 joinRoom=function(id){var r=S.rooms.filter(function(x){return x.id===id;})[0];if(r&&r.isShared){go('/room/'+id);return;}return nbOriginalJoinRoom(id);};
 var nbOriginalRoomTabBody=roomTabBody;
-roomTabBody=function(r){if(r&&r.isShared&&UI.roomTab!=='chat'&&UI.roomTab!=='info'){return '<div class="empty"><div class="em">☁️</div><h3 class="txl semi mb1">Shared '+(UI.roomTab==='notes'?'notes':'tasks')+' not enabled</h3><p class="txm muted">Room chat is synchronized across members. Notes and tasks remain personal until shared tables are added.</p></div>';}return nbOriginalRoomTabBody(r);};
+/* Shared-room notes, tasks, and files are stored as typed messages in
+   study_room_messages. Do not replace their working UI with a disabled state. */
+roomTabBody=function(r){return nbOriginalRoomTabBody(r);};
 var nbOriginalSendRoomMsg=sendRoomMsg;
 sendRoomMsg=async function(id){var r=S.rooms.filter(function(x){return x.id===id;})[0];var input=document.getElementById('roomMsg');var body=(input&&input.value||'').trim();if(!body)return;if(r&&r.isShared){if(!dbClient||!nbCurrentUserId()){toast('Please sign in again.');return;}input.value='';try{var out=await dbClient.from('study_room_messages').insert({room_id:r.id,user_id:nbCurrentUserId(),body:body});if(out.error)throw out.error;await nbLoadMessages(r,true);render();var sc=document.getElementById('scrollArea');if(sc)sc.scrollTop=sc.scrollHeight;}catch(e){console.error(e);if(input)input.value=body;toast('Message not sent: '+nbErr(e));}return;}return nbOriginalSendRoomMsg(id);};
 var nbOriginalPushRoomMessage=pushRoomMessage;
