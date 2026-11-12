@@ -1,0 +1,27 @@
+{
+  "id": "./index.html",
+  "name": "NEXBYTE — Academic Collaboration Environment",
+  "short_name": "NEXBYTE",
+  "description": "Your personal academic workspace, available online and with saved offline files.",
+  "start_url": "./index.html#/dashboard",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EDF1F6",
+  "theme_color": "#2563EB",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
