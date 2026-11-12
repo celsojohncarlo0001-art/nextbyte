@@ -4,6 +4,13 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <meta name="theme-color" content="#2563EB"/>
+<meta name="description" content="NEXBYTE — your personal academic workspace, available online and offline."/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<link rel="manifest" href="./manifest.webmanifest"/>
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png"/>
+<link rel="apple-touch-icon" href="./icons/icon-192.png"/>
 <title>NEXBYTE — Academic Collaboration Environment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -813,8 +820,39 @@ var NOTE_DIRTY=false;
 
 function profileFromUser(user){var md=user.user_metadata||{},name=md.full_name||user.email||'Student';var ini=name.split(/\s+/).map(function(p){return p[0]||'';}).join('').slice(0,2).toUpperCase()||'U';return {id:user.id,name:name,email:user.email||'',school:md.school||'',grade:md.grade||'',track:md.track||'',initials:ini,color:'#2563EB',avatar:ini,bio:md.bio||''};}
 
+function workspaceCacheKey(userId){return 'nexbyte_workspace_cache_'+String(userId||'guest');}
+function cacheWorkspaceSnapshot(){
+  try{
+    var userId=(S.auth.user&&S.auth.user.id)||'guest';
+    var payload=clone(S);
+    payload.auth={isAuthenticated:!!S.auth.isAuthenticated,user:S.auth.user||null};
+    localStorage.setItem(workspaceCacheKey(userId),JSON.stringify({savedAt:Date.now(),state:payload}));
+    return true;
+  }catch(error){console.warn('Local workspace cache could not be updated:',error);return false;}
+}
+function restoreWorkspaceSnapshot(userId){
+  try{
+    var raw=localStorage.getItem(workspaceCacheKey(userId));
+    if(!raw)return false;
+    var cached=JSON.parse(raw),p=cached&&cached.state;
+    if(!p)return false;
+    var d=defaultState();
+    S=Object.assign(d,p);
+    S.auth={isAuthenticated:true,user:Object.assign({},(p.auth&&p.auth.user)||{},{id:userId})};
+    S.notifications=Object.assign(d.notifications,p.notifications||{});
+    S.settings=Object.assign(d.settings,p.settings||{});
+    S.focus=Object.assign(d.focus,p.focus||{});
+    S.music=Object.assign(d.music,p.music||{});
+    S.music.favorites=Array.isArray(S.music.favorites)?S.music.favorites:[];
+    S.music.playlists=Array.isArray(S.music.playlists)?S.music.playlists:[];
+    S.offlineMusic=Array.isArray(S.offlineMusic)?S.offlineMusic:[];
+    return true;
+  }catch(error){console.warn('Local workspace cache could not be restored:',error);return false;}
+}
 async function saveWorkspaceNow(){
+  cacheWorkspaceSnapshot();
   if(!dbClient||!S.auth.user||!S.auth.user.id){
+    if(typeof navigator!=='undefined'&&!navigator.onLine&&S.auth.user&&S.auth.user.id)return {ok:true,offline:true};
     return {ok:false,error:new Error('You are not signed in or Supabase is not configured.')};
   }
   clearTimeout(saveTimer);
@@ -830,16 +868,18 @@ async function saveWorkspaceNow(){
     return {ok:true};
   }catch(e){
     console.error('Workspace sync failed',e);
+    if(typeof navigator!=='undefined'&&!navigator.onLine)return {ok:true,offline:true};
     return {ok:false,error:e};
   }
 }
 function save(){
   try{localStorage.setItem(KEY,JSON.stringify({theme:S.theme,settings:S.settings,notifications:S.notifications}));}catch(e){}
+  cacheWorkspaceSnapshot();
   if(!dbClient||!S.auth.user||!S.auth.user.id)return;
   clearTimeout(saveTimer);
   saveTimer=setTimeout(async function(){
     var result=await saveWorkspaceNow();
-    if(!result.ok) toast('Could not sync workspace. Check your connection and try saving again.');
+    if(!result.ok) toast('Changes are kept on this device and will sync when you are online.');
   },350);
 }
 
@@ -866,7 +906,16 @@ async function loadWorkspace(user){
       if(S.music.active!=='local'&&S.music.active!=='youtube')S.music.active='none';
       S.offlineMusic=Array.isArray(p.offlineMusic)?p.offlineMusic:[];
     }
-  }catch(e){console.error(e);toast('Could not load saved workspace. Check database setup.');}
+  }catch(e){
+    console.error(e);
+    if(restoreWorkspaceSnapshot(user.id)){
+      toast('Offline mode: showing the last workspace saved on this device. Changes will sync when connected.');
+    }else{
+      toast('Could not load saved workspace. Check database setup or reconnect.');
+    }
+  }
+  if(!S.auth.user||S.auth.user.id!==user.id)S.auth={isAuthenticated:true,user:profileFromUser(user)};
+  cacheWorkspaceSnapshot();
   /* FIX 4: backfill session.date so the heatmap works for older accounts */
   if(Array.isArray(S.sessions)){
     var _todayISO=new Date().toISOString().slice(0,10);
@@ -927,7 +976,7 @@ function openMusicDB(){
   return new Promise(function(resolve,reject){
     if(MUSIC_DB)return resolve(MUSIC_DB);
     if(!('indexedDB' in window))return reject(new Error('IndexedDB is unavailable'));
-    var req=indexedDB.open('nexbyte_music',1);
+    var req=indexedDB.open('nexbyte_music',2);
     req.onupgradeneeded=function(e){var db=e.target.result;if(!db.objectStoreNames.contains('files'))db.createObjectStore('files',{keyPath:'id'});};
     req.onsuccess=function(e){MUSIC_DB=e.target.result;resolve(MUSIC_DB);};
     req.onerror=function(){reject(req.error||new Error('Could not open local music cache'));};
@@ -935,6 +984,28 @@ function openMusicDB(){
 }
 function dbGet(id){return openMusicDB().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('files','readonly'),req=tx.objectStore('files').get(id);req.onsuccess=function(){resolve(req.result||null);};req.onerror=function(){reject(req.error);};});});}
 function dbDelete(id){return openMusicDB().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('files','readwrite'),req=tx.objectStore('files').delete(id);req.onsuccess=function(){resolve();};req.onerror=function(){reject(req.error);};});});}
+function dbPut(record){return openMusicDB().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('files','readwrite'),req=tx.objectStore('files').put(record);req.onsuccess=function(){resolve(req.result);};req.onerror=function(){reject(req.error);};});});}
+function offlineMusicKey(id){return 'offline_music_'+String(id);}
+function offlineMaterialKey(path){return 'offline_material_'+String(path);}
+async function saveOfflineBlob(key,blob,name,mime,kind){
+  if(!blob||!blob.size)throw new Error('The downloaded file is empty.');
+  await dbPut({id:key,blob:blob,name:name||'download',mime:mime||blob.type||'application/octet-stream',kind:kind||'file',savedAt:Date.now(),size:blob.size});
+}
+async function downloadCloudFile(path,bucketName,name,mime,key,kind){
+  await requireMusicUser();
+  var result=await dbClient.storage.from(bucketName).createSignedUrl(path,60*60);
+  if(result.error)throw result.error;
+  var response=await fetch(result.data.signedUrl);
+  if(!response.ok)throw new Error('Download failed ('+response.status+').');
+  var blob=await response.blob();
+  await saveOfflineBlob(key,blob,name,mime||blob.type,kind);
+  return blob.size;
+}
+window.addEventListener('online',function(){
+  if(!dbClient||!S.auth.user||!S.auth.user.id)return;
+  setTimeout(async function(){var result=await saveWorkspaceNow();if(result.ok)toast('NEXBYTE is back online. Your workspace is synced.');},700);
+});
+
 function getAudio(){return document.getElementById('nbAudio');}
 function musicTrackById(id){return (S.offlineMusic||[]).filter(function(t){return String(t.id)===String(id);})[0]||null;}
 function currentMusicList(){
@@ -1026,10 +1097,13 @@ async function playLocalMusic(id,fromList){
     if(track.userId&&track.userId!==user.id)throw new Error('This track belongs to a different account.');
     if(fromList!==false)MUSIC_QUEUE=currentMusicList().map(function(t){return t.id;});
     if(MUSIC_QUEUE.indexOf(id)<0)MUSIC_QUEUE=S.offlineMusic.map(function(t){return t.id;});
-    var url=await getMusicSignedUrl(track),audio=getAudio();if(!audio)throw new Error('Audio player is not ready. Refresh the page and try again.');
+    var cached=await dbGet(offlineMusicKey(track.id)).catch(function(){return null;});
+    var url=(cached&&cached.blob)?URL.createObjectURL(cached.blob):await getMusicSignedUrl(track);
+    var audio=getAudio();if(!audio)throw new Error('Audio player is not ready. Refresh the page and try again.');
     audio.pause();audio.src=url;audio.load();
-    try{await audio.play();}catch(playError){if(playError&&playError.name==='NotAllowedError')throw new Error('Your browser blocked playback. Tap Play again.');throw playError;}
+    try{await audio.play();}catch(playError){if(url.indexOf('blob:')===0)URL.revokeObjectURL(url);if(playError&&playError.name==='NotAllowedError')throw new Error('Your browser blocked playback. Tap Play again.');throw playError;}
     if(CURRENT_BLOB_URL){URL.revokeObjectURL(CURRENT_BLOB_URL);CURRENT_BLOB_URL=null;}
+    if(url.indexOf('blob:')===0)CURRENT_BLOB_URL=url;
     S.music.active='local';S.music.localId=id;S.music.playing=true;save();render();
   }catch(error){console.error('Music playback failed',error);toast('Could not play track: '+(error&&error.message?error.message:'Unknown error'));}
 }
@@ -1131,6 +1205,17 @@ async function addOfflineFiles(input){
   }finally{if(input)input.value='';render();}
 }
 function currentTrackDisplay(){return musicTrackById(S.music.localId);}
+
+async function musicDownloadOffline(id){
+  var track=musicTrackById(id);if(!track||!track.path){toast('This track is not in your cloud library yet.');return;}
+  try{
+    toast('Downloading '+(track.title||track.name)+' for offline playback…');
+    await downloadCloudFile(track.path,NB_MUSIC_BUCKET,track.name,track.mime,offlineMusicKey(track.id),'music');
+    toast('Saved on this device. It can now play without internet here.');
+    render();
+  }catch(error){console.error('Offline music download failed',error);toast('Could not save offline: '+(error.message||'Download failed'));}
+}
+
 function updateMusicUI(){
   var audio=getAudio(),mini=document.getElementById('miniPlayBtn');if(mini)mini.innerHTML=S.music.playing?icf('pause',16):icf('play',16);
   var big=document.getElementById('musicBigPlay');if(big)big.innerHTML=S.music.playing?icf('pause',22):icf('play',22);
@@ -1182,7 +1267,7 @@ function filterMusicLibrary(query){UI.musicQuery=query||'';var list=document.get
 function musicTrackRows(list,query){
   query=(query||'').toLowerCase();list=list.filter(function(t){return ((t.title||t.name)+' '+(t.artist||'')).toLowerCase().indexOf(query)>=0;});
   if(!list.length)return '<div class="empty" style="padding:28px 16px"><div class="em">🎧</div><p class="txm muted">'+(query?'No tracks match your search.':'No songs in this view yet.')+'</p></div>';
-  return list.map(function(t,index){var active=S.music.localId===t.id&&S.music.active==='local',favorite=S.music.favorites.indexOf(t.id)>=0;return '<div class="nb-music-row'+(active?' active':'')+'"><button class="nb-music-play" onclick="playLocalMusic(\''+t.id+'\')" aria-label="Play '+esc(t.name)+'">'+(active&&S.music.playing?icf('pause',16):icf('play',16))+'</button><button class="nb-music-track" onclick="playLocalMusic(\''+t.id+'\')"><strong>'+esc(t.title||t.name)+'</strong><small>'+esc(t.artist||'Saved audio')+' · '+fmtSize(t.size)+'</small></button><button class="iconbtn nb-music-icon" onclick="musicToggleFavorite(\''+t.id+'\')" aria-label="'+(favorite?'Remove favorite':'Add favorite')+'">'+(favorite?icf('heart',17):ic('heart',17))+'</button><button class="iconbtn nb-music-icon" onclick="musicAddToPlaylist(\''+t.id+'\')" aria-label="Add to playlist">'+ic('listChecks',17)+'</button><button class="iconbtn nb-music-icon" onclick="musicDeleteTrack(\''+t.id+'\')" aria-label="Remove track">'+ic('trash',16)+'</button></div>';}).join('');
+  return list.map(function(t,index){var active=S.music.localId===t.id&&S.music.active==='local',favorite=S.music.favorites.indexOf(t.id)>=0;return '<div class="nb-music-row'+(active?' active':'')+'"><button class="nb-music-play" onclick="playLocalMusic(\''+t.id+'\')" aria-label="Play '+esc(t.name)+'">'+(active&&S.music.playing?icf('pause',16):icf('play',16))+'</button><button class="nb-music-track" onclick="playLocalMusic(\''+t.id+'\')"><strong>'+esc(t.title||t.name)+'</strong><small>'+esc(t.artist||'Saved audio')+' · '+fmtSize(t.size)+'</small></button><button class="iconbtn nb-music-icon" onclick="musicToggleFavorite(\''+t.id+'\')" aria-label="'+(favorite?'Remove favorite':'Add favorite')+'">'+(favorite?icf('heart',17):ic('heart',17))+'</button><button class="iconbtn nb-music-icon" onclick="musicAddToPlaylist(\''+t.id+'\')" aria-label="Add to playlist">'+ic('listChecks',17)+'</button><button class="iconbtn nb-music-icon" onclick="musicDownloadOffline(\''+t.id+'\')" aria-label="Download for offline">'+ic('download',16)+'</button><button class="iconbtn nb-music-icon" onclick="musicDeleteTrack(\''+t.id+'\')" aria-label="Remove track">'+ic('trash',16)+'</button></div>';}).join('');
 }
 function musicLibraryTab(){
   var view=S.music.view||'all',playlist=S.music.playlists.filter(function(p){return p.id===view;})[0];
@@ -1602,7 +1687,7 @@ function subjectTabBody(s){
   }
   if(UI.subjectTab==='materials'){
     if(!Array.isArray(s.materials))s.materials=[];
-    var materialCards=s.materials.length?s.materials.map(function(m,i){return '<div class="rowitem"><span class="iconbtn" style="background:var(--primary-soft);color:var(--primary-text)">'+ic('file',17)+'</span><div class="grow minw"><p class="txm med trunc">'+esc(m.n||m.fileName||'Study material')+'</p><p class="txs muted">'+esc(m.t||'File')+' · '+esc(m.s||'')+'</p></div><button class="iconbtn" onclick="openMaterial(\''+s.id+'\','+i+')" aria-label="Open material">'+ic('download',15)+'</button><button class="iconbtn" onclick="removeMaterial(\''+s.id+'\','+i+')" aria-label="Remove material">'+ic('trash',15)+'</button></div>';}).join(''):'<div class="empty" style="padding:32px 16px"><div class="em">📎</div><p class="txm muted">No files attached to this subject yet.</p></div>';
+    var materialCards=s.materials.length?s.materials.map(function(m,i){return '<div class="rowitem"><span class="iconbtn" style="background:var(--primary-soft);color:var(--primary-text)">'+ic('file',17)+'</span><div class="grow minw"><p class="txm med trunc">'+esc(m.n||m.fileName||'Study material')+'</p><p class="txs muted">'+esc(m.t||'File')+' · '+esc(m.s||'')+'</p></div><button class="iconbtn" onclick="cacheMaterialOffline(\''+s.id+'\','+i+')" aria-label="Save material offline">'+ic('download',15)+'</button><button class="iconbtn" onclick="openMaterial(\''+s.id+'\','+i+')" aria-label="Open material">'+ic('download',15)+'</button><button class="iconbtn" onclick="removeMaterial(\''+s.id+'\','+i+')" aria-label="Remove material">'+ic('trash',15)+'</button></div>';}).join(''):'<div class="empty" style="padding:32px 16px"><div class="em">📎</div><p class="txm muted">No files attached to this subject yet.</p></div>';
     return '<div class="fc g2">'+materialCards+'</div><button class="btn btn-primary btn-block mt4" onclick="addMaterial(\''+s.id+'\')">'+ic('upload',18)+' Upload material</button><p class="txs muted mt2">Files are saved privately to your NEXBYTE account (20 MB maximum each).</p>';
   }
   if(UI.subjectTab==='tasks'){
@@ -1641,13 +1726,27 @@ async function addMaterial(sid){
     }catch(error){if(path&&dbClient){try{await dbClient.storage.from('user-study-files').remove([path]);}catch(_){}}console.error('Material upload failed',error);button.disabled=false;button.textContent='Upload material';toast('Could not upload material: '+(error&&error.message?error.message:'Unknown error')+'. Check the user-study-files bucket setup.');}
   };
 }
+async function cacheMaterialOffline(sid,index){
+  var subject=subjectById(sid),material=subject&&subject.materials&&subject.materials[index];if(!material||!material.path)return;
+  try{
+    toast('Downloading '+(material.fileName||material.n||'study material')+' for offline use…');
+    await downloadCloudFile(material.path,'user-study-files',material.fileName||material.n||'study-material',material.mime,offlineMaterialKey(material.path),'study-material');
+    toast('Study material saved for offline use on this device.');
+  }catch(error){console.error('Offline material download failed',error);toast('Could not save offline: '+(error.message||'Download failed'));}
+}
 async function openMaterial(sid,index){
   var subject=subjectById(sid),material=subject&&subject.materials&&subject.materials[index];if(!material)return;
   if(!material.path){toast('This is an older material record without an uploaded file. Upload it again to attach the actual file.');return;}
   try{
-    await requireMusicUser();var result=await dbClient.storage.from('user-study-files').createSignedUrl(material.path,60*60,{download:material.fileName||material.n||true});
-    if(result.error)throw result.error;var url=result.data&&result.data.signedUrl;if(!url)throw new Error('Could not create a download link.');
+    var cached=await dbGet(offlineMaterialKey(material.path)).catch(function(){return null;});
+    var url;
+    if(cached&&cached.blob)url=URL.createObjectURL(cached.blob);
+    else{
+      await requireMusicUser();var result=await dbClient.storage.from('user-study-files').createSignedUrl(material.path,60*60,{download:material.fileName||material.n||true});
+      if(result.error)throw result.error;url=result.data&&result.data.signedUrl;if(!url)throw new Error('Could not create a download link.');
+    }
     var a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.download=material.fileName||material.n||'study-material';document.body.appendChild(a);a.click();a.remove();
+    if(url.indexOf('blob:')===0)setTimeout(function(){URL.revokeObjectURL(url);},60000);
   }catch(error){console.error('Material open failed',error);toast('Could not open this material: '+(error&&error.message?error.message:'Unknown error'));}
 }
 function removeMaterial(sid,index){
@@ -2981,6 +3080,38 @@ async function deleteRoomAny(id){
   window.nbMountSharedBoard = mountBoard;
   setTimeout(function () { activateCurrentRoom(0); }, 1400);
   render();
+})();
+
+/* Installable PWA shell. Private Supabase API responses are never cached by the service worker. */
+(function(){
+  if('serviceWorker' in navigator && location.protocol!=='file:'){
+    window.addEventListener('load',function(){
+      navigator.serviceWorker.register('./sw.js').catch(function(error){console.warn('PWA service worker registration failed:',error);});
+    });
+  }
+  var installPrompt=null,installButton=null;
+  window.addEventListener('beforeinstallprompt',function(event){
+    event.preventDefault();installPrompt=event;
+    if(!installButton){
+      installButton=document.createElement('button');
+      installButton.type='button';installButton.className='btn btn-primary';
+      installButton.textContent='Install NEXBYTE';
+      installButton.style.cssText='position:fixed;right:16px;bottom:88px;z-index:80;padding:0 16px;box-shadow:var(--shadow-lg)';
+      installButton.addEventListener('click',async function(){
+        if(!installPrompt)return;
+        installPrompt.prompt();
+        try{await installPrompt.userChoice;}catch(_){}
+        installPrompt=null;
+        if(installButton){installButton.remove();installButton=null;}
+      });
+      document.body.appendChild(installButton);
+    }
+  });
+  window.addEventListener('appinstalled',function(){
+    if(installButton){installButton.remove();installButton=null;}
+    installPrompt=null;
+    if(typeof toast==='function')toast('NEXBYTE installed successfully.');
+  });
 })();
 
 </script>
