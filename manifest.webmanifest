@@ -9,7 +9,10 @@
   "orientation": "portrait",
   "background_color": "#EDF1F6",
   "theme_color": "#2563EB",
-  "categories": ["education", "productivity"],
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "./icon-192.png",

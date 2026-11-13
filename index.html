@@ -4,15 +4,15 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <meta name="theme-color" content="#2563EB"/>
+<meta name="nexbyte-repair-layer" content="4.1"/>
 <meta name="description" content="NEXBYTE — your personal academic workspace, available online and offline."/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
-<meta name="apple-mobile-web-app-title" content="NEXBYTE"/>
-<meta name="application-name" content="NEXBYTE"/>
 <link rel="manifest" href="./manifest.webmanifest"/>
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png"/>
-<link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png"/>
+<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png"/>
+<link rel="apple-touch-icon" href="./icon-192.png"/>
 <title>NEXBYTE — Academic Collaboration Environment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2417,7 +2417,7 @@ async function nbLoadMessages(room,quiet){
   var res=await dbClient.from('study_room_messages').select('id,room_id,user_id,body,created_at').eq('room_id',room.id).order('created_at',{ascending:true}).limit(300);
   if(res.error)throw res.error;
   var old=room.messages||[];
-  room.messages=(res.data||[]).map(function(m){var me=m.user_id===nbCurrentUserId();var member=room.members.filter(function(x){return x.userId===m.user_id;})[0];var parsed=nbParseSharedBody(m.body);return Object.assign({dbId:m.id,from:me?(S.auth.user.name||'You'):(member?member.name:'Member '+String(m.user_id||'').slice(0,8)),initials:me?(S.auth.user.initials||'ME'):(member?member.initials:'M'),color:me?(S.auth.user.color||'#2563EB'):(member?member.color:'#A78BFA'),time:new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),me:me},parsed);});
+  room.messages=(res.data||[]).map(function(m){var me=m.user_id===nbCurrentUserId();var member=room.members.filter(function(x){return x.userId===m.user_id;})[0];var parsed=nbParseSharedBody(m.body);return Object.assign({dbId:m.id,userId:m.user_id,from:me?(S.auth.user.name||'You'):(member?member.name:'Member '+String(m.user_id||'').slice(0,8)),initials:me?(S.auth.user.initials||'ME'):(member?member.initials:'M'),color:me?(S.auth.user.color||'#2563EB'):(member?member.color:'#A78BFA'),time:new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),me:me},parsed);});
   if(!quiet)render();
  }catch(e){console.error('Shared messages load failed',e);if(!quiet)toast('Could not load room messages: '+nbErr(e));}
 }
@@ -3114,6 +3114,1191 @@ async function deleteRoomAny(id){
     installPrompt=null;
     if(typeof toast==='function')toast('NEXBYTE installed successfully.');
   });
+})();
+
+</script>
+
+<script>
+/* NEXTBYTE repair layer v4.0
+   Repairs persistence, academic file handling, task detail, shared room submissions,
+   richer room quizzes, multi-board whiteboards, music background state and profile UI.
+   This layer intentionally reuses the existing HTML application and Supabase client.
+*/
+(function () {
+  'use strict';
+
+  var NB_MAX_FILE_BYTES = 20 * 1024 * 1024;
+  var NB_ALLOWED_EXT = ['pdf','doc','docx','ppt','pptx','xls','xlsx','txt','md','csv','png','jpg','jpeg','webp'];
+  var NB_UPLOAD_BUSY = Object.create(null);
+  var NB_SAVE_QUEUE = Promise.resolve();
+  var NB_SAVE_VERSION = 0;
+  var NB_CREATE_ROOM_BUSY = false;
+  var NB_TASK_RESPONSE_BUSY = Object.create(null);
+  var NB_QUIZ_SUBMIT_BUSY = Object.create(null);
+  var NB_ROOM_BOARDS = Object.create(null);
+  var NB_BOARD_SAVE_TIMER = null;
+  var NB_MUSIC_LAST_CLOUD_SAVE = 0;
+  var NB_MUSIC_LAST_LOCAL_SAVE = 0;
+  var NB_MUSIC_LAST_CACHE_SAVE = 0;
+
+  function nbExt(name) {
+    var parts = String(name || '').toLowerCase().split('.');
+    return parts.length > 1 ? parts.pop() : '';
+  }
+  function nbFileAllowed(file) {
+    if (!file || !file.name) return { ok: false, message: 'Choose a file first.' };
+    if (!file.size) return { ok: false, message: 'The selected file is empty.' };
+    if (file.size > NB_MAX_FILE_BYTES) return { ok: false, message: 'Files must be 20 MB or smaller.' };
+    if (NB_ALLOWED_EXT.indexOf(nbExt(file.name)) < 0) {
+      return { ok: false, message: 'Unsupported file type. Use PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, MD, CSV, PNG, JPG or WEBP.' };
+    }
+    return { ok: true };
+  }
+  function nbSafeName(name) {
+    return String(name || 'file').normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^\.+/, '').slice(-100) || 'file';
+  }
+  function nbFileSize(size) {
+    return typeof fmtSize === 'function' ? fmtSize(size) : (Math.round(size / 1024) + ' KB');
+  }
+  function nbUserId() {
+    return S && S.auth && S.auth.user && S.auth.user.id ? String(S.auth.user.id) : null;
+  }
+  function nbProfileName() {
+    return (S && S.auth && S.auth.user && S.auth.user.name) || 'Member';
+  }
+  function nbOpenSignedFile(bucket, path, fileName, download) {
+    if (!dbClient || !path) { toast('The file reference is missing.'); return; }
+    (async function () {
+      try {
+        await requireMusicUser();
+        var result = await dbClient.storage.from(bucket).createSignedUrl(path, 3600, download ? { download: fileName || true } : {});
+        if (result.error) throw result.error;
+        var url = result.data && result.data.signedUrl;
+        if (!url) throw new Error('Supabase did not return a file link.');
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } catch (error) {
+        console.error('Could not open file', error);
+        toast('Could not open file: ' + ((error && error.message) || 'Unknown error'));
+      }
+    })();
+  }
+  window.nbOpenRoomFile = async function (roomId, path, download) {
+    if (!path || String(path).split('/')[0] !== String(roomId)) { toast('Invalid room file reference.'); return; }
+    try {
+      await nbRequireSupabaseUser();
+      var result = await dbClient.storage.from('study-room-files').createSignedUrl(path, 3600, download ? { download: true } : {});
+      if (result.error) throw result.error;
+      if (!result.data || !result.data.signedUrl) throw new Error('Supabase did not return a file link.');
+      window.open(result.data.signedUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) { console.error('Room file open failed:', error); toast('Could not open the shared file: ' + ((error && error.message) || 'Check room membership and file permissions.')); }
+  };
+
+  function nbReadWorkspaceCache(userId) {
+    try {
+      var raw = localStorage.getItem(workspaceCacheKey(userId));
+      if (!raw) return null;
+      var value = JSON.parse(raw);
+      if (!value || !value.state || !value.state.auth || !value.state.auth.user || String(value.state.auth.user.id) !== String(userId)) return null;
+      return value;
+    } catch (_) { return null; }
+  }
+
+  function nbNormalizeWorkspace() {
+    var d = defaultState();
+    S = Object.assign(d, S || {});
+    ['subjects','tasks','notes','rooms','activities','sessions','weekly','offlineMusic'].forEach(function (key) {
+      if (!Array.isArray(S[key])) S[key] = [];
+    });
+    S.notifications = Object.assign({}, d.notifications, S.notifications || {});
+    S.settings = Object.assign({}, d.settings, S.settings || {});
+    S.focus = Object.assign({}, d.focus, S.focus || {});
+    S.music = Object.assign({}, d.music, S.music || {});
+    if (!Array.isArray(S.music.favorites)) S.music.favorites = [];
+    if (!Array.isArray(S.music.playlists)) S.music.playlists = [];
+    S.music.playlists.forEach(function (p) { if (!Array.isArray(p.ids)) p.ids = []; });
+    S.music.volume = Math.max(0, Math.min(100, Number(S.music.volume) || 80));
+    if (['off','all','one'].indexOf(S.music.repeat) < 0) S.music.repeat = 'off';
+    S.subjects.forEach(function (subject) {
+      if (!Array.isArray(subject.topics)) subject.topics = [];
+      if (!Array.isArray(subject.materials)) subject.materials = [];
+      if (!Array.isArray(subject.syllabusFiles)) subject.syllabusFiles = [];
+      if (!Number.isFinite(Number(subject.progress))) subject.progress = 0;
+      if (!Number.isFinite(Number(subject.loggedSeconds))) subject.loggedSeconds = 0;
+    });
+    S.tasks.forEach(function (task) {
+      if (!task.status) task.status = 'todo';
+      if (!task.priority) task.priority = 'medium';
+      if (!task.type) task.type = 'Assignment';
+      if (!task.createdAt) task.createdAt = new Date().toISOString();
+    });
+    S.notes.forEach(function (note) { if (!Array.isArray(note.tags)) note.tags = []; });
+  }
+
+  /* 1) Reliable cloud save queue + restore local snapshot when the cloud row is absent.
+     The source app used fire-and-forget debounced upserts and did not restore the local
+     snapshot when SELECT succeeded but returned zero rows. */
+  window.saveWorkspaceNow = async function () {
+    var version = ++NB_SAVE_VERSION;
+    if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
+    if (!dbClient || !nbUserId()) {
+      return { ok: false, error: new Error('Sign in and configure Supabase before cloud syncing.') };
+    }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return { ok: true, offline: true };
+    var operation = NB_SAVE_QUEUE.catch(function () {}).then(async function () {
+      var sessionResult = await dbClient.auth.getSession();
+      if (sessionResult.error) throw sessionResult.error;
+      var sessionUser = sessionResult.data && sessionResult.data.session && sessionResult.data.session.user;
+      if (!sessionUser || String(sessionUser.id) !== String(nbUserId())) throw new Error('Your sign-in session changed. Sign in again to sync.');
+      var payload = clone(S);
+      payload.auth = { isAuthenticated: true, user: S.auth.user };
+      var response = await dbClient.from('user_workspaces').upsert({
+        user_id: sessionUser.id,
+        state: payload,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      if (response.error) throw response.error;
+      return { ok: true, version: version };
+    }).catch(function (error) {
+      console.error('NEXTBYTE workspace save failed', error);
+      if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return { ok: true, offline: true };
+      return { ok: false, error: error };
+    });
+    NB_SAVE_QUEUE = operation;
+    return operation;
+  };
+
+  window.addEventListener('online', function () {
+    if (S && S.auth && S.auth.isAuthenticated && nbUserId()) {
+      setTimeout(function () { window.saveWorkspaceNow().then(function (result) { if (!result.ok) console.warn('NEXTBYTE reconnect sync is pending:', result.error); }); }, 300);
+    }
+  });
+
+  window.save = function () {
+    try { localStorage.setItem(KEY, JSON.stringify({ theme: S.theme, settings: S.settings, notifications: S.notifications })); } catch (_) {}
+    if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async function () {
+      var result = await window.saveWorkspaceNow();
+      if (!result.ok) toast('Saved on this device, but cloud sync failed: ' + ((result.error && result.error.message) || 'Please retry when online.'));
+    }, 450);
+  };
+
+  window.loadWorkspace = async function (user) {
+    var profile = profileFromUser(user);
+    S = defaultState();
+    S.auth = { isAuthenticated: true, user: profile };
+    var restoredLocal = false;
+    var hasCloudRow = false;
+    var localNewerThanCloud = false;
+    try {
+      var response = await dbClient.from('user_workspaces').select('state,updated_at').eq('user_id', user.id).maybeSingle();
+      if (response.error) throw response.error;
+      if (response.data && response.data.state && typeof response.data.state === 'object') {
+        hasCloudRow = true;
+        var cacheRecord = nbReadWorkspaceCache(user.id);
+        var cacheTime = cacheRecord && Number(cacheRecord.savedAt) || 0;
+        var cloudTime = Date.parse(response.data.updated_at || '') || 0;
+        // A recent local snapshot may contain edits made while the device was offline.
+        // Prefer it only when it is materially newer, then queue a cloud upsert below.
+        if (cacheRecord && cacheTime > cloudTime + 5000 && restoreWorkspaceSnapshot(user.id)) {
+          restoredLocal = true;
+          localNewerThanCloud = true;
+          S.auth = { isAuthenticated: true, user: profile };
+          nbNormalizeWorkspace();
+        } else {
+          var remoteState = response.data.state;
+          S = Object.assign(defaultState(), remoteState);
+          S.auth = { isAuthenticated: true, user: profile };
+          nbNormalizeWorkspace();
+        }
+        // Restore selected track as paused, but never autoplay during sign-in/reload.
+        if (S.music.active === 'local' && S.music.localId) S.music.playing = false;
+        else if (S.music.active !== 'youtube') { S.music.active = 'none'; S.music.playing = false; }
+      }
+    } catch (error) {
+      console.error('Cloud workspace load failed', error);
+      restoredLocal = typeof restoreWorkspaceSnapshot === 'function' && restoreWorkspaceSnapshot(user.id);
+      if (!restoredLocal) toast('Could not load your cloud workspace. Check your connection and Supabase setup.');
+      else toast('Showing the last saved copy on this device. Cloud sync will retry when online.');
+    }
+    if (!hasCloudRow && !restoredLocal) {
+      restoredLocal = typeof restoreWorkspaceSnapshot === 'function' && restoreWorkspaceSnapshot(user.id);
+      if (restoredLocal) toast('Restored this account’s saved copy from this device.');
+    }
+    S.auth = { isAuthenticated: true, user: profile };
+    nbNormalizeWorkspace();
+    if (S.music.active === 'local') S.music.playing = false;
+    try {
+      var lastMusicPosition = JSON.parse(localStorage.getItem('nexbyte_music_position_' + user.id) || 'null');
+      if (lastMusicPosition && String(lastMusicPosition.id || '') === String(S.music.localId || '')) {
+        S.music.position = Math.max(0, Number(lastMusicPosition.position) || 0);
+      }
+    } catch (_) {}
+    if (Array.isArray(S.sessions)) {
+      var today = new Date().toISOString().slice(0, 10);
+      S.sessions = S.sessions.map(function (entry) { if (!entry.date) entry.date = today; return entry; });
+    }
+    if (typeof applyTheme === 'function') applyTheme();
+    if (typeof restoreIframes === 'function') restoreIframes();
+    if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
+    render();
+    // Create the first remote row when this account had only a device-local workspace.
+    if (restoredLocal && (!hasCloudRow || localNewerThanCloud)) setTimeout(function () { window.saveWorkspaceNow(); }, 250);
+  };
+
+  /* 2) Academic uploads: allowlist, informative instructions, immediate metadata save. */
+  window.addMaterial = async function (subjectId) {
+    var subject = subjectById(subjectId);
+    if (!subject) { toast('Subject not found.'); return; }
+    var panel = sheet('<div class="f jb aic mb3"><h3 class="txl semi">Upload study material</h3><button class="iconbtn" data-cancel aria-label="Close">' + ic('x',18) + '</button></div>' +
+      '<div class="card padc mb3"><p class="txs semi">What can you upload?</p><p class="txs muted mt1">PDF, Word, PowerPoint, Excel, text/Markdown, CSV, or image files (PNG/JPG/WEBP). Maximum 20 MB per file. Materials are stored privately under this subject and can be opened again from your account.</p></div>' +
+      '<div class="fc g3"><div><label class="field-label" for="mtFile">Choose academic file</label><input id="mtFile" class="input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp" style="height:auto;padding:9px 12px"/></div><div><label class="field-label" for="mtName">Display name (optional)</label><input id="mtName" class="input" placeholder="Defaults to the original file name"/></div><p class="txs muted" id="mtFileHint">Accepted formats only · 20 MB maximum · Private to your account</p><button class="btn btn-primary btn-block" data-save>Upload material</button></div>');
+    panel.querySelector('[data-cancel]').onclick = closeTop;
+    panel.querySelector('#mtFile').onchange = function () {
+      var file = this.files && this.files[0];
+      var check = nbFileAllowed(file);
+      panel.querySelector('#mtFileHint').textContent = file ? (check.ok ? file.name + ' · ' + nbFileSize(file.size) : check.message) : 'Accepted formats only · 20 MB maximum';
+      if (file && !panel.querySelector('#mtName').value) panel.querySelector('#mtName').value = file.name;
+    };
+    panel.querySelector('[data-save]').onclick = async function () {
+      var button = this, file = panel.querySelector('#mtFile').files[0];
+      var check = nbFileAllowed(file);
+      if (!check.ok) { toast(check.message); return; }
+      if (NB_UPLOAD_BUSY[subjectId]) return;
+      NB_UPLOAD_BUSY[subjectId] = true; button.disabled = true; button.textContent = 'Uploading…';
+      var path = null;
+      try {
+        var user = await requireMusicUser();
+        path = user.id + '/' + subjectId + '/materials/' + Date.now() + '_' + nbSafeName(file.name);
+        var upload = await dbClient.storage.from('user-study-files').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream', cacheControl: '3600' });
+        if (upload.error) throw upload.error;
+        if (!Array.isArray(subject.materials)) subject.materials = [];
+        subject.materials.unshift({ id: 'mat_' + uid(), n: (panel.querySelector('#mtName').value || '').trim() || file.name, t: nbExt(file.name).toUpperCase(), s: nbFileSize(file.size), path: path, fileName: file.name, mime: file.type || 'application/octet-stream', size: file.size, userId: user.id, addedAt: new Date().toISOString() });
+        var saved = await window.saveWorkspaceNow();
+        if (!saved.ok) throw saved.error || new Error('The file uploaded, but its subject record could not be saved.');
+        closeTop(); render(); toast('Material uploaded and added to this subject.');
+      } catch (error) {
+        if (path) { try { await dbClient.storage.from('user-study-files').remove([path]); } catch (_) {} }
+        console.error('Study material upload failed', error);
+        button.disabled = false; button.textContent = 'Retry upload';
+        toast('Upload failed: ' + ((error && error.message) || 'Check the user-study-files bucket and its policies.'));
+      } finally { delete NB_UPLOAD_BUSY[subjectId]; }
+    };
+  };
+
+  window.openMaterial = async function (subjectId, index) {
+    var subject = subjectById(subjectId), material = subject && subject.materials && subject.materials[index];
+    if (!material || !material.path) { toast('This older item has no cloud file attached. Upload the original file again.'); return; }
+    try {
+      var cached = await dbGet(offlineMaterialKey(material.path)).catch(function () { return null; });
+      if (cached && cached.blob) {
+        var localUrl = URL.createObjectURL(cached.blob);
+        window.open(localUrl, '_blank', 'noopener,noreferrer');
+        setTimeout(function () { URL.revokeObjectURL(localUrl); }, 60000);
+      } else nbOpenSignedFile('user-study-files', material.path, material.fileName || material.n, false);
+    } catch (error) { toast('Could not open material: ' + ((error && error.message) || 'Unknown error')); }
+  };
+
+  window.removeMaterial = function (subjectId, index) {
+    var subject = subjectById(subjectId), material = subject && subject.materials && subject.materials[index];
+    if (!material) return;
+    confirmSheet({ title: 'Remove this material?', message: 'The file will be detached from this subject and removed from your private storage.', confirmLabel: 'Remove', danger: true, onConfirm: async function () {
+      var previous = subject.materials.slice();
+      subject.materials.splice(index, 1);
+      var saved = await window.saveWorkspaceNow();
+      if (!saved.ok) { subject.materials = previous; cacheWorkspaceSnapshot(); toast('Could not save the removal: ' + ((saved.error && saved.error.message) || 'Unknown error')); render(); return; }
+      if (material.path) {
+        var removed = await dbClient.storage.from('user-study-files').remove([material.path]);
+        if (removed.error) toast('The material was detached, but storage cleanup failed: ' + removed.error.message);
+      }
+      render(); toast('Material removed.');
+    }});
+  };
+
+  window.uploadSyllabusAttachment = function (subjectId) {
+    var subject = subjectById(subjectId); if (!subject) return;
+    var panel = sheet('<div class="f jb aic mb3"><h3 class="txl semi">Attach syllabus</h3><button class="iconbtn" data-cancel>' + ic('x',18) + '</button></div><div class="card padc mb3"><p class="txs semi">Syllabus file instructions</p><p class="txs muted mt1">Upload the official course outline, weekly schedule, grading policy, or learning outcomes. Accepted: PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT or image. Maximum 20 MB.</p></div><div class="fc g3"><input id="syllabusFile" class="input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.png,.jpg,.jpeg,.webp"/><input id="syllabusTitle" class="input" placeholder="Attachment label (optional)"/><button class="btn btn-primary btn-block" data-upload>Upload syllabus</button></div>');
+    panel.querySelector('[data-cancel]').onclick = closeTop;
+    panel.querySelector('[data-upload]').onclick = async function () {
+      var button = this, file = panel.querySelector('#syllabusFile').files[0], check = nbFileAllowed(file);
+      if (!check.ok) { toast(check.message); return; }
+      var key = 'syllabus:' + subjectId; if (NB_UPLOAD_BUSY[key]) return;
+      NB_UPLOAD_BUSY[key] = true; button.disabled = true; button.textContent = 'Uploading…';
+      var path = null;
+      try {
+        var user = await requireMusicUser();
+        path = user.id + '/' + subjectId + '/syllabus/' + Date.now() + '_' + nbSafeName(file.name);
+        var uploaded = await dbClient.storage.from('user-study-files').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream', cacheControl: '3600' });
+        if (uploaded.error) throw uploaded.error;
+        if (!Array.isArray(subject.syllabusFiles)) subject.syllabusFiles = [];
+        subject.syllabusFiles.unshift({ id: 'syl_' + uid(), title: (panel.querySelector('#syllabusTitle').value || '').trim() || file.name, fileName: file.name, path: path, mime: file.type || 'application/octet-stream', size: file.size, userId: user.id, addedAt: new Date().toISOString() });
+        var saved = await window.saveWorkspaceNow(); if (!saved.ok) throw saved.error || new Error('The syllabus uploaded but could not be linked to the subject.');
+        closeTop(); render(); toast('Syllabus attachment saved.');
+      } catch (error) {
+        if (path) { try { await dbClient.storage.from('user-study-files').remove([path]); } catch (_) {} }
+        console.error('Syllabus upload failed', error); button.disabled = false; button.textContent = 'Retry upload';
+        toast('Syllabus upload failed: ' + ((error && error.message) || 'Unknown error'));
+      } finally { delete NB_UPLOAD_BUSY[key]; }
+    };
+  };
+
+  window.removeSyllabusAttachment = function (subjectId, fileId) {
+    var subject = subjectById(subjectId), file = subject && (subject.syllabusFiles || []).filter(function (item) { return item.id === fileId; })[0];
+    if (!file) return;
+    confirmSheet({ title: 'Remove syllabus attachment?', message: 'This removes the selected syllabus from this subject.', confirmLabel: 'Remove', danger: true, onConfirm: async function () {
+      var old = subject.syllabusFiles.slice();
+      subject.syllabusFiles = old.filter(function (item) { return item.id !== fileId; });
+      var saved = await window.saveWorkspaceNow();
+      if (!saved.ok) { subject.syllabusFiles = old; toast('Could not save syllabus removal.'); render(); return; }
+      if (file.path) { var result = await dbClient.storage.from('user-study-files').remove([file.path]); if (result.error) console.warn(result.error); }
+      render(); toast('Syllabus attachment removed.');
+    }});
+  };
+
+  window.replaceSyllabusAttachment = function (subjectId, fileId) {
+    var subject = subjectById(subjectId);
+    var current = subject && (subject.syllabusFiles || []).filter(function (item) { return String(item.id) === String(fileId); })[0];
+    if (!subject || !current) return;
+    var picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.png,.jpg,.jpeg,.webp';
+    picker.onchange = async function () {
+      var file = picker.files && picker.files[0], check = nbFileAllowed(file);
+      if (!check.ok) { toast(check.message); return; }
+      var lockKey = 'replace-syllabus:' + subjectId;
+      if (NB_UPLOAD_BUSY[lockKey]) return;
+      NB_UPLOAD_BUSY[lockKey] = true;
+      var newPath = null;
+      try {
+        var user = await requireMusicUser();
+        newPath = user.id + '/' + subjectId + '/syllabus/' + Date.now() + '_' + nbSafeName(file.name);
+        var uploaded = await dbClient.storage.from('user-study-files').upload(newPath, file, { upsert: false, contentType: file.type || 'application/octet-stream', cacheControl: '3600' });
+        if (uploaded.error) throw uploaded.error;
+        var oldList = subject.syllabusFiles.slice();
+        subject.syllabusFiles = oldList.map(function (item) {
+          return String(item.id) === String(fileId) ? Object.assign({}, item, { fileName: file.name, title: item.title || file.name, path: newPath, mime: file.type || 'application/octet-stream', size: file.size, userId: user.id, addedAt: new Date().toISOString() }) : item;
+        });
+        var saved = await window.saveWorkspaceNow();
+        if (!saved.ok) { subject.syllabusFiles = oldList; throw saved.error || new Error('Could not save the replacement file reference.'); }
+        if (current.path) { var removed = await dbClient.storage.from('user-study-files').remove([current.path]); if (removed.error) console.warn('Old syllabus file cleanup failed:', removed.error); }
+        render(); toast('Syllabus attachment replaced.');
+      } catch (error) {
+        if (newPath) { try { await dbClient.storage.from('user-study-files').remove([newPath]); } catch (_) {} }
+        console.error('Syllabus replacement failed:', error); toast('Could not replace syllabus: ' + ((error && error.message) || 'Unknown error'));
+      } finally { delete NB_UPLOAD_BUSY[lockKey]; }
+    };
+    picker.click();
+  };
+
+  var nbOriginalSubjectTabBody = subjectTabBody;
+  subjectTabBody = function (subject) {
+    if (UI.subjectTab === 'syllabus') {
+      var files = Array.isArray(subject.syllabusFiles) ? subject.syllabusFiles : [];
+      var topics = Array.isArray(subject.topics) ? subject.topics : [];
+      var completed = topics.filter(function (topic) { return topic.done; }).length;
+      var pct = topics.length ? Math.round(completed / topics.length * 100) : 0;
+      var syllabusCards = files.length ? files.map(function (file) {
+        return '<article class="card padc"><div class="f jb aic g2"><div class="grow minw"><p class="txm semi">' + esc(file.title || file.fileName || 'Syllabus') + '</p><p class="txs muted mt1">' + esc(file.fileName || '') + ' · ' + esc(nbFileSize(file.size || 0)) + '</p></div><span class="badge">Syllabus</span></div><div class="nb-record-actions"><button class="btn btn-secondary" onclick="nbOpenSignedFilePublic(\'user-study-files\',\'' + esc(file.path) + '\',\'' + esc(file.fileName || file.title) + '\',false)">Open</button><button class="btn btn-primary" onclick="nbOpenSignedFilePublic(\'user-study-files\',\'' + esc(file.path) + '\',\'' + esc(file.fileName || file.title) + '\',true)">Download</button><button class="btn btn-secondary" onclick="replaceSyllabusAttachment(\'' + subject.id + '\',\'' + file.id + '\')">Replace</button><button class="btn btn-danger" onclick="removeSyllabusAttachment(\'' + subject.id + '\',\'' + file.id + '\')">Remove</button></div></article>';
+      }).join('') : '<div class="empty" style="padding:20px"><p class="txm muted">No syllabus attachment yet. Add the official course outline or syllabus document.</p></div>';
+      var topicHtml = topics.length ? '<div class="card padc"><div class="f jb aic mb2"><span class="txm semi">Syllabus topics</span><span class="txm semi" style="color:' + subject.color + '">' + pct + '%</span></div><div class="bar"><div style="width:' + pct + '%;background:' + subject.color + '"></div></div><div class="fc g2 mt3">' + topics.map(function (topic, index) { return '<button class="rowitem" onclick="toggleTopic(\'' + subject.id + '\',' + index + ')"><span class="checkbox' + (topic.done ? ' on' : '') + '">' + (topic.done ? ic('check',14) : '') + '</span><span class="txm">' + esc(topic.t) + '</span></button>'; }).join('') + '</div></div>' : '<div class="card padc"><p class="txm semi">Topics not added yet</p><p class="txs muted mt1">Add weekly topics or modules to track course progress.</p></div>';
+      return '<div class="fc g3"><div class="card padc"><div class="f jb aic"><div><h3 class="txm semi">Course syllabus</h3><p class="txs muted mt1">Keep the official course document separate from ordinary materials.</p></div><button class="btn btn-primary btn-sm" onclick="uploadSyllabusAttachment(\'' + subject.id + '\')">' + ic('upload',15) + ' Attach file</button></div><p class="txs muted mt2">PDF, Word, PowerPoint, Excel, text, or images · 20 MB maximum per file.</p><div class="fc g2 mt3">' + syllabusCards + '</div></div>' + topicHtml + '<button class="btn btn-secondary btn-block" onclick="addTopic(\'' + subject.id + '\')">' + ic('plus',16) + ' Add syllabus topic</button></div>';
+    }
+    if (UI.subjectTab === 'materials') {
+      var materials = Array.isArray(subject.materials) ? subject.materials : [];
+      var materialList = materials.length ? materials.map(function (material, index) {
+        return '<article class="rowitem"><span class="iconbtn" style="background:var(--primary-soft);color:var(--primary-text)">' + ic('file',17) + '</span><div class="grow minw"><p class="txm semi trunc">' + esc(material.n || material.fileName || 'Study material') + '</p><p class="txs muted">' + esc(material.t || nbExt(material.fileName).toUpperCase() || 'File') + ' · ' + esc(material.s || nbFileSize(material.size || 0)) + '</p></div><button class="iconbtn" onclick="cacheMaterialOffline(\'' + subject.id + '\',' + index + ')" aria-label="Save offline">' + ic('download',15) + '</button><button class="iconbtn" onclick="openMaterial(\'' + subject.id + '\',' + index + ')" aria-label="Open material">' + ic('external',15) + '</button><button class="iconbtn" onclick="removeMaterial(\'' + subject.id + '\',' + index + ')" aria-label="Delete material">' + ic('trash',15) + '</button></article>';
+      }).join('') : '<div class="empty"><p class="txm muted">No study materials uploaded yet.</p></div>';
+      return '<div class="fc g3"><div class="card padc"><h3 class="txm semi">What belongs in Materials?</h3><p class="txs muted mt1">Upload lesson handouts, worksheets, reviewer files, lecture slides, reference spreadsheets, or study images. Supported: PDF, DOC/DOCX, PPT/PPTX, XLS/XLSX, TXT, Markdown, CSV, PNG, JPG, and WEBP. Maximum 20 MB per file. Each file is kept in your private account storage and linked to this subject. Open files online or download them for offline use on this device.</p></div><div class="fc g2">' + materialList + '</div><button class="btn btn-primary btn-block" onclick="addMaterial(\'' + subject.id + '\')">' + ic('upload',17) + ' Upload study material</button></div>';
+    }
+    if (UI.subjectTab === 'tasks') {
+      var list = (S.tasks || []).filter(function (task) { return String(task.subjectId) === String(subject.id); });
+      if (!list.length) return '<div class="empty"><p class="txm muted">No tasks linked to this subject yet.</p><button class="btn btn-primary mt3" onclick="openTaskSheet(null,\'' + subject.id + '\')">Add task</button></div>';
+      return '<div class="fc g2">' + list.map(function (task) {
+        var desc = task.description || task.instructions || task.additionalNotes || '';
+        var status = task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In progress' : 'To do';
+        return '<article class="card padc"><div class="f jb aic g2"><div class="grow minw"><p class="txm semi">' + esc(task.title) + '</p><p class="txs muted mt1">' + esc(task.type || 'Task') + ' · ' + esc(status) + '</p></div><button class="iconbtn" onclick="openTaskSheet(\'' + task.id + '\')">' + ic('edit',15) + '</button></div><p class="txs muted mt2">Due: ' + esc(task.dueDate || 'No date') + (task.dueTime ? ' · ' + esc(task.dueTime) : '') + ' · ' + esc((task.priority || 'medium').toUpperCase()) + '</p>' + (desc ? '<p class="txm mt2" style="white-space:pre-wrap">' + esc(desc) + '</p>' : '<p class="txs muted mt2">No extra instructions.</p>') + '<button class="btn btn-secondary btn-sm mt3" onclick="cycleTask(\'' + task.id + '\')">Update status</button><button class="btn btn-danger btn-sm mt3" onclick="nbDeletePersonalTask(\'' + task.id + '\')">Delete task</button></article>';
+      }).join('') + '</div><button class="btn btn-secondary btn-block mt3" onclick="openTaskSheet(null,\'' + subject.id + '\')">' + ic('plus',16) + ' Add task</button>';
+    }
+    return nbOriginalSubjectTabBody(subject);
+  };
+  window.nbOpenSignedFilePublic = nbOpenSignedFile;
+
+  /* 3) Detailed task editor and clearer task list. */
+  window.openTaskSheet = function (editId, presetSubject) {
+    var task = editId ? S.tasks.filter(function (item) { return String(item.id) === String(editId); })[0] : null;
+    var typeOptions = ['Assignment','Project','Reading','Lab','Review','Exam','Presentation','Other'];
+    var priorities = [['high','High','#FF7A7A'],['medium','Medium','#FBBF24'],['low','Low','#2DD4BF']];
+    var statusOptions = [['todo','To do'],['progress','In progress'],['done','Completed']];
+    var currentPriority = task ? task.priority : 'medium';
+    var currentStatus = task ? task.status : 'todo';
+    var currentSubject = task ? task.subjectId : (presetSubject || (S.subjects[0] && S.subjects[0].id) || '');
+    var subjectOptions = '<option value="">General / no subject</option>' + S.subjects.map(function (subject) { return '<option value="' + esc(subject.id) + '" ' + (String(subject.id) === String(currentSubject) ? 'selected' : '') + '>' + esc(subject.code + ' · ' + subject.name) + '</option>'; }).join('');
+    var panel = sheet('<div class="f jb aic mb3"><h3 class="txl semi">' + (task ? 'Edit task details' : 'Create a detailed task') + '</h3><button class="iconbtn" data-cancel>' + ic('x',18) + '</button></div><div class="fc g3"><div><label class="field-label" for="nbTaskTitle">Task title</label><input id="nbTaskTitle" class="input" value="' + esc(task ? task.title : '') + '" placeholder="e.g. Prepare the biology lab report"/></div><div><label class="field-label" for="nbTaskDesc">What needs to be done?</label><textarea id="nbTaskDesc" class="input" rows="3" placeholder="Describe the expected work, requirements, or deliverables">' + esc(task ? task.description || '' : '') + '</textarea></div><div><label class="field-label" for="nbTaskInstructions">Step-by-step instructions (optional)</label><textarea id="nbTaskInstructions" class="input" rows="3" placeholder="1. Review the lesson&#10;2. Complete the activity&#10;3. Submit your work">' + esc(task ? task.instructions || '' : '') + '</textarea></div><div><label class="field-label" for="nbTaskSubject">Subject</label><select id="nbTaskSubject" class="input">' + subjectOptions + '</select></div><div class="f g2"><div class="grow"><label class="field-label" for="nbTaskType">Task type</label><select id="nbTaskType" class="input">' + typeOptions.map(function (type) { return '<option ' + ((task && task.type === type) || (!task && type === 'Assignment') ? 'selected' : '') + '>' + type + '</option>'; }).join('') + '</select></div><div class="grow"><label class="field-label" for="nbTaskAssignee">Assigned to</label><input id="nbTaskAssignee" class="input" value="' + esc(task ? task.assignedTo || nbProfileName() : nbProfileName()) + '"/></div></div><div class="f g2"><div class="grow"><label class="field-label" for="nbTaskDue">Due date</label><input id="nbTaskDue" class="input" type="date" value="' + esc(task ? task.dueDate || '' : todayISO()) + '"/></div><div class="grow"><label class="field-label" for="nbTaskTime">Due time</label><input id="nbTaskTime" class="input" type="time" value="' + esc(task ? task.dueTime || '' : '') + '"/></div></div><div><label class="field-label">Priority</label><div class="f g2" id="nbTaskPriorities">' + priorities.map(function (item) { return '<button type="button" class="btn grow" data-priority="' + item[0] + '" style="height:40px;' + (currentPriority === item[0] ? 'background:' + item[2] + ';color:#fff;border:none' : 'background:var(--card);border:1px solid var(--border);color:var(--muted-fg)') + '">' + item[1] + '</button>'; }).join('') + '</div></div><div><label class="field-label">Status</label><div class="seg" id="nbTaskStatuses">' + statusOptions.map(function (item) { return '<button type="button" data-status="' + item[0] + '" class="' + (currentStatus === item[0] ? 'on' : '') + '">' + item[1] + '</button>'; }).join('') + '</div></div><div><label class="field-label" for="nbTaskNotes">Additional notes (optional)</label><textarea id="nbTaskNotes" class="input" rows="2" placeholder="References, reminders, or submission details">' + esc(task ? task.additionalNotes || '' : '') + '</textarea></div><button class="btn btn-primary btn-block" data-save>' + (task ? 'Save task changes' : 'Create task') + '</button></div>');
+    var choice = { priority: currentPriority, status: currentStatus };
+    panel.querySelector('[data-cancel]').onclick = closeTop;
+    panel.querySelectorAll('[data-priority]').forEach(function (button) { button.onclick = function () { choice.priority = button.dataset.priority; panel.querySelectorAll('[data-priority]').forEach(function (item) { var color = {high:'#FF7A7A',medium:'#FBBF24',low:'#2DD4BF'}[item.dataset.priority]; var selected = item.dataset.priority === choice.priority; item.style.background = selected ? color : 'var(--card)'; item.style.color = selected ? '#fff' : 'var(--muted-fg)'; item.style.border = selected ? 'none' : '1px solid var(--border)'; }); }; });
+    panel.querySelectorAll('[data-status]').forEach(function (button) { button.onclick = function () { choice.status = button.dataset.status; panel.querySelectorAll('[data-status]').forEach(function (item) { item.classList.toggle('on', item === button); }); }; });
+    panel.querySelector('[data-save]').onclick = async function () {
+      var button = this, title = panel.querySelector('#nbTaskTitle').value.trim();
+      if (!title) { toast('Enter a task title.'); return; }
+      var data = { title: title, description: panel.querySelector('#nbTaskDesc').value.trim(), instructions: panel.querySelector('#nbTaskInstructions').value.trim(), subjectId: panel.querySelector('#nbTaskSubject').value || null, type: panel.querySelector('#nbTaskType').value, assignedTo: panel.querySelector('#nbTaskAssignee').value.trim() || nbProfileName(), dueDate: panel.querySelector('#nbTaskDue').value, dueTime: panel.querySelector('#nbTaskTime').value, priority: choice.priority, status: choice.status, additionalNotes: panel.querySelector('#nbTaskNotes').value.trim(), updatedAt: new Date().toISOString() };
+      if (task) Object.assign(task, data);
+      else S.tasks.unshift(Object.assign({ id: uid(), createdAt: new Date().toISOString(), createdBy: nbUserId() }, data));
+      button.disabled = true; button.textContent = 'Saving…';
+      var saved = await window.saveWorkspaceNow();
+      if (!saved.ok) { button.disabled = false; button.textContent = 'Retry save'; cacheWorkspaceSnapshot(); toast('Task is kept on this device, but cloud save failed: ' + ((saved.error && saved.error.message) || 'Unknown error')); return; }
+      NOTE_DIRTY = false; closeTop(); render(); toast(task ? 'Task updated.' : 'Task created.');
+    };
+  };
+
+  window.vTasks = function () {
+    var counts = taskCounts();
+    var list = S.tasks.filter(function (task) { return UI.taskFilter === 'all' || task.status === UI.taskFilter; }).slice().sort(function (a,b) { return String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')); });
+    var html = '<div class="pad pt" style="padding-top:20px;padding-bottom:12px"><div class="f jb aic"><div><h1 class="tx2 bold">Tasks</h1><p class="txm muted">' + counts.done + ' of ' + counts.all + ' complete · ' + counts.overdue + ' overdue</p></div><button class="btn btn-sm" style="background:#2563EB;color:#fff" onclick="openTaskSheet(null)">' + ic('plus',17) + ' Add task</button></div></div><div class="pad grid3"><div class="stat"><span class="txl bold">' + counts.dueToday + '</span><span class="txs muted">Due today</span></div><div class="stat"><span class="txl bold">' + counts.week + '</span><span class="txs muted">Due this week</span></div><div class="stat"><span class="txl bold">' + counts.overdue + '</span><span class="txs muted">Overdue</span></div></div><div class="pad mt3"><div class="hscroll">' + [['all','All'],['todo','To do'],['progress','In progress'],['done','Completed']].map(function(f){return '<button class="chip' + (UI.taskFilter===f[0]?' on':'') + '" onclick="setTaskFilter(\'' + f[0] + '\')">' + f[1] + '</button>';}).join('') + '</div></div><div class="pad mt3 pb fc g2">';
+    if (!list.length) html += '<div class="empty"><p class="txm muted">No tasks match this view.</p></div>';
+    html += list.map(function (task) {
+      var subject = subjectById(task.subjectId), overdue = task.status !== 'done' && task.dueDate && task.dueDate < todayISO();
+      return '<article class="card padc"><div class="f jb aic g2"><div class="grow minw"><p class="txm semi">' + esc(task.title) + '</p><p class="txs muted mt1">' + esc(task.type || 'Task') + ' · ' + esc(subject ? subject.code : 'General') + '</p></div><span class="badge pri-' + esc(task.priority || 'medium') + '">' + esc((task.priority || 'medium').toUpperCase()) + '</span></div><p class="txs mt2" style="color:' + (overdue ? '#dc2626' : 'var(--muted-fg)') + '">Due ' + esc(task.dueDate || 'not set') + (task.dueTime ? ' at ' + esc(task.dueTime) : '') + (overdue ? ' · OVERDUE' : '') + '</p>' + ((task.description || task.instructions) ? '<p class="txm mt2" style="white-space:pre-wrap">' + esc(task.description || task.instructions) + '</p>' : '<p class="txs muted mt2">No description provided.</p>') + '<div class="f jb aic mt3"><span class="badge">' + esc(task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In progress' : 'To do') + '</span><div class="f g1"><button class="btn btn-secondary btn-sm" onclick="openTaskSheet(\'' + task.id + '\')">Edit details</button><button class="btn btn-sm" style="background:var(--secondary);color:var(--fg)" onclick="cycleTask(\'' + task.id + '\')">Next status</button><button class="btn btn-danger btn-sm" onclick="nbDeletePersonalTask(\'' + task.id + '\')">Delete</button></div></div><p class="txs muted mt2">Assigned to: ' + esc(task.assignedTo || nbProfileName()) + '</p></article>';
+    }).join('');
+    return html + '</div>';
+  };
+
+  window.nbDeletePersonalTask = function (taskId) {
+    var task = (S.tasks || []).filter(function (item) { return String(item.id) === String(taskId); })[0];
+    if (!task) return;
+    confirmSheet({ title: 'Delete this task?', message: '“' + task.title + '” will be removed from your personal workspace.', confirmLabel: 'Delete task', danger: true, onConfirm: async function () {
+      var previous = S.tasks.slice();
+      S.tasks = S.tasks.filter(function (item) { return String(item.id) !== String(taskId); });
+      var result = await window.saveWorkspaceNow();
+      if (!result.ok) { S.tasks = previous; cacheWorkspaceSnapshot(); toast('Could not delete the task: ' + ((result.error && result.error.message) || 'Unknown error')); }
+      else toast('Task deleted.');
+      render();
+    }});
+  };
+
+  /* 4) Lock-In copy and room selection. Room mode requires a joined Supabase room. */
+  var nbOldLockSetup = lockSetup;
+  lockSetup = function (subject) {
+    var html = nbOldLockSetup(subject);
+    var marker = '</div></div><div class="card padc"><div class="prow">';
+    var roomOptions = (S.rooms || []).filter(function (room) { return room.isShared && room.isJoined; });
+    var roomBox = '<div class="card padc mt2"><p class="txs semi">Choose a study mode</p><p class="txs muted mt1"><b>Solo Lock-In:</b> a private focus timer for your own study. Your session is logged to your subject.</p><p class="txs muted mt2"><b>Room Lock-In:</b> your timer still belongs to you, but your focus status, subject, and remaining time are shared with room members in the room Info tab. Each member has an independent timer and music remains personal to their device.</p>' +
+      '<label class="field-label mt3" for="nbLockRoom">Shared room</label><select id="nbLockRoom" class="input" onchange="LOCK.roomId=this.value;persistLock()"><option value="">Choose a joined room</option>' + roomOptions.map(function (room) { return '<option value="' + esc(room.id) + '" ' + (String(LOCK.roomId || '') === String(room.id) ? 'selected' : '') + '>' + esc(room.name) + '</option>'; }).join('') + '</select></div>';
+    if (html.indexOf(marker) >= 0) html = html.replace(marker, '</div></div>' + roomBox + '<div class="card padc"><div class="prow">');
+    return html;
+  };
+  window.setLockMode = function (mode) {
+    if (mode === 'room') {
+      var rooms = (S.rooms || []).filter(function (room) { return room.isShared && room.isJoined; });
+      if (!rooms.length) { toast('Join a shared study room before choosing Room Lock-In.'); LOCK.mode = 'solo'; render(); return; }
+      if (!LOCK.roomId || !rooms.some(function (room) { return String(room.id) === String(LOCK.roomId); })) LOCK.roomId = rooms[0].id;
+    }
+    LOCK.mode = mode === 'room' ? 'room' : 'solo';
+    if (LOCK.mode === 'solo') LOCK.roomId = null;
+    persistLock(); render();
+  };
+
+  /* 5) Prevent room creation double-submits. The original async routine still performs
+     the existing Supabase inserts and cleanup; this wrapper serializes the UI action. */
+  var nbOriginalOpenCreateRoom = openCreateRoom;
+  window.openCreateRoom = async function () {
+    if (NB_CREATE_ROOM_BUSY) { toast('Room creation is already processing.'); return; }
+    NB_CREATE_ROOM_BUSY = true;
+    var buttons = Array.prototype.slice.call(document.querySelectorAll('button[onclick*="openCreateRoom"]'));
+    buttons.forEach(function (button) { button.disabled = true; });
+    try { await nbOriginalOpenCreateRoom(); }
+    finally { NB_CREATE_ROOM_BUSY = false; buttons.forEach(function (button) { button.disabled = false; }); }
+  };
+
+  var nbOriginalCreateRoomTask = window.nbCreateRoomTask || nbCreateRoomTask;
+  var NB_ROOM_TASK_CREATE_BUSY = false;
+  window.nbCreateRoomTask = async function (roomId) {
+    if (NB_ROOM_TASK_CREATE_BUSY) return;
+    NB_ROOM_TASK_CREATE_BUSY = true;
+    var button = document.querySelector('button[onclick*="nbCreateRoomTask"]');
+    if (button) { button.disabled = true; button.textContent = 'Publishing…'; }
+    try { await nbOriginalCreateRoomTask(roomId); }
+    finally { NB_ROOM_TASK_CREATE_BUSY = false; if (button) { button.disabled = false; button.textContent = 'Publish task to room'; } }
+  };
+
+  /* 6) Shared room tasks: each member stores their own response/status row. */
+  window.nbSubmitRoomTaskResponse = async function (roomId, taskId) {
+    var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId); })[0];
+    var task = room && (room.messages || []).filter(function (item) { return item.kind === 'shared-task' && String(item.id) === String(taskId); })[0];
+    var userId = nbUserId();
+    if (!room || !task || !userId) { toast('Open the shared room and sign in before submitting.'); return; }
+    var key = String(roomId) + ':' + String(taskId) + ':' + userId;
+    if (NB_TASK_RESPONSE_BUSY[key]) return;
+    NB_TASK_RESPONSE_BUSY[key] = true;
+    try {
+      var responseText = (document.getElementById('nbTaskResponse_' + taskId) || {}).value || '';
+      var status = (document.getElementById('nbTaskStatus_' + taskId) || {}).value || 'todo';
+      var existing = (room.messages || []).filter(function (item) { return item.kind === 'shared-task-response' && String(item.taskId) === String(taskId) && String(item.userId) === String(userId); })[0];
+      var payload = nbSharedPayload('shared-task-response', { id: existing ? existing.id : uid(), taskId: taskId, userId: userId, response: responseText.trim(), status: status, submittedAt: new Date().toISOString() });
+      var result;
+      if (existing && existing.dbId) result = await dbClient.from('study_room_messages').update({ body: payload }).eq('id', existing.dbId).eq('room_id', roomId).select('id').maybeSingle();
+      else result = await dbClient.from('study_room_messages').insert({ room_id: roomId, user_id: userId, body: payload }).select('id').single();
+      if (result.error) throw result.error;
+      if (existing && !result.data) throw new Error('Your individual task response was not saved. Check room message UPDATE permissions.');
+      await nbLoadMessages(room, true); render(); toast('Your task progress was saved separately from other members.');
+    } catch (error) { console.error(error); toast('Could not save your task response: ' + ((error && error.message) || 'Unknown error')); }
+    finally { delete NB_TASK_RESPONSE_BUSY[key]; }
+  };
+
+  function nbRenderSharedTasks(room) {
+    var tasks = (room.messages || []).filter(function (item) { return item.kind === 'shared-task'; });
+    var html = tasks.length ? tasks.map(function (task) {
+      var responses = (room.messages || []).filter(function (item) { return item.kind === 'shared-task-response' && String(item.taskId) === String(task.id); });
+      var mine = responses.filter(function (item) { return String(item.userId) === String(nbUserId()); })[0];
+      var people = responses.map(function (item) { return '<div class="rowitem"><span class="grow txs">' + esc(item.from || 'Member') + '</span><span class="badge">' + esc(item.status || 'todo') + '</span>' + (item.response ? '<p class="txs muted" style="white-space:pre-wrap;max-width:100%">' + esc(item.response) + '</p>' : '') + '</div>'; }).join('');
+      return '<article class="card padc"><div class="f jb aic g2"><div class="grow minw"><p class="txm semi">' + esc(task.title || 'Room task') + '</p><p class="txs muted mt1">Created by ' + esc(task.from || 'Member') + (task.due ? ' · Due ' + esc(task.due) : '') + '</p></div>' + (typeof nbDeleteSharedRecord === 'function' && (task.me || room.ownerId === nbUserId()) ? '<button class="iconbtn" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + task.dbId + '\')">' + ic('trash',15) + '</button>' : '') + '</div>' + (task.details ? '<p class="txm mt2" style="white-space:pre-wrap">' + esc(task.details) + '</p>' : '') + '<div class="card padc mt3"><p class="txs semi">Your individual response</p><textarea id="nbTaskResponse_' + task.id + '" class="input mt2" rows="3" placeholder="Describe your work or progress">' + esc(mine ? mine.response || '' : '') + '</textarea><div class="f g2 aic mt2"><select id="nbTaskStatus_' + task.id + '" class="input"><option value="todo" ' + (!mine || mine.status === 'todo' ? 'selected' : '') + '>To do</option><option value="progress" ' + (mine && mine.status === 'progress' ? 'selected' : '') + '>In progress</option><option value="done" ' + (mine && mine.status === 'done' ? 'selected' : '') + '>Completed</option></select><button class="btn btn-primary" onclick="nbSubmitRoomTaskResponse(\'' + room.id + '\',\'' + task.id + '\')">Save my progress</button></div></div><p class="txs muted mt2">' + responses.length + ' member response(s) / ' + (room.members || []).length + ' members</p>' + (people ? '<details class="mt2"><summary class="txs semi">View member progress</summary><div class="fc g1 mt2">' + people + '</div></details>' : '') + '</article>';
+    }).join('') : '<div class="empty"><p class="txm muted">No room tasks yet. Create one below; each member can submit their own progress.</p></div>';
+    return '<div class="nb-room-list">' + html + '</div><div class="pad fc g2"><h3 class="txm semi">Create a room task</h3><p class="txs muted">This task is visible to members. Each member’s response and status are saved separately.</p><input id="sharedTaskTitle" class="input" placeholder="Task title"/><input id="sharedTaskDue" class="input" type="date"/><textarea id="sharedTaskDetails" class="input" rows="3" placeholder="Detailed instructions and expected result"></textarea><button class="btn btn-primary" onclick="nbCreateRoomTask(\'' + room.id + '\')">Publish task to room</button></div>';
+  }
+
+  /* 7) Multi-question room quiz builder and per-member submissions.
+     These are study/practice quizzes. Correct answers remain in the shared message payload,
+     so this client-only design should not be used for high-stakes secure examinations. */
+  window.NB_QUIZ_DRAFT = [];
+  window.NB_QUIZ_TITLE = '';
+  window.nbQuizDraftBuild = function (count) {
+    var n = Math.max(1, Math.min(50, parseInt(count, 10) || 1));
+    while (NB_QUIZ_DRAFT.length < n) NB_QUIZ_DRAFT.push({ type: 'multiple_choice', question: '', options: '', correctAnswer: '', points: 1, explanation: '' });
+    NB_QUIZ_DRAFT = NB_QUIZ_DRAFT.slice(0, n);
+    render();
+  };
+  window.nbQuizDraftUpdate = function (index, key, value) {
+    if (!NB_QUIZ_DRAFT[index]) NB_QUIZ_DRAFT[index] = {};
+    NB_QUIZ_DRAFT[index][key] = value;
+  };
+  window.nbQuizChangeType = function (index, value) {
+    nbQuizDraftUpdate(index, 'type', value);
+    render();
+  };
+  function nbQuizBuilder(roomId) {
+    if (!NB_QUIZ_DRAFT.length) NB_QUIZ_DRAFT = [{ type: 'multiple_choice', question: '', options: '', correctAnswer: '', points: 1, explanation: '' }];
+    var cards = NB_QUIZ_DRAFT.map(function (question, index) {
+      var type = question.type || 'multiple_choice';
+      var choices = type === 'multiple_choice' ? '<label class="field-label mt2">Answer choices (one per line)</label><textarea class="input" rows="3" oninput="nbQuizDraftUpdate(' + index + ',\'options\',this.value)" placeholder="Choice A&#10;Choice B&#10;Choice C&#10;Choice D">' + esc(question.options || '') + '</textarea>' : '';
+      var answerLabel = type === 'true_false' ? 'Correct answer (True or False)' : (type === 'short_answer' ? 'Expected answer (optional; leave blank for manual review)' : 'Correct answer (use | to separate accepted variants)');
+      var answerControl = type === 'true_false' ? '<select class="input" onchange="nbQuizDraftUpdate(' + index + ',\'correctAnswer\',this.value)"><option value="True" ' + (/^true$/i.test(question.correctAnswer || '') ? 'selected' : '') + '>True</option><option value="False" ' + (/^false$/i.test(question.correctAnswer || '') ? 'selected' : '') + '>False</option></select>' : '<input class="input" value="' + esc(question.correctAnswer || '') + '" oninput="nbQuizDraftUpdate(' + index + ',\'correctAnswer\',this.value)" placeholder="Enter the correct answer"/>';
+      return '<article class="card padc"><div class="f jb aic"><strong>Question ' + (index + 1) + '</strong><select class="input" style="max-width:190px" onchange="nbQuizChangeType(' + index + ',this.value)"><option value="multiple_choice" ' + (type === 'multiple_choice' ? 'selected' : '') + '>Multiple choice</option><option value="true_false" ' + (type === 'true_false' ? 'selected' : '') + '>True or false</option><option value="identification" ' + (type === 'identification' ? 'selected' : '') + '>Identification</option><option value="fill_blank" ' + (type === 'fill_blank' ? 'selected' : '') + '>Fill in the blanks</option><option value="short_answer" ' + (type === 'short_answer' ? 'selected' : '') + '>Short answer</option></select></div><label class="field-label mt2">Question or instruction</label><textarea class="input" rows="2" oninput="nbQuizDraftUpdate(' + index + ',\'question\',this.value)" placeholder="Write the question">' + esc(question.question || '') + '</textarea>' + choices + '<label class="field-label mt2">' + answerLabel + '</label>' + answerControl + '<div class="f g2 mt2"><div class="grow"><label class="field-label">Points</label><input class="input" type="number" min="1" max="100" value="' + esc(question.points || 1) + '" oninput="nbQuizDraftUpdate(' + index + ',\'points\',this.value)"/></div><div class="grow"><label class="field-label">Explanation (optional)</label><input class="input" value="' + esc(question.explanation || '') + '" oninput="nbQuizDraftUpdate(' + index + ',\'explanation\',this.value)"/></div></div></article>';
+    }).join('');
+    return '<div class="nb-room-list"><div class="card padc"><h3 class="txl semi">Create a room quiz</h3><p class="txs muted mt1">Choose the number of items, then set each question type, answer, points, and explanation. This quiz is for collaborative study practice.</p><label class="field-label mt3" for="nbQuizTitle">Quiz title</label><input id="nbQuizTitle" class="input" value="' + esc(NB_QUIZ_TITLE) + '" oninput="NB_QUIZ_TITLE=this.value" placeholder="e.g. Biology Chapter 2 Review"/><label class="field-label mt3" for="nbQuizCount">Number of items (1–50)</label><div class="f g2"><input id="nbQuizCount" type="number" min="1" max="50" value="' + NB_QUIZ_DRAFT.length + '" class="input"/><button class="btn btn-secondary" onclick="nbQuizDraftBuild(document.getElementById(\'nbQuizCount\').value)">Build questions</button></div></div>' + cards + '<button class="btn btn-primary btn-block" onclick="nbPublishRoomQuiz(\'' + roomId + '\')">Publish quiz to room</button></div>';
+  }
+  function nbNormalizeQuizQuestions(quiz) {
+    if (Array.isArray(quiz.questions)) return quiz.questions;
+    if (quiz.question) return [{ type: 'multiple_choice', question: quiz.question, options: quiz.options || [], correctAnswer: (quiz.options || [])[Number(quiz.correctIndex)] || '', points: 1, explanation: quiz.explanation || '' }];
+    return [];
+  }
+  function nbRenderQuizzes(room) {
+    var quizzes = (room.messages || []).filter(function (item) { return item.kind === 'shared-quiz'; });
+    var html = quizzes.map(function (quiz) {
+      var questions = nbNormalizeQuizQuestions(quiz);
+      var submissions = (room.messages || []).filter(function (item) { return item.kind === 'shared-quiz-answer' && String(item.quizId) === String(quiz.id); });
+      var mine = submissions.filter(function (item) { return String(item.userId) === String(nbUserId()); })[0];
+      var qhtml = questions.map(function (question, index) {
+        var controlId = 'nbQuizAnswer_' + quiz.id + '_' + index;
+        var type = question.type || 'multiple_choice';
+        var value = mine && Array.isArray(mine.answers) ? (mine.answers[index] || '') : '';
+        var disabled = mine ? 'disabled' : '';
+        var control = '';
+        if (type === 'multiple_choice') {
+          control = (question.options || []).map(function (option) { return '<label class="rowitem"><input type="radio" name="' + controlId + '" value="' + esc(option) + '" ' + (value === option ? 'checked' : '') + ' ' + disabled + '/><span class="txm">' + esc(option) + '</span></label>'; }).join('');
+        } else if (type === 'true_false') {
+          control = ['True','False'].map(function (option) { return '<label class="rowitem"><input type="radio" name="' + controlId + '" value="' + option + '" ' + (value === option ? 'checked' : '') + ' ' + disabled + '/><span class="txm">' + option + '</span></label>'; }).join('');
+        } else {
+          control = '<textarea id="' + controlId + '" class="input mt2" rows="2" ' + disabled + ' placeholder="Type your answer">' + esc(value) + '</textarea>';
+        }
+        return '<div class="card padc mt2"><p class="txs muted">Item ' + (index + 1) + ' · ' + esc(type.replace('_',' ')) + ' · ' + Number(question.points || 1) + ' pt(s)</p><p class="txm semi mt1">' + esc(question.question || '') + '</p>' + control + (mine && question.explanation ? '<p class="txs muted mt2">' + esc(question.explanation) + '</p>' : '') + '</div>';
+      }).join('');
+      var result = mine ? '<div class="nb-quiz-feedback"><p class="txm semi">Submission saved</p><p class="txs muted mt1">Score: ' + Number(mine.score || 0) + ' / ' + Number(mine.maxScore || 0) + (mine.reviewRequired ? ' · Some short answers need review' : '') + '</p></div>' : '<button class="btn btn-primary btn-block mt3" onclick="nbSubmitRoomQuiz(\'' + room.id + '\',\'' + quiz.id + '\')">Submit my answers</button>';
+      var deleteButton = (quiz.me || String(room.ownerId) === String(nbUserId())) ? '<button class="iconbtn" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + quiz.dbId + '\')">' + ic('trash',15) + '</button>' : '';
+      return '<article class="card padc"><div class="f jb aic"><div><span class="badge">ROOM QUIZ</span><p class="txs muted mt1">' + esc(quiz.from || 'Member') + ' · ' + submissions.length + ' submission(s)</p></div>' + deleteButton + '</div><h3 class="txl semi mt2">' + esc(quiz.title || 'Study quiz') + '</h3><p class="txs muted">' + questions.length + ' item(s)</p>' + qhtml + result + '</article>';
+    }).join('');
+    return '<div class="nb-room-list">' + (html || '<div class="empty"><p class="txm muted">No quizzes yet. Create a multi-item quiz for room members.</p></div>') + '<button class="btn btn-secondary btn-block" onclick="NB_QUIZ_DRAFT=[{type:\'multiple_choice\',question:\'\',options:\'\',correctAnswer:\'\',points:1,explanation:\'\'}];UI.nbShowQuizComposer=true;render()">' + ic('plus',16) + ' Create another quiz</button>' + (UI.nbShowQuizComposer ? nbQuizBuilder(room.id) : '') + '</div>';
+  }
+  window.nbPublishRoomQuiz = async function (roomId) {
+    if (window.NB_QUIZ_PUBLISH_BUSY) return;
+    window.NB_QUIZ_PUBLISH_BUSY = true;
+    var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId); })[0];
+    if (!room || !room.isShared || !nbUserId()) { window.NB_QUIZ_PUBLISH_BUSY = false; toast('Open a shared room and sign in first.'); return; }
+    var questions = NB_QUIZ_DRAFT.map(function (draft) {
+      var type = draft.type || 'multiple_choice';
+      var options = type === 'multiple_choice' ? String(draft.options || '').split(/\n/).map(function (item) { return item.trim(); }).filter(Boolean).slice(0, 8) : (type === 'true_false' ? ['True','False'] : []);
+      return { type: type, question: String(draft.question || '').trim(), options: options, correctAnswer: type === 'true_false' ? (String(draft.correctAnswer || 'True')) : String(draft.correctAnswer || '').trim(), points: Math.max(1, Math.min(100, parseInt(draft.points, 10) || 1)), explanation: String(draft.explanation || '').trim() };
+    });
+    if (!questions.length || questions.some(function (question) { return !question.question; })) { window.NB_QUIZ_PUBLISH_BUSY = false; toast('Every quiz item needs a question.'); return; }
+    var invalid = questions.some(function (question) { return (question.type === 'multiple_choice' && (question.options.length < 2 || !question.options.some(function (option) { return option.toLowerCase() === question.correctAnswer.toLowerCase(); }))) || ((question.type === 'identification' || question.type === 'fill_blank') && !question.correctAnswer) || (question.type === 'true_false' && ['True','False'].indexOf(question.correctAnswer) < 0); });
+    if (invalid) { window.NB_QUIZ_PUBLISH_BUSY = false; toast('Check the choices and correct answer for each quiz item.'); return; }
+    try {
+      var user = await nbRequireSupabaseUser();
+      var quizTitle = (document.getElementById('nbQuizTitle') || {}).value || NB_QUIZ_TITLE || 'Room study quiz';
+      var body = nbSharedPayload('shared-quiz', { id: uid(), title: String(quizTitle).trim().slice(0, 100) || 'Room study quiz', questions: questions, from: nbProfileName(), createdAt: new Date().toISOString() });
+      var insert = await dbClient.from('study_room_messages').insert({ room_id: room.id, user_id: user.id, body: body });
+      if (insert.error) throw insert.error;
+      NB_QUIZ_DRAFT = []; NB_QUIZ_TITLE = ''; UI.nbShowQuizComposer = false;
+      await nbLoadMessages(room, true); render(); toast('Multi-item quiz published.');
+    } catch (error) { console.error(error); toast('Could not publish quiz: ' + ((error && error.message) || 'Unknown error')); }
+    finally { window.NB_QUIZ_PUBLISH_BUSY = false; }
+  };
+  window.nbSubmitRoomQuiz = async function (roomId, quizId) {
+    var key = roomId + ':' + quizId + ':' + nbUserId(); if (NB_QUIZ_SUBMIT_BUSY[key]) return;
+    NB_QUIZ_SUBMIT_BUSY[key] = true;
+    try {
+      var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId); })[0];
+      var quiz = room && (room.messages || []).filter(function (item) { return item.kind === 'shared-quiz' && String(item.id) === String(quizId); })[0];
+      if (!room || !quiz) throw new Error('Quiz not found. Refresh the room and try again.');
+      var prior = (room.messages || []).filter(function (item) { return item.kind === 'shared-quiz-answer' && String(item.quizId) === String(quizId) && String(item.userId) === String(nbUserId()); })[0];
+      if (prior) { toast('You have already submitted this quiz.'); return; }
+      var questions = nbNormalizeQuizQuestions(quiz), answers = [], score = 0, maxScore = 0, reviewRequired = false;
+      questions.forEach(function (question, index) {
+        var id = 'nbQuizAnswer_' + quizId + '_' + index;
+        var value = '';
+        if (question.type === 'multiple_choice' || question.type === 'true_false') {
+          var selected = document.querySelector('input[name="' + id + '"]:checked'); value = selected ? selected.value : '';
+        } else { value = (document.getElementById(id) || {}).value || ''; }
+        if (!String(value).trim()) throw new Error('Answer item ' + (index + 1) + ' before submitting.');
+        answers.push(String(value).trim());
+        var points = Number(question.points || 1); maxScore += points;
+        if (question.type === 'short_answer' && !String(question.correctAnswer || '').trim()) { reviewRequired = true; }
+        else {
+          var accepted = String(question.correctAnswer || '').split('|').map(function (answer) { return answer.trim().toLowerCase().replace(/\s+/g,' '); }).filter(Boolean);
+          var submitted = String(value).trim().toLowerCase().replace(/\s+/g,' ');
+          if (accepted.indexOf(submitted) >= 0) score += points;
+        }
+      });
+      var user = await nbRequireSupabaseUser();
+      var payload = nbSharedPayload('shared-quiz-answer', { id: uid(), quizId: quizId, userId: user.id, answers: answers, score: score, maxScore: maxScore, reviewRequired: reviewRequired, submitted: true, submittedAt: new Date().toISOString() });
+      var inserted = await dbClient.from('study_room_messages').insert({ room_id: roomId, user_id: user.id, body: payload });
+      if (inserted.error) throw inserted.error;
+      await nbLoadMessages(room, true); render(); toast(reviewRequired ? 'Quiz submitted. Some short answers require manual review.' : 'Quiz submitted. Your score is saved.');
+    } catch (error) { console.error(error); toast('Could not submit quiz: ' + ((error && error.message) || 'Unknown error')); }
+    finally { delete NB_QUIZ_SUBMIT_BUSY[key]; }
+  };
+
+  /* 8) Shared note/file uploads: clarify formats and allow a file-only note with a title. */
+  window.nbEditRoomNote = function (roomId, dbId) {
+    var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId); })[0];
+    var note = room && (room.messages || []).filter(function (item) { return String(item.dbId) === String(dbId) && item.kind === 'shared-note'; })[0];
+    if (!note || (!note.me && String(room.ownerId) !== String(nbUserId()))) { toast('Only the note author or room owner can edit this note.'); return; }
+    var panel = sheet('<div class="f jb aic mb3"><h3 class="txl semi">Edit shared note</h3><button class="iconbtn" data-close>' + ic('x',18) + '</button></div><div class="fc g3"><label class="field-label">Title</label><input id="nbEditSharedNoteTitle" class="input" value="' + esc(note.title || '') + '"/><label class="field-label">Note content</label><textarea id="nbEditSharedNoteText" class="input" rows="8">' + esc(note.text || '') + '</textarea><p class="txs muted">Any existing file attachment will be kept unchanged.</p><button class="btn btn-primary" data-save>Save changes</button></div>');
+    panel.querySelector('[data-close]').onclick = closeTop;
+    panel.querySelector('[data-save]').onclick = async function () {
+      var title = panel.querySelector('#nbEditSharedNoteTitle').value.trim(), text = panel.querySelector('#nbEditSharedNoteText').value.trim();
+      if (!title || (!text && !note.filePath)) { toast('Enter a title and note text, or keep an existing attachment.'); return; }
+      var button = this; button.disabled = true; button.textContent = 'Saving…';
+      try {
+        await nbRequireSupabaseUser();
+        var payload = nbSharedPayload('shared-note', { id: note.id, title: title, text: text, filePath: note.filePath || null, fileName: note.fileName || null, fileSize: note.fileSize || null, fileType: note.fileType || null, from: note.from || nbProfileName(), createdAt: note.createdAt || new Date().toISOString(), editedAt: new Date().toISOString() });
+        var result = await dbClient.from('study_room_messages').update({ body: payload }).eq('id', dbId).eq('room_id', roomId).select('id').maybeSingle();
+        if (result.error) throw result.error;
+        if (!result.data) throw new Error('No note was updated. Check room message UPDATE permissions.');
+        await nbLoadMessages(room, true); closeTop(); render(); toast('Shared note updated.');
+      } catch (error) { console.error(error); button.disabled = false; button.textContent = 'Retry save'; toast('Could not update the shared note: ' + ((error && error.message) || 'Unknown error')); }
+    };
+  };
+
+  window.nbPublishRoomNote = async function (roomId) {
+    var busyKey = 'roomnote:' + roomId;
+    if (NB_UPLOAD_BUSY[busyKey]) return;
+    NB_UPLOAD_BUSY[busyKey] = true;
+    var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId); })[0];
+    var title = (document.getElementById('sharedNoteTitle') || {}).value || '';
+    var text = (document.getElementById('sharedNoteText') || {}).value || '';
+    var fileInput = document.getElementById('sharedNoteFile'), file = fileInput && fileInput.files && fileInput.files[0];
+    if (!room || !room.isShared || !nbUserId()) { delete NB_UPLOAD_BUSY[busyKey]; toast('Sign in and open a shared room first.'); return; }
+    if (!title.trim() || (!text.trim() && !file)) { delete NB_UPLOAD_BUSY[busyKey]; toast('Enter a title and either note text or an attachment.'); return; }
+    if (file) { var check = nbFileAllowed(file); if (!check.ok) { delete NB_UPLOAD_BUSY[busyKey]; toast(check.message); return; } }
+    var path = null;
+    try {
+      var user = await nbRequireSupabaseUser();
+      if (file) {
+        path = roomId + '/' + user.id + '/notes/' + Date.now() + '_' + nbSafeName(file.name);
+        var upload = await dbClient.storage.from('study-room-files').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream', cacheControl: '3600' });
+        if (upload.error) throw upload.error;
+      }
+      var body = nbSharedPayload('shared-note', { id: uid(), title: title.trim(), text: text.trim(), filePath: path, fileName: file ? file.name : null, fileSize: file ? file.size : null, fileType: file ? (file.type || 'application/octet-stream') : null, from: nbProfileName(), createdAt: new Date().toISOString() });
+      var result = await dbClient.from('study_room_messages').insert({ room_id: roomId, user_id: user.id, body: body });
+      if (result.error) throw result.error;
+      await nbLoadMessages(room, true); render(); toast('Shared note saved for the room.');
+    } catch (error) {
+      if (path) { try { await dbClient.storage.from('study-room-files').remove([path]); } catch (_) {} }
+      console.error(error); toast('Could not share note: ' + ((error && error.message) || 'Check room Storage and message permissions.'));
+    } finally { delete NB_UPLOAD_BUSY[busyKey]; }
+  };
+
+  window.nbUploadRoomFile = async function (roomId) {
+    var busyKey = 'roomfile:' + roomId;
+    if (NB_UPLOAD_BUSY[busyKey]) return;
+    NB_UPLOAD_BUSY[busyKey] = true;
+    var input = document.getElementById('roomFileInput'), file = input && input.files && input.files[0];
+    var check = nbFileAllowed(file); if (!check.ok) { delete NB_UPLOAD_BUSY[busyKey]; toast(check.message); return; }
+    var path = null;
+    try {
+      var user = await nbRequireSupabaseUser();
+      var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId); })[0];
+      if (!room || !room.isShared) throw new Error('Shared room not found.');
+      var membership = await dbClient.from('study_room_members').select('room_id').eq('room_id', roomId).eq('user_id', user.id).maybeSingle();
+      if (membership.error) throw membership.error;
+      if (!membership.data) throw new Error('You are not a member of this room.');
+      path = roomId + '/' + user.id + '/' + Date.now() + '_' + nbSafeName(file.name);
+      var upload = await dbClient.storage.from('study-room-files').upload(path, file, { upsert: false, contentType: file.type || 'application/octet-stream', cacheControl: '3600' });
+      if (upload.error) throw upload.error;
+      var payload = nbSharedPayload('shared-file', { id: uid(), filePath: path, fileName: file.name, fileType: file.type || '', fileSize: file.size, from: nbProfileName(), createdAt: new Date().toISOString() });
+      var message = await dbClient.from('study_room_messages').insert({ room_id: roomId, user_id: user.id, body: payload });
+      if (message.error) throw message.error;
+      await nbLoadMessages(room, true); render(); toast('File uploaded and shared with room members.');
+    } catch (error) {
+      if (path) { try { await dbClient.storage.from('study-room-files').remove([path]); } catch (_) {} }
+      console.error(error); toast('Room file upload failed: ' + ((error && error.message) || 'Unknown error'));
+    } finally { delete NB_UPLOAD_BUSY[busyKey]; }
+  };
+
+  /* 9) Multiple persistent whiteboards backed by a dedicated table and RLS migration.
+     Drawing state is never embedded into general chat messages. */
+  var NB_BOARD = window.NB_BOARD || {};
+  Object.assign(NB_BOARD, { canvas: null, ctx: null, roomId: null, drawing: false, start: null, last: null, base: null, color: NB_BOARD.color || '#2563EB', size: NB_BOARD.size || 4, tool: NB_BOARD.tool || 'pen', undo: [], redo: [], activeBoardId: NB_BOARD.activeBoardId || null, saving: false, loading: false });
+  window.NB_BOARD = NB_BOARD;
+  function nbBoardList(roomId) { return NB_ROOM_BOARDS[String(roomId)] || []; }
+  async function nbLoadRoomBoards(roomId) {
+    if (!dbClient || !roomId) return [];
+    var response = await dbClient.from('study_room_boards').select('id,room_id,name,image_data,created_by,updated_by,created_at,updated_at').eq('room_id', roomId).order('created_at', { ascending: true });
+    if (response.error) throw response.error;
+    NB_ROOM_BOARDS[String(roomId)] = response.data || [];
+    return NB_ROOM_BOARDS[String(roomId)];
+  }
+  function nbRenderBoard(room) {
+    var boards = nbBoardList(room.id);
+    var active = boards.filter(function (board) { return String(board.id) === String(NB_BOARD.activeBoardId); })[0] || boards[0];
+    if (active) NB_BOARD.activeBoardId = active.id;
+    var canDeleteActive = !!(active && (String(active.created_by) === String(nbUserId()) || String(room.ownerId) === String(nbUserId())));
+    var selector = boards.map(function (board) { return '<option value="' + esc(board.id) + '" ' + (active && String(active.id) === String(board.id) ? 'selected' : '') + '>' + esc(board.name) + '</option>'; }).join('');
+    return `<div id="nbBoardFullscreenHost" class="nb-board-wrap">
+      <div class="f jb aic g2 wrapf"><div><h2 class="txl semi">Collaborative whiteboards</h2><p class="txs muted">Each board is saved separately for this room.</p></div>
+        <div class="f g2"><button class="btn btn-secondary btn-sm" onclick="nbCreateRoomBoard('${esc(room.id)}')">${ic('plus',14)} New board</button>
+          ${canDeleteActive ? `<button class="btn btn-danger btn-sm" onclick="nbDeleteRoomBoard('${esc(room.id)}')">${ic('trash',14)} Delete</button>` : ''}
+          <button class="btn btn-secondary btn-sm" onclick="nbToggleBoardFullscreen()">${ic('grid',14)} Fullscreen</button></div></div>
+      <div class="f g2 aic"><label class="field-label" for="nbBoardSelect">Active board</label><select id="nbBoardSelect" class="input" onchange="nbSelectRoomBoard('${esc(room.id)}',this.value)">${selector}</select>
+        ${active ? `<span class="txs muted">Updated ${esc(new Date(active.updated_at || active.created_at).toLocaleString())}</span>` : ''}</div>
+      <div class="nb-board-toolbar">
+        <button type="button" data-nb-tool="pen" class="${NB_BOARD.tool === 'pen' ? 'active' : ''}" onclick="nbSetBoardTool('pen')">Pen</button>
+        <button type="button" data-nb-tool="eraser" class="${NB_BOARD.tool === 'eraser' ? 'active' : ''}" onclick="nbSetBoardTool('eraser')">Eraser</button>
+        <button type="button" data-nb-tool="line" class="${NB_BOARD.tool === 'line' ? 'active' : ''}" onclick="nbSetBoardTool('line')">Line</button>
+        <button type="button" data-nb-tool="rect" class="${NB_BOARD.tool === 'rect' ? 'active' : ''}" onclick="nbSetBoardTool('rect')">Rectangle</button>
+        <button type="button" data-nb-tool="circle" class="${NB_BOARD.tool === 'circle' ? 'active' : ''}" onclick="nbSetBoardTool('circle')">Oval</button>
+        <label>Color<input id="nbBoardColor" type="color" value="${esc(NB_BOARD.color)}" oninput="NB_BOARD.color=this.value"/></label>
+        <label>Size<input type="range" min="1" max="24" value="${Number(NB_BOARD.size || 4)}" oninput="NB_BOARD.size=Number(this.value)"/></label>
+        <button onclick="nbUndoBoard()">Undo</button><button onclick="nbRedoBoard()">Redo</button>
+        <button onclick="nbClearBoard('${esc(room.id)}')">Clear</button><button onclick="nbSaveSharedBoard('${esc(room.id)}',false)">Save</button><button onclick="nbDownloadBoard()">Download PNG</button>
+      </div>
+      <div class="nb-board-canvas-wrap"><canvas id="nbRoomBoard" width="1200" height="840" aria-label="Shared room whiteboard"></canvas></div>
+      <p class="txs muted">Use touch, mouse, or stylus. Drawings autosave after you stop drawing. Room details stay in the Info tab and do not cover this canvas.</p>
+    </div>`;
+  }
+  window.nbCreateRoomBoard = async function (roomId) {
+    var name = prompt('Name this whiteboard:', 'Whiteboard ' + (nbBoardList(roomId).length + 1));
+    if (!name || !name.trim()) return;
+    try {
+      var user = await nbRequireSupabaseUser();
+      var result = await dbClient.from('study_room_boards').insert({ room_id: roomId, name: name.trim().slice(0, 80), image_data: '', created_by: user.id, updated_by: user.id }).select('id').single();
+      if (result.error) throw result.error;
+      await nbLoadRoomBoards(roomId); NB_BOARD.activeBoardId = result.data.id; render(); toast('New whiteboard created.');
+    } catch (error) { console.error(error); toast('Could not create whiteboard. Run the supplied SQL migration first: ' + ((error && error.message) || 'Unknown error')); }
+  };
+  window.nbSelectRoomBoard = async function (roomId, boardId) { NB_BOARD.activeBoardId = boardId; await nbLoadRoomBoards(roomId).catch(function (error) { console.warn(error); }); render(); };
+  window.nbDeleteRoomBoard = function (roomId) {
+    var board = nbBoardList(roomId).filter(function (item) { return String(item.id) === String(NB_BOARD.activeBoardId); })[0];
+    if (!board) { toast('There is no active board to delete.'); return; }
+    confirmSheet({ title: 'Delete this whiteboard?', message: 'Only “' + board.name + '” will be deleted. Other room whiteboards will remain.', confirmLabel: 'Delete board', danger: true, onConfirm: async function () {
+      try {
+        var result = await dbClient.from('study_room_boards').delete().eq('id', board.id).eq('room_id', roomId).select('id').maybeSingle();
+        if (result.error) throw result.error;
+        if (!result.data) throw new Error('No board was deleted. Check the room board DELETE policy.');
+        await nbLoadRoomBoards(roomId); NB_BOARD.activeBoardId = nbBoardList(roomId)[0] ? nbBoardList(roomId)[0].id : null; render(); toast('Whiteboard deleted.');
+      } catch (error) { console.error(error); toast('Could not delete whiteboard: ' + ((error && error.message) || 'Unknown error')); }
+    }});
+  };
+  window.nbToggleBoardFullscreen = async function () {
+    var host = document.getElementById('nbBoardFullscreenHost'); if (!host) return;
+    try { if (!document.fullscreenElement) await host.requestFullscreen(); else await document.exitFullscreen(); }
+    catch (error) { toast('Fullscreen is not available in this browser.'); }
+  };
+  window.nbSetBoardTool = function (tool) {
+    if (['pen','eraser','line','rect','circle'].indexOf(tool) < 0) return;
+    NB_BOARD.tool = tool;
+    document.querySelectorAll('[data-nb-tool]').forEach(function (button) { button.classList.toggle('active', button.dataset.nbTool === tool); });
+  };
+  function nbBoardImage(data, canvas, done) {
+    if (!data) { done(); return; }
+    var image = new Image();
+    image.onload = function () { canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height); done(); };
+    image.onerror = done; image.src = data;
+  }
+  function nbBoardSnapshot() {
+    if (!NB_BOARD.ctx || !NB_BOARD.canvas) return;
+    NB_BOARD.undo.push(NB_BOARD.ctx.getImageData(0, 0, NB_BOARD.canvas.width, NB_BOARD.canvas.height));
+    if (NB_BOARD.undo.length > 6) NB_BOARD.undo.shift();
+    NB_BOARD.redo = [];
+  }
+  async function nbSaveBoard(roomId, silent) {
+    if (!NB_BOARD.canvas || NB_BOARD.roomId !== roomId || !NB_BOARD.activeBoardId || NB_BOARD.saving) return;
+    NB_BOARD.saving = true;
+    try {
+      var user = await nbRequireSupabaseUser();
+      var image = NB_BOARD.canvas.toDataURL('image/jpeg', 0.56);
+      if (image.length > 1200000) throw new Error('This drawing is too large to save. Reduce it or split it across boards.');
+      var result = await dbClient.from('study_room_boards').update({ image_data: image, updated_by: user.id, updated_at: new Date().toISOString() }).eq('id', NB_BOARD.activeBoardId).eq('room_id', roomId).select('id').maybeSingle();
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error('No board was updated. Check the board UPDATE policy.');
+      await nbLoadRoomBoards(roomId);
+      if (!silent) toast('Whiteboard saved for room members.');
+    } catch (error) { console.error(error); if (!silent) toast('Could not save whiteboard: ' + ((error && error.message) || 'Run the board SQL migration and check room membership.')); }
+    finally { NB_BOARD.saving = false; }
+  }
+  function nbMountRoomBoard() {
+    var canvas = document.getElementById('nbRoomBoard'); if (!canvas) return;
+    var roomId = resolve().id, room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId); })[0];
+    if (!room || !room.isShared) return;
+    NB_BOARD.canvas = canvas; NB_BOARD.ctx = canvas.getContext('2d'); NB_BOARD.roomId = room.id; NB_BOARD.loading = true; NB_BOARD.drawing = false; NB_BOARD.undo = []; NB_BOARD.redo = [];
+    var board = nbBoardList(room.id).filter(function (item) { return String(item.id) === String(NB_BOARD.activeBoardId); })[0] || nbBoardList(room.id)[0];
+    if (board) NB_BOARD.activeBoardId = board.id;
+    NB_BOARD.ctx.fillStyle = '#fff'; NB_BOARD.ctx.fillRect(0, 0, canvas.width, canvas.height);
+    nbBoardImage(board && board.image_data, canvas, function () {
+      if (NB_BOARD.canvas !== canvas) return;
+      NB_BOARD.loading = false; nbBoardSnapshot();
+      function point(event) { var rect = canvas.getBoundingClientRect(); return { x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height }; }
+      canvas.onpointerdown = function (event) {
+        if (NB_BOARD.loading) return; event.preventDefault(); try { canvas.setPointerCapture(event.pointerId); } catch (_) {}
+        NB_BOARD.start = point(event); NB_BOARD.last = NB_BOARD.start; NB_BOARD.base = NB_BOARD.ctx.getImageData(0,0,canvas.width,canvas.height); NB_BOARD.drawing = true;
+        if (NB_BOARD.tool === 'pen' || NB_BOARD.tool === 'eraser') { NB_BOARD.ctx.beginPath(); NB_BOARD.ctx.moveTo(NB_BOARD.start.x,NB_BOARD.start.y); NB_BOARD.ctx.lineTo(NB_BOARD.start.x+0.1,NB_BOARD.start.y+0.1); NB_BOARD.ctx.strokeStyle = NB_BOARD.tool === 'eraser' ? '#fff' : NB_BOARD.color; NB_BOARD.ctx.lineWidth = NB_BOARD.tool === 'eraser' ? NB_BOARD.size*4 : NB_BOARD.size; NB_BOARD.ctx.lineCap='round'; NB_BOARD.ctx.stroke(); }
+      };
+      canvas.onpointermove = function (event) {
+        if (!NB_BOARD.drawing) return; event.preventDefault(); var p = point(event), ctx = NB_BOARD.ctx;
+        ctx.strokeStyle = NB_BOARD.tool === 'eraser' ? '#fff' : NB_BOARD.color; ctx.lineWidth = NB_BOARD.tool === 'eraser' ? NB_BOARD.size*4 : NB_BOARD.size; ctx.lineCap='round'; ctx.lineJoin='round';
+        if (NB_BOARD.tool === 'pen' || NB_BOARD.tool === 'eraser') { ctx.beginPath(); ctx.moveTo(NB_BOARD.last.x,NB_BOARD.last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); }
+        else { ctx.putImageData(NB_BOARD.base,0,0); ctx.beginPath(); if (NB_BOARD.tool === 'line') { ctx.moveTo(NB_BOARD.start.x,NB_BOARD.start.y); ctx.lineTo(p.x,p.y); } else if (NB_BOARD.tool === 'rect') ctx.rect(NB_BOARD.start.x,NB_BOARD.start.y,p.x-NB_BOARD.start.x,p.y-NB_BOARD.start.y); else { var dx=p.x-NB_BOARD.start.x,dy=p.y-NB_BOARD.start.y; ctx.ellipse(NB_BOARD.start.x+dx/2,NB_BOARD.start.y+dy/2,Math.abs(dx/2),Math.abs(dy/2),0,0,Math.PI*2); } ctx.stroke(); }
+        NB_BOARD.last = p;
+      };
+      function finish() { if (!NB_BOARD.drawing) return; NB_BOARD.drawing=false; nbBoardSnapshot(); clearTimeout(NB_BOARD_SAVE_TIMER); NB_BOARD_SAVE_TIMER=setTimeout(function(){ nbSaveBoard(room.id,true); },850); }
+      canvas.onpointerup=finish; canvas.onpointercancel=finish; canvas.onlostpointercapture=finish;
+    });
+  }
+  window.nbMountSharedBoard = nbMountRoomBoard;
+  window.nbSaveSharedBoard = nbSaveBoard;
+  window.nbUndoBoard = function () { if (!NB_BOARD.ctx || NB_BOARD.undo.length < 2) { toast('Nothing to undo.'); return; } NB_BOARD.redo.push(NB_BOARD.undo.pop()); NB_BOARD.ctx.putImageData(NB_BOARD.undo[NB_BOARD.undo.length-1],0,0); nbSaveBoard(NB_BOARD.roomId,true); };
+  window.nbRedoBoard = function () { if (!NB_BOARD.ctx || !NB_BOARD.redo.length) { toast('Nothing to redo.'); return; } var image=NB_BOARD.redo.pop(); NB_BOARD.ctx.putImageData(image,0,0); NB_BOARD.undo.push(image); nbSaveBoard(NB_BOARD.roomId,true); };
+  window.nbClearBoard = function (roomId) { confirmSheet({title:'Clear this whiteboard?',message:'This clears only the active whiteboard for all room members.',confirmLabel:'Clear board',danger:true,onConfirm:function(){ if (!NB_BOARD.ctx || NB_BOARD.roomId !== roomId) return; NB_BOARD.ctx.fillStyle='#fff'; NB_BOARD.ctx.fillRect(0,0,NB_BOARD.canvas.width,NB_BOARD.canvas.height); nbBoardSnapshot(); nbSaveBoard(roomId,false); }}); };
+  window.nbDownloadBoard = function () { if (!NB_BOARD.canvas) return; var link=document.createElement('a'); link.href=NB_BOARD.canvas.toDataURL('image/png'); link.download='nextbyte-whiteboard.png'; document.body.appendChild(link); link.click(); link.remove(); };
+
+  var nbOriginalRoomTabBody = roomTabBody;
+  roomTabBody = function (room) {
+    if (!room || !room.isShared) return nbOriginalRoomTabBody(room);
+    if (UI.roomTab === 'tasks') return nbRenderSharedTasks(room);
+    if (UI.roomTab === 'quiz') return nbRenderQuizzes(room);
+    if (UI.roomTab === 'board') return nbRenderBoard(room);
+    if (UI.roomTab === 'notes') {
+      var notes = (room.messages || []).filter(function (item) { return item.kind === 'shared-note'; });
+      var cards = notes.map(function (note) { var edit = (note.me || String(room.ownerId) === String(nbUserId())) ? '<button class="btn btn-secondary" onclick="nbEditRoomNote(\'' + room.id + '\',\'' + note.dbId + '\')">Edit note</button>' : ''; var file = note.filePath ? '<div class="nb-record-actions"><button class="btn btn-secondary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(note.filePath) + '\',false)">Open file</button><button class="btn btn-primary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(note.filePath) + '\',true)">Download</button></div>' : ''; var remove = (note.me || String(room.ownerId) === String(nbUserId())) ? '<button class="btn btn-danger" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + note.dbId + '\')">Delete</button>' : ''; return '<article class="card padc"><div class="f jb aic"><strong>' + esc(note.title || 'Shared note') + '</strong><span class="txs muted">' + esc(note.from || 'Member') + '</span>' + edit + '</div><p class="txm mt2" style="white-space:pre-wrap">' + esc(note.text || '') + '</p>' + file + remove + '</article>'; }).join('');
+      return '<div class="nb-room-list">' + (cards || '<div class="empty"><p class="txm muted">No shared notes yet.</p></div>') + '</div><div class="pad fc g2"><div class="card padc"><p class="txs semi">What belongs here?</p><p class="txs muted mt1">Use written notes for explanations and summaries. Attach PDF, Word, PowerPoint, Excel, text, Markdown, CSV, or image files. Maximum 20 MB per attachment. Attachments are private to this room’s members.</p></div><input id="sharedNoteTitle" class="input" placeholder="Note or document title"/><textarea id="sharedNoteText" class="input" rows="4" placeholder="Write your shared note (optional when attaching a file)"></textarea><label class="field-label">Optional academic attachment · 20 MB max</label><input id="sharedNoteFile" type="file" class="input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"/><button class="btn btn-primary" onclick="nbPublishRoomNote(\'' + room.id + '\')">Share note or file</button></div>';
+    }
+    if (UI.roomTab === 'files') {
+      var files = (room.messages || []).filter(function (item) { return item.kind === 'shared-file'; });
+      var list = files.map(function (file) { var remove = (file.me || String(room.ownerId) === String(nbUserId())) ? '<button class="btn btn-danger" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + file.dbId + '\')">Delete</button>' : ''; return '<article class="card padc"><p class="txm semi">' + esc(file.fileName || 'Shared file') + '</p><p class="txs muted mt1">' + esc(file.from || 'Member') + ' · ' + nbFileSize(file.fileSize || 0) + '</p><div class="nb-record-actions"><button class="btn btn-secondary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(file.filePath || '') + '\',false)">Open</button><button class="btn btn-primary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(file.filePath || '') + '\',true)">Download</button>' + remove + '</div></article>'; }).join('');
+      return '<div class="nb-room-list">' + (list || '<div class="empty"><p class="txm muted">No files shared yet.</p></div>') + '</div><div class="pad fc g2"><p class="txs muted">Share academic files and reference images (PDF, Office documents, TXT/MD/CSV, PNG/JPG/WEBP). Maximum 20 MB per file. All items are visible to room members.</p><input id="roomFileInput" type="file" class="input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"/><button class="btn btn-primary" onclick="nbUploadRoomFile(\'' + room.id + '\')">Upload and share</button></div>';
+    }
+    return nbOriginalRoomTabBody(room);
+  };
+
+  /* Load board rows before the board tab is painted; never overlay Info content on the board. */
+  var nbOriginalAfterRender = afterRender;
+  afterRender = function (route) {
+    nbOriginalAfterRender(route);
+    if (route && route.view === 'room' && UI.roomTab === 'board') {
+      (async function () {
+        try {
+          var boards = await nbLoadRoomBoards(route.id);
+          if (!boards.length) {
+            var user = await nbRequireSupabaseUser();
+            var made = await dbClient.from('study_room_boards').insert({ room_id: route.id, name: 'Whiteboard 1', image_data: '', created_by: user.id, updated_by: user.id }).select('id').single();
+            if (made.error && made.error.code !== '23505') throw made.error;
+            await nbLoadRoomBoards(route.id);
+            NB_BOARD.activeBoardId = (made.data && made.data.id) || (nbBoardList(route.id)[0] && nbBoardList(route.id)[0].id) || null;
+            if (resolve().view === 'room' && resolve().id === route.id && UI.roomTab === 'board') render();
+            return;
+          }
+          if (!NB_BOARD.activeBoardId || !boards.some(function (board) { return String(board.id) === String(NB_BOARD.activeBoardId); })) NB_BOARD.activeBoardId = boards[0].id;
+          requestAnimationFrame(nbMountRoomBoard);
+        } catch (error) {
+          console.error('Room whiteboard load failed', error);
+          var host = document.getElementById('nbBoardFullscreenHost');
+          if (host) host.insertAdjacentHTML('beforeend', '<p class="txs" style="color:#b45309">Whiteboards need the NEXBYTE enhancements SQL migration. Please run it in Supabase, then reopen this room.</p>');
+        }
+      })();
+    }
+  };
+
+  /* 10) Notes: larger writing area and adjustable text size. */
+  var nbOriginalNoteEditor = noteEditor;
+  noteEditor = function (note) {
+    var html = nbOriginalNoteEditor(note);
+    html = html.replace('font-size:13px', 'font-size:' + Number(note.textSize || 16) + 'px;line-height:1.7');
+    var toolbar = '<div class="f jb aic"><label class="txs muted" for="nbNoteTextSize">Text size</label><select id="nbNoteTextSize" class="input" style="width:100px;height:34px" onchange="nbChangeNoteTextSize(this.value)"><option value="14" ' + (Number(note.textSize || 16) === 14 ? 'selected' : '') + '>14 px</option><option value="16" ' + (Number(note.textSize || 16) === 16 ? 'selected' : '') + '>16 px</option><option value="18" ' + (Number(note.textSize || 16) === 18 ? 'selected' : '') + '>18 px</option><option value="20" ' + (Number(note.textSize || 16) === 20 ? 'selected' : '') + '>20 px</option><option value="22" ' + (Number(note.textSize || 16) === 22 ? 'selected' : '') + '>22 px</option></select><span class="txs muted">Writing text</span></div>';
+    html = html.replace('<textarea id="noteEditor"', toolbar + '<textarea id="noteEditor"');
+    return html;
+  };
+  window.nbChangeNoteTextSize = function (value) {
+    var note = S.notes.filter(function (item) { return String(item.id) === String(UI.activeNoteId); })[0];
+    if (!note) return;
+    note.textSize = Math.max(14, Math.min(22, Number(value) || 16));
+    var editor = document.getElementById('noteEditor'); if (editor) { editor.style.fontSize = note.textSize + 'px'; editor.style.lineHeight = '1.7'; }
+    save();
+  };
+
+  /* 11) Remove the two requested profile actions; keep PWA installation elsewhere. */
+  var nbOriginalProfileSettings = profileSettings;
+  profileSettings = function () {
+    var html = nbOriginalProfileSettings();
+    html = html.replace(/<button class="arow" onclick="downloadAppFile\(\)">[\s\S]*?<\/button><div class="hr"><\/div>/, '');
+    html = html.replace(/<button class="arow" onclick="clearWorkspace\(\)">[\s\S]*?<\/button><div class="hr"><\/div>/, '');
+    return html;
+  };
+
+  /* 12) Music: pause on background, keep track/position, and repair missing icon paths. */
+  ICONS.shuffle = '<path d="M16 3h5v5"/><path d="M4 7h3c4 0 6 10 10 10h4"/><path d="m17 14 4 3-4 3"/><path d="M4 17h3c1.4 0 2.4-1.1 3.4-2.8M14 7c1 0 2 .2 3 .7"/><path d="m17 3 4 3-4 3"/>';
+  ICONS.repeat = '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="m7 22-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>';
+  ICONS.volume = '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>';
+  ICONS.heart = '<path d="M20.8 8.8c0 5.5-8.8 11-8.8 11s-8.8-5.5-8.8-11A4.8 4.8 0 0 1 12 6.2a4.8 4.8 0 0 1 8.8 2.6Z"/>';
+  ICONS.repeatOne = ICONS.repeat + '<path d="M12 9v6m-1.5-4.5L12 9l1.5 1.5"/>';
+
+  var nbOriginalMusicToggle = musicTogglePlay;
+  musicTogglePlay = async function () {
+    if (S.music.active !== 'local') return nbOriginalMusicToggle();
+    var audio = getAudio();
+    if (!audio) { toast('The audio player is not ready. Refresh the app and try again.'); return; }
+    if (!audio.getAttribute('src') && S.music.localId) { await playLocalMusic(S.music.localId, false); return; }
+    if (audio.paused) {
+      try { await audio.play(); S.music.playing = true; save(); updateMusicUI(); }
+      catch (error) { toast(error && error.name === 'NotAllowedError' ? 'Tap Play again to allow audio playback.' : 'Could not resume this track.'); }
+    } else { audio.pause(); S.music.playing = false; save(); updateMusicUI(); }
+  };
+  var nbOriginalPlayLocalMusic = playLocalMusic;
+  playLocalMusic = async function (id, fromList) {
+    var sameTrack = String(S.music.localId || '') === String(id);
+    var resumeAt = sameTrack ? Math.max(0, Number(S.music.position || 0)) : 0;
+    await nbOriginalPlayLocalMusic(id, fromList);
+    var audio = getAudio();
+    if (audio && S.music.active === 'local' && String(S.music.localId) === String(id) && resumeAt > 2) {
+      try {
+        if (!Number.isFinite(audio.duration) || audio.readyState < 1) {
+          await new Promise(function (resolve) { audio.addEventListener('loadedmetadata', resolve, { once: true }); setTimeout(resolve, 2500); });
+        }
+        if (Number.isFinite(audio.duration) && audio.duration > resumeAt) { audio.currentTime = resumeAt; S.music.position = resumeAt; nbSaveMusicPosition(true, true); }
+      } catch (_) {}
+    }
+  };
+  function nbSaveMusicPosition(localOnly, force) {
+    var audio = getAudio();
+    if (audio && S.music.active === 'local' && Number.isFinite(audio.currentTime)) S.music.position = audio.currentTime;
+    var now = Date.now();
+    if (force || now - NB_MUSIC_LAST_LOCAL_SAVE > 1200) {
+      try { localStorage.setItem('nexbyte_music_position_' + (nbUserId() || 'guest'), JSON.stringify({ id: S.music.localId, position: S.music.position || 0, savedAt: now })); } catch (_) {}
+      NB_MUSIC_LAST_LOCAL_SAVE = now;
+    }
+    if (force || now - NB_MUSIC_LAST_CACHE_SAVE > 5000) {
+      if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
+      NB_MUSIC_LAST_CACHE_SAVE = now;
+    }
+    if (!localOnly && (force || now - NB_MUSIC_LAST_CLOUD_SAVE > 20000)) { NB_MUSIC_LAST_CLOUD_SAVE = now; save(); }
+  }
+  var nbAudio = getAudio();
+  if (nbAudio) {
+    nbAudio.addEventListener('timeupdate', function () { nbSaveMusicPosition(true, false); });
+    nbAudio.addEventListener('play', function () { S.music.playing = true; updateMusicUI(); });
+    nbAudio.addEventListener('pause', function () { S.music.playing = false; nbSaveMusicPosition(false, true); updateMusicUI(); });
+  }
+  function nbPauseEmbeddedYoutube() {
+    var frame = document.getElementById('nbYoutube');
+    if (!frame || !frame.contentWindow || !frame.src) return;
+    try { var origin = new URL(frame.src).origin; frame.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), origin); } catch (_) {}
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      var audio = getAudio();
+      if (audio && !audio.paused) { nbSaveMusicPosition(true, true); audio.pause(); S.music.playing = false; save(); }
+      if (S.music.active === 'youtube') nbPauseEmbeddedYoutube();
+    } else {
+      updateMusicUI();
+    }
+  });
+  window.addEventListener('pagehide', function () { nbSaveMusicPosition(true, true); var audio = getAudio(); if (audio && !audio.paused) audio.pause(); if (S.music.active === 'youtube') nbPauseEmbeddedYoutube(); });
+  window.addEventListener('pageshow', function () { updateMusicUI(); });
+
+  /* 13) Improve room header/content layout; Info remains in its own tab, never floats over
+     the Files/Whiteboard viewport. */
+  var nbOriginalVRooms = vRooms;
+  vRooms = function () {
+    var html = nbOriginalVRooms();
+    return html.replace(/<div class="pad mt2"><div class="card padc" style="background:rgba\(251,191,36,.10\);border-color:rgba\(251,191,36,.35\)"><p class="txs" style="color:#b45309;display:flex;gap:6px;align-items:flex-start">[\s\S]*?<\/p><\/div><\/div>/, '');
+  };
+
+  var nbOriginalVRoom = vRoom;
+  vRoom = function (roomId) {
+    var html = nbOriginalVRoom(roomId);
+    return html.replace('class="main" style="display:flex;flex-direction:column;width:100%;min-width:0;min-height:0"', 'class="main nb-room-content" style="display:flex;flex-direction:column;width:100%;min-width:0;min-height:0;position:relative;overflow:hidden"');
+  };
+
+  /* 14) Shared Room Lock-In check-ins. Each participant writes a separate room
+     message so their status never overwrites another member's focus session. */
+  var NB_ROOM_FOCUS = { sessionId: null, dbId: null, roomId: null, busy: Promise.resolve() };
+  async function nbWriteRoomFocus(status) {
+    if (LOCK.mode !== 'room' || !LOCK.roomId || !dbClient) return;
+    var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(LOCK.roomId); })[0];
+    if (!room || !room.isShared) { toast('Room Lock-In needs a joined shared room.'); return; }
+    NB_ROOM_FOCUS.roomId = room.id;
+    NB_ROOM_FOCUS.sessionId = NB_ROOM_FOCUS.sessionId || uid();
+    var op = NB_ROOM_FOCUS.busy.catch(function () {}).then(async function () {
+      var user = await nbRequireSupabaseUser();
+      var membership = await dbClient.from('study_room_members').select('room_id').eq('room_id', room.id).eq('user_id', user.id).maybeSingle();
+      if (membership.error) throw membership.error;
+      if (!membership.data) throw new Error('Your account is not a member of the selected room.');
+      var subject = subjectById(LOCK.subjectId);
+      var payload = nbSharedPayload('shared-focus-session', {
+        id: NB_ROOM_FOCUS.sessionId,
+        userId: user.id,
+        subjectId: LOCK.subjectId,
+        subjectCode: subject && subject.code || '',
+        subjectName: subject && subject.name || 'Study session',
+        duration: Number(LOCK.duration || 0),
+        secondsRemaining: Number(LOCK.left || 0),
+        status: status,
+        startedAt: LOCK.startedAt ? new Date(LOCK.startedAt).toISOString() : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      var result;
+      if (NB_ROOM_FOCUS.dbId && NB_ROOM_FOCUS.roomId === room.id) {
+        result = await dbClient.from('study_room_messages').update({ body: payload }).eq('id', NB_ROOM_FOCUS.dbId).eq('room_id', room.id).select('id').maybeSingle();
+        if (result.error) throw result.error;
+        if (!result.data) throw new Error('Could not update this room focus status. Check message UPDATE permissions.');
+      } else {
+        result = await dbClient.from('study_room_messages').insert({ room_id: room.id, user_id: user.id, body: payload }).select('id').single();
+        if (result.error) throw result.error;
+        NB_ROOM_FOCUS.dbId = result.data.id;
+      }
+      await nbLoadMessages(room, true);
+    }).catch(function (error) {
+      console.error('Room Lock-In sync failed', error);
+      toast('Your personal timer is still running, but room status did not sync: ' + ((error && error.message) || 'Unknown error'));
+    });
+    NB_ROOM_FOCUS.busy = op;
+    return op;
+  }
+  function nbRoomFocusCard(room) {
+    var sessions = (room.messages || []).filter(function (message) {
+      if (message.kind !== 'shared-focus-session') return false;
+      var age = Date.now() - (Date.parse(message.updatedAt || message.startedAt || '') || 0);
+      return age < 12 * 60 * 60 * 1000 && (message.status === 'active' || message.status === 'paused');
+    }).sort(function (a, b) { return String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')); });
+    var body = sessions.length ? sessions.map(function (session) {
+      var remaining = Math.max(0, Number(session.secondsRemaining || 0));
+      var statusLabel = session.status === 'active' ? 'Focusing' : 'Paused';
+      return '<div class="rowitem"><div class="grow minw"><p class="txm semi">' + esc(session.from || 'Room member') + '</p><p class="txs muted">' + esc(session.subjectCode || session.subjectName || 'Study session') + ' · ' + Math.ceil(remaining / 60) + ' min left</p></div><span class="badge">' + statusLabel + '</span></div>';
+    }).join('') : '<p class="txs muted">No active or paused room focus sessions right now. Start Room Lock-In from a subject to share your status.</p>';
+    return '<section class="card padc mt3"><h3 class="txm semi">Room Lock-In activity</h3><p class="txs muted mt1">Each member has their own timer and progress. Starting, pausing, and completing a session updates this room activity.</p><div class="fc g1 mt2">' + body + '</div></section>';
+  }
+
+  var nbOriginalRoomTabBodyWithFocus = roomTabBody;
+  roomTabBody = function (room) {
+    var html = nbOriginalRoomTabBodyWithFocus(room);
+    if (room && room.isShared && UI.roomTab === 'info') return html + nbRoomFocusCard(room);
+    return html;
+  };
+
+  var nbOriginalStartLock = startLock;
+  startLock = function () {
+    NB_ROOM_FOCUS = { sessionId: uid(), dbId: null, roomId: LOCK.roomId, busy: Promise.resolve() };
+    nbOriginalStartLock();
+    if (LOCK.mode === 'room') nbWriteRoomFocus('active');
+  };
+  var nbOriginalToggleLockRun = toggleLockRun;
+  toggleLockRun = function () {
+    nbOriginalToggleLockRun();
+    if (LOCK.mode === 'room') nbWriteRoomFocus(LOCK.running ? 'active' : 'paused');
+  };
+  var nbOriginalResetLock = resetLock;
+  resetLock = function () {
+    var wasRoom = LOCK.mode === 'room';
+    nbOriginalResetLock();
+    if (wasRoom) nbWriteRoomFocus('reset');
+  };
+  var nbOriginalCompleteLock = completeLock;
+  completeLock = function () {
+    var wasRoom = LOCK.mode === 'room';
+    nbOriginalCompleteLock();
+    if (wasRoom) nbWriteRoomFocus('completed');
+  };
+  abandonLock = function () {
+    confirmSheet({ title: 'Abandon this session?', message: 'Progress will not be logged to the subject.', confirmLabel: 'Abandon', onConfirm: function () {
+      var wasRoom = LOCK.mode === 'room';
+      LOCK.running = false; LOCK.phase = 'setup'; LOCK.left = LOCK.duration; LOCK._logged = false; persistLock(); render();
+      if (wasRoom) nbWriteRoomFocus('cancelled');
+    }});
+  };
+
+  /* 15) Realtime updates for multi-board whiteboards. */
+  var NB_BOARD_CHANNEL = null;
+  var NB_BOARD_CHANNEL_ROOM = null;
+  function nbSubscribeBoards(roomId) {
+    if (!dbClient || !roomId) return;
+    if (NB_BOARD_CHANNEL_ROOM === roomId && NB_BOARD_CHANNEL) return;
+    if (NB_BOARD_CHANNEL) { try { dbClient.removeChannel(NB_BOARD_CHANNEL); } catch (_) {} }
+    NB_BOARD_CHANNEL_ROOM = roomId;
+    NB_BOARD_CHANNEL = dbClient.channel('nb-boards-' + roomId)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'study_room_boards', filter: 'room_id=eq.' + roomId }, async function (payload) {
+        if (NB_BOARD.drawing) return;
+        try {
+          await nbLoadRoomBoards(roomId);
+          if (payload && payload.eventType !== 'UPDATE') {
+            if (!nbBoardList(roomId).some(function (board) { return String(board.id) === String(NB_BOARD.activeBoardId); })) {
+              NB_BOARD.activeBoardId = nbBoardList(roomId)[0] ? nbBoardList(roomId)[0].id : null;
+            }
+            var currentRoute = resolve();
+            if (currentRoute.view === 'room' && currentRoute.id === roomId && UI.roomTab === 'board') render();
+          } else if (NB_BOARD.roomId === roomId && !NB_BOARD.saving) {
+            requestAnimationFrame(nbMountRoomBoard);
+          }
+        } catch (error) { console.warn('Realtime whiteboard update failed', error); }
+      }).subscribe();
+  }
+  var nbPreviousAfterRenderForBoards = afterRender;
+  afterRender = function (route) {
+    nbPreviousAfterRenderForBoards(route);
+    if (route && route.view === 'room' && UI.roomTab === 'board') nbSubscribeBoards(route.id);
+    else if (NB_BOARD_CHANNEL && route && route.view !== 'room') {
+      try { dbClient.removeChannel(NB_BOARD_CHANNEL); } catch (_) {}
+      NB_BOARD_CHANNEL = null; NB_BOARD_CHANNEL_ROOM = null;
+    }
+  };
+
+  /* 16) Mobile layout polish for the room work area and whiteboard fullscreen. */
+  var nbRepairStyle = document.createElement('style');
+  nbRepairStyle.id = 'nexbyte-repair-layer-style';
+  nbRepairStyle.textContent = `
+    .nb-room-content{position:relative;min-width:0;min-height:0;overflow:hidden}
+    .nb-board-wrap{width:100%;box-sizing:border-box}
+    .nb-board-wrap:fullscreen{width:100vw;height:100dvh;max-height:100dvh;overflow:auto;background:var(--bg);padding:12px;box-sizing:border-box}
+    .nb-board-wrap:fullscreen .nb-board-canvas-wrap{flex:1;min-height:45vh;display:flex;align-items:center;justify-content:center}
+    .nb-board-wrap:fullscreen #nbRoomBoard{max-height:calc(100dvh - 240px);width:auto;max-width:100%;height:auto}
+    .nb-room-list .card{max-width:100%;overflow-wrap:anywhere}
+    #noteEditor{font-size:16px!important;line-height:1.7;min-height:55vh}
+    @media(max-width:640px){.nb-board-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.nb-board-wrap{padding:8px}.nb-record-actions .btn{flex:1 1 auto}.nb-room-content>.nb-room-list{padding:10px}}
+  `;
+  document.head.appendChild(nbRepairStyle);
+
+  // Do not silently claim that room focus/boards are available if migrations are missing.
+  window.NEXBYTE_REPAIR_LAYER = '4.1';
+  console.info('NEXTBYTE repair layer 4.0 loaded.');
 })();
 
 </script>
