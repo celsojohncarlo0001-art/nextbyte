@@ -4,12 +4,13 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v3';
+const CACHE_VERSION = 'nexbyte-pwa-v3-room-upload-fix';
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
+  './nexbyte-background.png',
   './supabase-config.js'
 ];
 

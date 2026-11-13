@@ -83,7 +83,7 @@ body{
   font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color:var(--fg);background-color:var(--shell);font-size:14px;line-height:1.45;
   /* NEXTBYTE Global App Background */
-  background-image:url("./nextbyte-background.png");
+  background-image:url("./nexbyte-background.png");
   background-size:cover;
   background-position:center center;
   background-repeat:no-repeat;
@@ -4553,43 +4553,124 @@ async function deleteRoomAny(id){
     button.onclick = uploadSelected;
   };
 
+  /* Resolve a shared room from Supabase, not only from the in-memory S.rooms array.
+     A room can be open in the router while local room state is still stale or incomplete. */
+  async function nb42ResolveSharedRoom(roomId, user) {
+    var id = String(roomId || '').trim();
+    if (!id) throw new Error('The room ID is missing. Close the room and open it again.');
+    if (!dbClient) throw new Error('Supabase is not configured.');
+    if (!user || !user.id) throw new Error('Your sign-in session is missing. Sign in again.');
+
+    var membership = await dbClient.from('study_room_members')
+      .select('room_id,user_id,role,joined_at')
+      .eq('room_id', id).eq('user_id', user.id).limit(1).maybeSingle();
+    if (membership.error) {
+      throw new Error('Could not verify room membership: ' + (membership.error.message || 'Supabase membership query failed.'));
+    }
+    if (!membership.data) {
+      throw new Error('This account is not listed as a member of this room. Rejoin with the room invite code, then try again.');
+    }
+
+    var cached = (S.rooms || []).filter(function (item) { return String(item.id) === id && item.isShared; })[0] || null;
+    var roomColumns = 'id,name,subject_tag,description,emoji,color,owner_id,invite_code,max_capacity,created_at';
+    var roomResult = await dbClient.from('study_rooms').select(roomColumns).eq('id', id).maybeSingle();
+    if (roomResult.error) {
+      if (cached) {
+        console.warn('Room metadata refresh failed; using the already-rendered, membership-verified room:', roomResult.error);
+      } else {
+        throw new Error('Membership is valid, but the room details could not be loaded: ' + (roomResult.error.message || 'Check SELECT access to study_rooms.'));
+      }
+    }
+
+    var room = cached;
+    if (roomResult.data) {
+      var rosterResult = await dbClient.from('study_room_members')
+        .select('room_id,user_id,role').eq('room_id', id);
+      if (rosterResult.error) {
+        console.warn('Room roster refresh failed; using the verified current membership:', rosterResult.error);
+      }
+      var roster = rosterResult.data || [membership.data];
+      room = nbRoomFromRow(roomResult.data, roster);
+      if (cached && Array.isArray(cached.messages)) room.messages = cached.messages;
+      if (cached && cached.status) room.status = cached.status;
+    }
+    if (!room) throw new Error('The room record could not be found. Return to Study Rooms and open the room again.');
+
+    /* Replace any stale/local copy with one canonical shared-room object. */
+    var rooms = Array.isArray(S.rooms) ? S.rooms : [];
+    S.rooms = rooms.filter(function (item) { return String(item.id) !== id; });
+    S.rooms.push(room);
+    return room;
+  }
+
+  function nb42AppendUploadedRoomMessage(room, insertedRow, user, kind) {
+    if (!room || !insertedRow) return;
+    var parsed = nbParseSharedBody(insertedRow.body || '');
+    var isMe = String(insertedRow.user_id || user.id) === String(user.id);
+    var message = Object.assign({
+      dbId: insertedRow.id,
+      userId: insertedRow.user_id || user.id,
+      from: nbProfileName(),
+      initials: (S.auth && S.auth.user && S.auth.user.initials) || 'ME',
+      color: (S.auth && S.auth.user && S.auth.user.color) || '#2563EB',
+      time: new Date(insertedRow.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      me: isMe
+    }, parsed);
+    if (!message.kind) message.kind = kind;
+    room.messages = Array.isArray(room.messages) ? room.messages : [];
+    if (!room.messages.some(function (item) { return String(item.dbId) === String(message.dbId); })) room.messages.push(message);
+  }
+
   /* C. Shared room file upload: verify current membership, upload, then insert metadata. */
   window.nbUploadRoomFile = async function (roomId) {
-    var key = 'room-file:' + String(roomId);
+    var key = 'room-file:' + String(roomId || '');
     if (!nb42Lock(key)) return;
     var input = document.getElementById('roomFileInput');
     var file = input && input.files && input.files[0];
     var button = document.querySelector('button[onclick*="nbUploadRoomFile"]');
     var statusId = 'nb42RoomFileStatus';
     var check = nb42Validate(file);
-    if (!check.ok) { nb42SetStatus(input, statusId, check.message, true); toast(check.message); nb42Unlock(key); return; }
+    if (!check.ok) {
+      nb42SetStatus(input, statusId, check.message, true);
+      toast(check.message);
+      nb42Unlock(key);
+      return;
+    }
+
     var path = null, uploaded = false;
     if (button) { button.disabled = true; button.textContent = 'Uploading…'; }
-    nb42SetStatus(input, statusId, 'Uploading ' + file.name + ' (' + nb42Size(file.size) + ')…', false);
+    nb42SetStatus(input, statusId, 'Verifying room access, then uploading ' + file.name + ' (' + nb42Size(file.size) + ')…', false);
     try {
       var user = await nb42User();
-      var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId) && item.isShared; })[0];
-      if (!room) throw new Error('Shared room not found. Reload the room and try again.');
-      var membership = await dbClient.from('study_room_members').select('room_id').eq('room_id', roomId).eq('user_id', user.id).limit(1).maybeSingle();
-      if (membership.error) throw membership.error;
-      if (!membership.data) throw new Error('Your account is not a member of this room. Rejoin with the room invite code.');
-      path = roomId + '/' + user.id + '/files/' + Date.now() + '_' + uid() + '_' + nb42SafeName(file.name);
-      await nb42Upload('study-room-files', path, file); uploaded = true;
-      var payload = nbSharedPayload('shared-file', {
+      /* Do not trust stale S.rooms as the authority. Verify membership and load the room from Supabase. */
+      var room = await nb42ResolveSharedRoom(roomId, user);
+      path = String(room.id) + '/' + user.id + '/files/' + Date.now() + '_' + uid() + '_' + nb42SafeName(file.name);
+      await nb42Upload('study-room-files', path, file);
+      uploaded = true;
+
+      var body = nbSharedPayload('shared-file', {
         id: uid(), filePath: path, fileName: file.name, fileType: nb42Mime(file),
         fileSize: file.size, from: nbProfileName(), createdAt: new Date().toISOString()
       });
-      var inserted = await dbClient.from('study_room_messages').insert({ room_id: roomId, user_id: user.id, body: payload }).select('id').single();
+      var inserted = await dbClient.from('study_room_messages')
+        .insert({ room_id: room.id, user_id: user.id, body: body })
+        .select('id,room_id,user_id,body,created_at').single();
       if (inserted.error) throw inserted.error;
-      await nbLoadMessages(room, true);
+
+      nb42AppendUploadedRoomMessage(room, inserted.data, user, 'shared-file');
       if (input) input.value = '';
       nb42SetStatus(input, statusId, 'Upload complete. The file is now shared with this room.', false);
-      render(); toast('File uploaded and shared with room members.');
+      render();
+      toast('File uploaded and shared with room members.');
     } catch (error) {
-      if (uploaded && path) { try { await nb42Remove('study-room-files', path); } catch (cleanupError) { console.warn('Room file cleanup failed:', cleanupError); } }
+      if (uploaded && path) {
+        try { await nb42Remove('study-room-files', path); }
+        catch (cleanupError) { console.warn('Room file cleanup failed:', cleanupError); }
+      }
       console.error('Room file upload failed:', error);
-      nb42SetStatus(input, statusId, 'Upload failed: ' + nb42StorageError(error), true);
-      toast('Room file upload failed: ' + nb42StorageError(error));
+      var message = nb42StorageError(error);
+      nb42SetStatus(input, statusId, 'Upload failed: ' + message, true);
+      toast('Room file upload failed: ' + message);
     } finally {
       if (button && button.isConnected) { button.disabled = false; button.textContent = 'Upload and share'; }
       nb42Unlock(key);
@@ -4598,9 +4679,8 @@ async function deleteRoomAny(id){
 
   /* D. Shared notes may contain text, an attachment, or both. File-only notes get a filename title. */
   window.nbPublishRoomNote = async function (roomId) {
-    var key = 'room-note:' + String(roomId);
+    var key = 'room-note:' + String(roomId || '');
     if (!nb42Lock(key)) return;
-    var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId) && item.isShared; })[0];
     var titleInput = document.getElementById('sharedNoteTitle');
     var textInput = document.getElementById('sharedNoteText');
     var fileInput = document.getElementById('sharedNoteFile');
@@ -4608,36 +4688,58 @@ async function deleteRoomAny(id){
     var title = (titleInput && titleInput.value || '').trim();
     var text = (textInput && textInput.value || '').trim();
     var button = document.querySelector('button[onclick*="nbPublishRoomNote"]');
-    if (!room) { nb42Unlock(key); toast('Open a shared room before sharing a note.'); return; }
-    if (!text && !file) { nb42Unlock(key); toast('Write a note or attach a file first.'); return; }
-    if (file) { var check = nb42Validate(file); if (!check.ok) { nb42Unlock(key); nb42SetStatus(fileInput, 'nb42SharedNoteStatus', check.message, true); toast(check.message); return; } }
+    if (!text && !file) {
+      nb42Unlock(key);
+      toast('Write a note or attach a file first.');
+      return;
+    }
+    if (file) {
+      var check = nb42Validate(file);
+      if (!check.ok) {
+        nb42Unlock(key);
+        nb42SetStatus(fileInput, 'nb42SharedNoteStatus', check.message, true);
+        toast(check.message);
+        return;
+      }
+    }
     if (!title) title = file ? file.name : 'Shared study note';
     if (button) { button.disabled = true; button.textContent = 'Sharing…'; }
-    nb42SetStatus(fileInput, 'nb42SharedNoteStatus', file ? ('Uploading and sharing ' + file.name + '…') : 'Saving shared note…', false);
+    nb42SetStatus(fileInput, 'nb42SharedNoteStatus', file ? ('Verifying room access, then uploading ' + file.name + '…') : 'Saving shared note…', false);
     var path = null, uploaded = false;
     try {
       var user = await nb42User();
-      var membership = await dbClient.from('study_room_members').select('room_id').eq('room_id', roomId).eq('user_id', user.id).limit(1).maybeSingle();
-      if (membership.error) throw membership.error;
-      if (!membership.data) throw new Error('Your account is not a member of this room.');
+      var room = await nb42ResolveSharedRoom(roomId, user);
       if (file) {
-        path = roomId + '/' + user.id + '/notes/' + Date.now() + '_' + uid() + '_' + nb42SafeName(file.name);
-        await nb42Upload('study-room-files', path, file); uploaded = true;
+        path = String(room.id) + '/' + user.id + '/notes/' + Date.now() + '_' + uid() + '_' + nb42SafeName(file.name);
+        await nb42Upload('study-room-files', path, file);
+        uploaded = true;
       }
-      var payload = nbSharedPayload('shared-note', {
+      var body = nbSharedPayload('shared-note', {
         id: uid(), title: title, text: text, filePath: path,
         fileName: file ? file.name : null, fileSize: file ? file.size : null,
         fileType: file ? nb42Mime(file) : null, from: nbProfileName(), createdAt: new Date().toISOString()
       });
-      var inserted = await dbClient.from('study_room_messages').insert({ room_id: roomId, user_id: user.id, body: payload }).select('id').single();
+      var inserted = await dbClient.from('study_room_messages')
+        .insert({ room_id: room.id, user_id: user.id, body: body })
+        .select('id,room_id,user_id,body,created_at').single();
       if (inserted.error) throw inserted.error;
-      await nbLoadMessages(room, true);
-      render(); toast(file ? 'Shared note and attachment saved.' : 'Shared note saved.');
+
+      nb42AppendUploadedRoomMessage(room, inserted.data, user, 'shared-note');
+      if (titleInput) titleInput.value = '';
+      if (textInput) textInput.value = '';
+      if (fileInput) fileInput.value = '';
+      nb42SetStatus(fileInput, 'nb42SharedNoteStatus', 'Shared note and attachment saved.', false);
+      render();
+      toast(file ? 'Shared note and attachment saved.' : 'Shared note saved.');
     } catch (error) {
-      if (uploaded && path) { try { await nb42Remove('study-room-files', path); } catch (cleanupError) { console.warn('Shared note cleanup failed:', cleanupError); } }
+      if (uploaded && path) {
+        try { await nb42Remove('study-room-files', path); }
+        catch (cleanupError) { console.warn('Shared note cleanup failed:', cleanupError); }
+      }
       console.error('Shared note publish failed:', error);
-      nb42SetStatus(fileInput, 'nb42SharedNoteStatus', 'Share failed: ' + nb42StorageError(error), true);
-      toast('Could not share note: ' + nb42StorageError(error));
+      var message = nb42StorageError(error);
+      nb42SetStatus(fileInput, 'nb42SharedNoteStatus', 'Share failed: ' + message, true);
+      toast('Could not share note: ' + message);
     } finally {
       if (button && button.isConnected) { button.disabled = false; button.textContent = 'Share note or file'; }
       nb42Unlock(key);
@@ -4657,8 +4759,7 @@ async function deleteRoomAny(id){
         var file = roomInput.files && roomInput.files[0]; if (!file) return;
         var check = nb42Validate(file);
         if (!check.ok) { nb42SetStatus(roomInput, 'nb42RoomFileStatus', check.message, true); toast(check.message); return; }
-        nb42SetStatus(roomInput, 'nb42RoomFileStatus', 'Selected: ' + file.name + ' · ' + nb42Size(file.size) + ' · Upload starts automatically.', false);
-        window.nbUploadRoomFile(roomId);
+        nb42SetStatus(roomInput, 'nb42RoomFileStatus', 'Selected: ' + file.name + ' · ' + nb42Size(file.size) + '. Tap Upload and share to continue.', false);
       });
     }
     var noteInput = document.getElementById('sharedNoteFile');
@@ -4669,8 +4770,7 @@ async function deleteRoomAny(id){
         var file = noteInput.files && noteInput.files[0]; if (!file) return;
         var check = nb42Validate(file);
         if (!check.ok) { nb42SetStatus(noteInput, 'nb42SharedNoteStatus', check.message, true); toast(check.message); return; }
-        nb42SetStatus(noteInput, 'nb42SharedNoteStatus', 'Selected: ' + file.name + ' · ' + nb42Size(file.size) + ' · Sharing starts automatically. Any note text already entered will be included.', false);
-        window.nbPublishRoomNote(roomId);
+        nb42SetStatus(noteInput, 'nb42SharedNoteStatus', 'Selected: ' + file.name + ' · ' + nb42Size(file.size) + '. Tap Share note or file to continue.', false);
       });
     }
   }
