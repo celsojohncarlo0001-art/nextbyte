@@ -1,36 +1,29 @@
-# NEXTBYTE Repair Layer — Change Summary
+# NEXTBYTE repair layer 4.2 — change summary
 
-This build keeps the existing single-page HTML architecture, Supabase Auth, personal JSONB workspace, and current visual theme.
+This package is based on the latest NEXTBYTE repository ZIP previously uploaded in this conversation and the prior repaired build. It keeps the single-page HTML application and existing Supabase configuration.
 
-## Added or repaired in the frontend
-- Workspace save serialization, account-scoped local snapshots, local recovery when no cloud row is available, and reconnect sync attempt.
-- Subject material upload validation and instructions, Storage upload, metadata persistence, open/download/offline/remove controls.
-- Separate syllabus attachment workflow: upload, open, download, replace, and remove.
-- Structured personal task editor with detailed descriptions, instructions, due date/time, type, priority, status, and delete action.
-- Solo/Room Lock-In explanations and room focus status records.
-- Room creation action lock to prevent repeated button submissions during the asynchronous create flow.
-- Separate room task responses per participant.
-- Configurable room practice quiz length and several question types.
-- Shared note and file upload controls with supported-format guidance.
-- Dedicated multi-whiteboard table integration, per-board snapshots, fullscreen, mobile pointer input, tools, deletion, and Realtime refresh.
-- Adjustable note editor font size.
-- Removes the Profile options “Download App File” and “Clear My Workspace.”
-- Music pause on page hidden/pagehide, retains selected track and playback position for manual resume, and supplies missing shuffle/repeat icon paths.
-- Root PWA icon paths corrected; service worker cache version bumped.
+## Reported issues addressed in source
 
-## Database changes
-- New `study_room_boards` table.
-- Room/member/message RLS helper functions and named policies.
-- Private room-file storage access policies.
-- Explicit authenticated grants for the new Data API table.
-- No intentional deletion of existing rows.
+- **Study materials and syllabus:** selection-triggered upload, extension and 20 MB validation, visible upload status, private user-folder storage paths, cloud workspace metadata write, rollback of in-memory metadata on failed save, and best-effort Storage cleanup.
+- **Shared room files:** validates the selected document, checks authenticated room membership, uploads to the room/user folder, writes a shared-file message, and removes the Storage object if message insertion fails.
+- **Shared notes:** supports text-only, file-only, and text-plus-file sharing, membership validation, clear status messaging, and best-effort cleanup after failure.
+- **Duplicate room cards:** serializes concurrent room-list loads, fetches shared memberships/rooms, rebuilds shared-room state, and deduplicates displayed rooms by stable ID. This does not delete database rows or merge rooms with different IDs.
+- **Whiteboard:** visible exit control, browser fullscreen plus CSS fallback, Escape key handling for fallback mode, responsive portrait/landscape toolbar layout, resize snapshot/contain behavior, and autosave attempt after canvas resize.
+- **Buttons:** improved minimum sizes, padding, alignment, text wrapping, action row wrapping, and disabled styling.
+- **PWA cache:** updated cache version; manifest orientation changed to `any` so it does not declare a portrait-only orientation.
 
-## Known remaining engineering work
-- Make quizzes secure for examinations by moving answer keys and grading to server-side logic.
-- Upgrade whiteboard sync from whole-image snapshots to stroke/event-based collaboration to avoid concurrent last-write-wins.
-- Make focus sessions server-authoritative if one shared synchronized timer is required.
-- Consider normalizing personal workspace JSON into relational tables if field-level concurrent merge and granular audit history are required.
-- Review the entire existing RLS policy set, including pre-existing permissive policies.
+## New SQL migration
 
-## Testing boundary
-The deliverable was syntax/static validated. Live Supabase, Vercel, two-account collaboration, and Android lifecycle testing still need to be performed against the user's actual project.
+`NEXBYTE_UPLOAD_STORAGE_FIX.sql` creates/updates private `user-study-files` and `user-music` buckets and adds owner-folder select/insert/update/delete policies for authenticated users. It does not delete files or existing user rows.
+
+## Preserved
+
+- Existing `supabase-config.js` copied byte-for-byte from the uploaded repository. Do not overwrite it with a placeholder or with an older version if you changed credentials later.
+- Existing application theme, routes, workspace, storage bucket names, and PWA architecture.
+- Existing `schema.sql` and `NEXBYTE_ENHANCEMENTS.sql` carried into the package.
+
+## Testing boundary / limitations
+
+Static parsing and syntax validation are performed on the generated files. Live Supabase Storage upload, RLS, Vercel deployment, mobile installation, cross-device synchronization, and two-user room interaction have not been executed here.
+
+Supabase Storage requests in this implementation show stage/status messages rather than byte-accurate upload percentages. Whiteboard persistence is snapshot-based, so simultaneous concurrent drawing can still result in last-write-wins behavior. Existing broad permissive RLS policies must be reviewed because permissive PostgreSQL policies are OR-combined.

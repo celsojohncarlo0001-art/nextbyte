@@ -4302,5 +4302,617 @@ async function deleteRoomAny(id){
 })();
 
 </script>
+
+<script>
+/* NEXTBYTE repair layer v4.2
+   Focus: reliable upload-on-select flows, safe storage metadata rollback,
+   deduplicated room state/loading, responsive full-screen whiteboard, and button polish.
+   This layer deliberately reuses the existing Supabase client and application state.
+*/
+(function () {
+  'use strict';
+
+  var NB42_MAX_FILE = 20 * 1024 * 1024;
+  var NB42_EXT = ['pdf','doc','docx','ppt','pptx','xls','xlsx','txt','md','csv','png','jpg','jpeg','webp'];
+  var NB42_UPLOADS = Object.create(null);
+  var NB42_ROOM_LOAD = null;
+  var NB42_ROOM_LOAD_USER = null;
+  var NB42_CREATE_LOCK = false;
+  var NB42_BOARD_OBSERVER = null;
+  var NB42_BOARD_BOUND_CANVAS = null;
+  var NB42_BOARD_BOUND_HOST = null;
+  var NB42_BOARD_RESIZE_TIMER = null;
+  var NB42_BOARD_SAVE_TIMER = null;
+  var NB42_BOARD_RESIZING = false;
+
+  function nb42Ext(name) {
+    var bits = String(name || '').toLowerCase().split('.');
+    return bits.length > 1 ? bits.pop() : '';
+  }
+  function nb42SafeName(name) {
+    var value = String(name || 'file');
+    try { value = value.normalize('NFKD'); } catch (_) {}
+    return value.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^\.+/, '').slice(-100) || 'file';
+  }
+  function nb42Size(size) {
+    var bytes = Number(size) || 0;
+    if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    if (bytes >= 1024) return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+    return bytes + ' B';
+  }
+  function nb42Validate(file, maxBytes) {
+    if (!file || !file.name) return { ok: false, message: 'Choose a file first.' };
+    if (!file.size) return { ok: false, message: 'The selected file is empty.' };
+    if (file.size > (maxBytes || NB42_MAX_FILE)) return { ok: false, message: 'The file is too large. Maximum size is ' + nb42Size(maxBytes || NB42_MAX_FILE) + '.' };
+    if (NB42_EXT.indexOf(nb42Ext(file.name)) < 0) {
+      return { ok: false, message: 'Unsupported file type. Accepted: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, and WEBP.' };
+    }
+    return { ok: true };
+  }
+  function nb42Mime(file) {
+    if (file && file.type) return file.type;
+    var ext = nb42Ext(file && file.name);
+    var map = {
+      pdf:'application/pdf', doc:'application/msword',
+      docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ppt:'application/vnd.ms-powerpoint',
+      pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      xls:'application/vnd.ms-excel',
+      xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      txt:'text/plain', md:'text/markdown', csv:'text/csv',
+      png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp'
+    };
+    return map[ext] || 'application/octet-stream';
+  }
+  function nb42Status(input, id) {
+    if (!input || !input.parentNode) return null;
+    var status = document.getElementById(id);
+    if (!status) {
+      status = document.createElement('p');
+      status.id = id;
+      status.className = 'txs muted mt1';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      input.parentNode.insertBefore(status, input.nextSibling);
+    }
+    return status;
+  }
+  function nb42SetStatus(input, id, message, isError) {
+    var node = nb42Status(input, id);
+    if (node) {
+      node.textContent = message;
+      node.style.color = isError ? 'var(--destructive)' : 'var(--muted-fg)';
+    }
+  }
+  async function nb42User() {
+    if (typeof nbRequireSupabaseUser === 'function') return await nbRequireSupabaseUser();
+    if (typeof requireMusicUser === 'function') return await requireMusicUser();
+    throw new Error('Supabase authentication is not ready. Sign in again and retry.');
+  }
+  function nb42StorageError(error) {
+    var message = error && error.message ? error.message : 'Unknown Storage error';
+    if (/row-level security|permission denied|not authorized/i.test(message)) {
+      return message + ' Check the bucket policies and the signed-in account folder path.';
+    }
+    if (/bucket not found|no such bucket/i.test(message)) {
+      return message + ' Create the required private Storage bucket in Supabase.';
+    }
+    return message;
+  }
+  async function nb42Upload(bucketName, path, file) {
+    if (!dbClient || !dbClient.storage) throw new Error('Supabase Storage is unavailable. Check your project URL and publishable key.');
+    var result = await dbClient.storage.from(bucketName).upload(path, file, {
+      upsert: false,
+      contentType: nb42Mime(file),
+      cacheControl: '3600'
+    });
+    if (result.error) throw result.error;
+    if (!result.data || !result.data.path) throw new Error('Storage did not confirm the uploaded file path.');
+    return result.data;
+  }
+  async function nb42Remove(bucketName, path) {
+    if (!dbClient || !path) return;
+    var removed = await dbClient.storage.from(bucketName).remove([path]);
+    if (removed && removed.error) throw removed.error;
+  }
+  function nb42Lock(key) {
+    if (NB42_UPLOADS[key]) return false;
+    NB42_UPLOADS[key] = true;
+    return true;
+  }
+  function nb42Unlock(key) { delete NB42_UPLOADS[key]; }
+
+  /* A. Study materials: selection starts the upload, with rollback if workspace metadata fails. */
+  window.addMaterial = function (subjectId) {
+    var subject = typeof subjectById === 'function' ? subjectById(subjectId) : null;
+    if (!subject) { toast('Subject not found. Refresh Study Hub and try again.'); return; }
+    var panel = sheet(
+      '<div class="f jb aic mb3"><h3 class="txl semi">Upload study material</h3><button class="iconbtn" data-cancel aria-label="Close">' + ic('x',18) + '</button></div>' +
+      '<div class="card padc mb3"><p class="txs semi">What can you upload?</p><p class="txs muted mt1">PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, or WEBP files. Maximum 20 MB each. Files are private to your account and organized under this subject. Selecting a valid file starts the upload automatically.</p></div>' +
+      '<div class="fc g3"><div><label class="field-label" for="mtFile">Choose an academic file</label><input id="mtFile" class="input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp" style="height:auto;padding:9px 12px"/></div><div><label class="field-label" for="mtName">Display name (optional; enter before choosing a file)</label><input id="mtName" class="input" placeholder="Defaults to the original file name"/></div><p id="nb42MaterialStatus" class="txs muted" role="status" aria-live="polite">Waiting for file selection · 20 MB maximum</p><button class="btn btn-secondary btn-block" data-save type="button">Upload selected file</button></div>'
+    );
+    var input = panel.querySelector('#mtFile');
+    var nameInput = panel.querySelector('#mtName');
+    var button = panel.querySelector('[data-save]');
+    var busyKey = 'material:' + subjectId;
+    var completed = false;
+    var previousMaterials = null;
+    panel.querySelector('[data-cancel]').onclick = closeTop;
+
+    async function uploadSelected() {
+      if (completed || !nb42Lock(busyKey)) return;
+      var file = input.files && input.files[0];
+      var check = nb42Validate(file);
+      if (!check.ok) { nb42SetStatus(input, 'nb42MaterialStatus', check.message, true); toast(check.message); nb42Unlock(busyKey); return; }
+      button.disabled = true; button.textContent = 'Uploading…';
+      nb42SetStatus(input, 'nb42MaterialStatus', 'Uploading ' + file.name + ' (' + nb42Size(file.size) + ')…', false);
+      var path = null, metadataAdded = false;
+      try {
+        var user = await nb42User();
+        path = user.id + '/' + subjectId + '/materials/' + Date.now() + '_' + uid() + '_' + nb42SafeName(file.name);
+        await nb42Upload('user-study-files', path, file);
+        previousMaterials = Array.isArray(subject.materials) ? subject.materials.slice() : [];
+        subject.materials = previousMaterials.slice();
+        subject.materials.unshift({ id:'mat_' + uid(), n:(nameInput.value || '').trim() || file.name, t:nb42Ext(file.name).toUpperCase(), s:nb42Size(file.size), path:path, fileName:file.name, mime:nb42Mime(file), size:file.size, userId:user.id, addedAt:new Date().toISOString() });
+        metadataAdded = true;
+        var saved = await window.saveWorkspaceNow();
+        if (!saved || !saved.ok) throw (saved && saved.error) || new Error('The file uploaded, but its subject record could not be saved.');
+        completed = true;
+        nb42SetStatus(input, 'nb42MaterialStatus', 'Upload complete. The file is now attached to this subject.', false);
+        input.value = '';
+        closeTop(); render(); toast('Study material uploaded and saved.');
+      } catch (error) {
+        if (metadataAdded && previousMaterials) { subject.materials = previousMaterials; if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot(); }
+        if (path) { try { await nb42Remove('user-study-files', path); } catch (cleanupError) { console.warn('Material upload cleanup failed:', cleanupError); } }
+        console.error('Study material upload failed:', error);
+        nb42SetStatus(input, 'nb42MaterialStatus', 'Upload failed: ' + nb42StorageError(error), true);
+        button.disabled = false; button.textContent = 'Retry upload';
+        toast('Material upload failed: ' + nb42StorageError(error));
+      } finally { nb42Unlock(busyKey); }
+    }
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var check = nb42Validate(file);
+      nb42SetStatus(input, 'nb42MaterialStatus', check.ok ? ('Selected: ' + file.name + ' · ' + nb42Size(file.size) + ' · Upload will start now.') : check.message, !check.ok);
+      if (check.ok) uploadSelected();
+    });
+    button.onclick = uploadSelected;
+  };
+
+  /* B. Syllabus: same upload/metadata transaction, kept separate from ordinary materials. */
+  window.uploadSyllabusAttachment = function (subjectId) {
+    var subject = typeof subjectById === 'function' ? subjectById(subjectId) : null;
+    if (!subject) { toast('Subject not found.'); return; }
+    var panel = sheet(
+      '<div class="f jb aic mb3"><h3 class="txl semi">Attach syllabus</h3><button class="iconbtn" data-cancel aria-label="Close">' + ic('x',18) + '</button></div>' +
+      '<div class="card padc mb3"><p class="txs semi">Syllabus file instructions</p><p class="txs muted mt1">Upload the official course outline, weekly schedule, grading policy, or learning outcomes. Accepted formats: PDF, Word, PowerPoint, Excel, TXT, Markdown, or images. Maximum 20 MB. Selecting a valid file starts the upload automatically.</p></div>' +
+      '<div class="fc g3"><input id="syllabusFile" class="input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.png,.jpg,.jpeg,.webp"/><input id="syllabusTitle" class="input" placeholder="Attachment label (optional; enter before choosing a file)"/><p id="nb42SyllabusStatus" class="txs muted" role="status" aria-live="polite">Waiting for file selection · 20 MB maximum</p><button class="btn btn-secondary btn-block" data-upload type="button">Upload selected syllabus</button></div>'
+    );
+    var input = panel.querySelector('#syllabusFile'), title = panel.querySelector('#syllabusTitle'), button = panel.querySelector('[data-upload]');
+    var busyKey = 'syllabus:' + subjectId, completed = false;
+    panel.querySelector('[data-cancel]').onclick = closeTop;
+    async function uploadSelected() {
+      if (completed || !nb42Lock(busyKey)) return;
+      var file = input.files && input.files[0], check = nb42Validate(file);
+      if (!check.ok) { nb42SetStatus(input, 'nb42SyllabusStatus', check.message, true); toast(check.message); nb42Unlock(busyKey); return; }
+      button.disabled = true; button.textContent = 'Uploading…';
+      nb42SetStatus(input, 'nb42SyllabusStatus', 'Uploading ' + file.name + '…', false);
+      var path = null, before = Array.isArray(subject.syllabusFiles) ? subject.syllabusFiles.slice() : [], changed = false;
+      try {
+        var user = await nb42User();
+        path = user.id + '/' + subjectId + '/syllabus/' + Date.now() + '_' + uid() + '_' + nb42SafeName(file.name);
+        await nb42Upload('user-study-files', path, file);
+        subject.syllabusFiles = before.slice();
+        subject.syllabusFiles.unshift({ id:'syl_' + uid(), title:(title.value || '').trim() || file.name, fileName:file.name, path:path, mime:nb42Mime(file), size:file.size, userId:user.id, addedAt:new Date().toISOString() });
+        changed = true;
+        var saved = await window.saveWorkspaceNow();
+        if (!saved || !saved.ok) throw (saved && saved.error) || new Error('The syllabus uploaded, but its subject record could not be saved.');
+        completed = true; input.value = '';
+        nb42SetStatus(input, 'nb42SyllabusStatus', 'Syllabus uploaded and attached.', false);
+        closeTop(); render(); toast('Syllabus attachment saved.');
+      } catch (error) {
+        if (changed) { subject.syllabusFiles = before; if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot(); }
+        if (path) { try { await nb42Remove('user-study-files', path); } catch (cleanupError) { console.warn('Syllabus upload cleanup failed:', cleanupError); } }
+        console.error('Syllabus upload failed:', error);
+        nb42SetStatus(input, 'nb42SyllabusStatus', 'Upload failed: ' + nb42StorageError(error), true);
+        button.disabled = false; button.textContent = 'Retry upload'; toast('Syllabus upload failed: ' + nb42StorageError(error));
+      } finally { nb42Unlock(busyKey); }
+    }
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0]; if (!file) return;
+      var check = nb42Validate(file);
+      nb42SetStatus(input, 'nb42SyllabusStatus', check.ok ? ('Selected: ' + file.name + ' · ' + nb42Size(file.size) + ' · Upload will start now.') : check.message, !check.ok);
+      if (check.ok) uploadSelected();
+    });
+    button.onclick = uploadSelected;
+  };
+
+  /* C. Shared room file upload: verify current membership, upload, then insert metadata. */
+  window.nbUploadRoomFile = async function (roomId) {
+    var key = 'room-file:' + String(roomId);
+    if (!nb42Lock(key)) return;
+    var input = document.getElementById('roomFileInput');
+    var file = input && input.files && input.files[0];
+    var button = document.querySelector('button[onclick*="nbUploadRoomFile"]');
+    var statusId = 'nb42RoomFileStatus';
+    var check = nb42Validate(file);
+    if (!check.ok) { nb42SetStatus(input, statusId, check.message, true); toast(check.message); nb42Unlock(key); return; }
+    var path = null, uploaded = false;
+    if (button) { button.disabled = true; button.textContent = 'Uploading…'; }
+    nb42SetStatus(input, statusId, 'Uploading ' + file.name + ' (' + nb42Size(file.size) + ')…', false);
+    try {
+      var user = await nb42User();
+      var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId) && item.isShared; })[0];
+      if (!room) throw new Error('Shared room not found. Reload the room and try again.');
+      var membership = await dbClient.from('study_room_members').select('room_id').eq('room_id', roomId).eq('user_id', user.id).limit(1).maybeSingle();
+      if (membership.error) throw membership.error;
+      if (!membership.data) throw new Error('Your account is not a member of this room. Rejoin with the room invite code.');
+      path = roomId + '/' + user.id + '/files/' + Date.now() + '_' + uid() + '_' + nb42SafeName(file.name);
+      await nb42Upload('study-room-files', path, file); uploaded = true;
+      var payload = nbSharedPayload('shared-file', {
+        id: uid(), filePath: path, fileName: file.name, fileType: nb42Mime(file),
+        fileSize: file.size, from: nbProfileName(), createdAt: new Date().toISOString()
+      });
+      var inserted = await dbClient.from('study_room_messages').insert({ room_id: roomId, user_id: user.id, body: payload }).select('id').single();
+      if (inserted.error) throw inserted.error;
+      await nbLoadMessages(room, true);
+      if (input) input.value = '';
+      nb42SetStatus(input, statusId, 'Upload complete. The file is now shared with this room.', false);
+      render(); toast('File uploaded and shared with room members.');
+    } catch (error) {
+      if (uploaded && path) { try { await nb42Remove('study-room-files', path); } catch (cleanupError) { console.warn('Room file cleanup failed:', cleanupError); } }
+      console.error('Room file upload failed:', error);
+      nb42SetStatus(input, statusId, 'Upload failed: ' + nb42StorageError(error), true);
+      toast('Room file upload failed: ' + nb42StorageError(error));
+    } finally {
+      if (button && button.isConnected) { button.disabled = false; button.textContent = 'Upload and share'; }
+      nb42Unlock(key);
+    }
+  };
+
+  /* D. Shared notes may contain text, an attachment, or both. File-only notes get a filename title. */
+  window.nbPublishRoomNote = async function (roomId) {
+    var key = 'room-note:' + String(roomId);
+    if (!nb42Lock(key)) return;
+    var room = (S.rooms || []).filter(function (item) { return String(item.id) === String(roomId) && item.isShared; })[0];
+    var titleInput = document.getElementById('sharedNoteTitle');
+    var textInput = document.getElementById('sharedNoteText');
+    var fileInput = document.getElementById('sharedNoteFile');
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    var title = (titleInput && titleInput.value || '').trim();
+    var text = (textInput && textInput.value || '').trim();
+    var button = document.querySelector('button[onclick*="nbPublishRoomNote"]');
+    if (!room) { nb42Unlock(key); toast('Open a shared room before sharing a note.'); return; }
+    if (!text && !file) { nb42Unlock(key); toast('Write a note or attach a file first.'); return; }
+    if (file) { var check = nb42Validate(file); if (!check.ok) { nb42Unlock(key); nb42SetStatus(fileInput, 'nb42SharedNoteStatus', check.message, true); toast(check.message); return; } }
+    if (!title) title = file ? file.name : 'Shared study note';
+    if (button) { button.disabled = true; button.textContent = 'Sharing…'; }
+    nb42SetStatus(fileInput, 'nb42SharedNoteStatus', file ? ('Uploading and sharing ' + file.name + '…') : 'Saving shared note…', false);
+    var path = null, uploaded = false;
+    try {
+      var user = await nb42User();
+      var membership = await dbClient.from('study_room_members').select('room_id').eq('room_id', roomId).eq('user_id', user.id).limit(1).maybeSingle();
+      if (membership.error) throw membership.error;
+      if (!membership.data) throw new Error('Your account is not a member of this room.');
+      if (file) {
+        path = roomId + '/' + user.id + '/notes/' + Date.now() + '_' + uid() + '_' + nb42SafeName(file.name);
+        await nb42Upload('study-room-files', path, file); uploaded = true;
+      }
+      var payload = nbSharedPayload('shared-note', {
+        id: uid(), title: title, text: text, filePath: path,
+        fileName: file ? file.name : null, fileSize: file ? file.size : null,
+        fileType: file ? nb42Mime(file) : null, from: nbProfileName(), createdAt: new Date().toISOString()
+      });
+      var inserted = await dbClient.from('study_room_messages').insert({ room_id: roomId, user_id: user.id, body: payload }).select('id').single();
+      if (inserted.error) throw inserted.error;
+      await nbLoadMessages(room, true);
+      render(); toast(file ? 'Shared note and attachment saved.' : 'Shared note saved.');
+    } catch (error) {
+      if (uploaded && path) { try { await nb42Remove('study-room-files', path); } catch (cleanupError) { console.warn('Shared note cleanup failed:', cleanupError); } }
+      console.error('Shared note publish failed:', error);
+      nb42SetStatus(fileInput, 'nb42SharedNoteStatus', 'Share failed: ' + nb42StorageError(error), true);
+      toast('Could not share note: ' + nb42StorageError(error));
+    } finally {
+      if (button && button.isConnected) { button.disabled = false; button.textContent = 'Share note or file'; }
+      nb42Unlock(key);
+    }
+  };
+
+  /* E. Bind dynamic room file inputs once per rendered element. Selecting files uploads immediately. */
+  function bindRoomUploadInputs() {
+    var route = typeof resolve === 'function' ? resolve() : null;
+    if (!route || route.view !== 'room') return;
+    var roomId = route.id;
+    var roomInput = document.getElementById('roomFileInput');
+    if (roomInput && roomInput.dataset.nb42Bound !== '1') {
+      roomInput.dataset.nb42Bound = '1';
+      nb42Status(roomInput, 'nb42RoomFileStatus');
+      roomInput.addEventListener('change', function () {
+        var file = roomInput.files && roomInput.files[0]; if (!file) return;
+        var check = nb42Validate(file);
+        if (!check.ok) { nb42SetStatus(roomInput, 'nb42RoomFileStatus', check.message, true); toast(check.message); return; }
+        nb42SetStatus(roomInput, 'nb42RoomFileStatus', 'Selected: ' + file.name + ' · ' + nb42Size(file.size) + ' · Upload starts automatically.', false);
+        window.nbUploadRoomFile(roomId);
+      });
+    }
+    var noteInput = document.getElementById('sharedNoteFile');
+    if (noteInput && noteInput.dataset.nb42Bound !== '1') {
+      noteInput.dataset.nb42Bound = '1';
+      nb42Status(noteInput, 'nb42SharedNoteStatus');
+      noteInput.addEventListener('change', function () {
+        var file = noteInput.files && noteInput.files[0]; if (!file) return;
+        var check = nb42Validate(file);
+        if (!check.ok) { nb42SetStatus(noteInput, 'nb42SharedNoteStatus', check.message, true); toast(check.message); return; }
+        nb42SetStatus(noteInput, 'nb42SharedNoteStatus', 'Selected: ' + file.name + ' · ' + nb42Size(file.size) + ' · Sharing starts automatically. Any note text already entered will be included.', false);
+        window.nbPublishRoomNote(roomId);
+      });
+    }
+  }
+
+  /* F. Deduplicate local and cloud room records by their stable database/local ID. */
+  function dedupeRooms(rooms) {
+    var map = Object.create(null), order = [];
+    (rooms || []).forEach(function (room) {
+      if (!room || room.id == null) return;
+      if (Array.isArray(room.members)) {
+        var normalizedMembers = Object.create(null);
+        room.members.forEach(function (member) {
+          var memberKey = String(member && (member.userId || member.id || member.name) || '');
+          if (memberKey && !normalizedMembers[memberKey]) normalizedMembers[memberKey] = member;
+        });
+        room.members = Object.keys(normalizedMembers).map(function (memberKey) { return normalizedMembers[memberKey]; });
+      }
+      var key = String(room.id);
+      if (!map[key]) { map[key] = room; order.push(key); return; }
+      var existing = map[key];
+      // Prefer the canonical Supabase-backed record over an old local draft with same ID.
+      if (room.isShared && !existing.isShared) map[key] = room;
+      else if (room.isShared && existing.isShared) {
+        var merged = Object.assign({}, existing, room);
+        var memberMap = Object.create(null);
+        (existing.members || []).concat(room.members || []).forEach(function (member) {
+          var memberKey = String(member.userId || member.id || member.name || '');
+          if (memberKey && !memberMap[memberKey]) memberMap[memberKey] = member;
+        });
+        merged.members = Object.keys(memberMap).map(function (memberKey) { return memberMap[memberKey]; });
+        map[key] = merged;
+      }
+    });
+    return order.map(function (key) { return map[key]; });
+  }
+  function normalizeRoomState() {
+    if (typeof S !== 'undefined' && S && Array.isArray(S.rooms)) S.rooms = dedupeRooms(S.rooms);
+  }
+  var nb42OldLoadRooms = window.nbLoadSharedRooms;
+  window.nbLoadSharedRooms = async function (silent) {
+    var currentUserId = typeof nbCurrentUserId === 'function' ? nbCurrentUserId() : null;
+    if (!dbClient || !currentUserId) { normalizeRoomState(); return; }
+    if (NB42_ROOM_LOAD && NB42_ROOM_LOAD_USER === String(currentUserId)) {
+      await NB42_ROOM_LOAD;
+      normalizeRoomState();
+      if (!silent) render();
+      return;
+    }
+    var loadUserToken = String(currentUserId);
+    NB42_ROOM_LOAD_USER = loadUserToken;
+    var thisRoomLoad;
+    thisRoomLoad = (async function () {
+      var memberRows = await dbClient.from('study_room_members').select('room_id,user_id,role,joined_at').eq('user_id', currentUserId);
+      if (memberRows.error) throw memberRows.error;
+      var roomIds = Array.from(new Set((memberRows.data || []).map(function (row) { return String(row.room_id); })));
+      var localRooms = (S.rooms || []).filter(function (room) { return !room.isShared; });
+      var sharedRooms = [];
+      if (roomIds.length) {
+        var rows = await dbClient.from('study_rooms').select('id,name,subject_tag,description,emoji,color,owner_id,invite_code,max_capacity,created_at').in('id', roomIds);
+        if (rows.error) throw rows.error;
+        var members = await dbClient.from('study_room_members').select('room_id,user_id,role').in('room_id', roomIds);
+        if (members.error) throw members.error;
+        sharedRooms = (rows.data || []).map(function (row) {
+          return nbRoomFromRow(row, (members.data || []).filter(function (member) { return String(member.room_id) === String(row.id); }));
+        });
+      }
+      S.rooms = dedupeRooms(sharedRooms.concat(localRooms));
+    })().catch(function (error) {
+      console.error('Deduplicated shared room refresh failed:', error);
+      normalizeRoomState();
+      if (!silent) toast('Could not refresh shared rooms: ' + ((error && error.message) || 'Check room permissions.'));
+    }).finally(function () {
+      if (NB42_ROOM_LOAD === thisRoomLoad) { NB42_ROOM_LOAD = null; NB42_ROOM_LOAD_USER = null; }
+    });
+    NB42_ROOM_LOAD = thisRoomLoad;
+    await thisRoomLoad;
+    normalizeRoomState();
+    if (!silent) render();
+  };
+  var nb42OldRoomCards = roomCards;
+  roomCards = function (query) { normalizeRoomState(); return nb42OldRoomCards(query); };
+  var nb42OldVRooms = vRooms;
+  vRooms = function () { normalizeRoomState(); return nb42OldVRooms(); };
+  var nb42OldCreate = window.openCreateRoom;
+  window.openCreateRoom = async function () {
+    if (NB42_CREATE_LOCK) { toast('Room creation is already in progress.'); return; }
+    NB42_CREATE_LOCK = true;
+    var buttons = Array.prototype.slice.call(document.querySelectorAll('button[onclick*="openCreateRoom"]'));
+    buttons.forEach(function (button) { button.disabled = true; button.setAttribute('aria-busy', 'true'); });
+    try { if (typeof nb42OldCreate === 'function') await nb42OldCreate(); }
+    finally {
+      NB42_CREATE_LOCK = false;
+      buttons.forEach(function (button) { button.disabled = false; button.removeAttribute('aria-busy'); });
+      normalizeRoomState();
+    }
+  };
+
+  /* G. Whiteboard: portrait/landscape full-screen, visible exit action, and canvas-resize preservation. */
+  function boardHost() { return document.getElementById('nbBoardFullscreenHost'); }
+  function boardCanvas() { return document.getElementById('nbRoomBoard'); }
+  function boardIsFullscreen(host) {
+    return !!(host && (document.fullscreenElement === host || host.classList.contains('nb42-fallback-fullscreen')));
+  }
+  function exitBoardFullscreen() {
+    var host = boardHost();
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(function () { if (host) host.classList.remove('nb42-fallback-fullscreen'); document.body.classList.remove('nb42-board-fallback'); });
+    }
+    if (host) host.classList.remove('nb42-fallback-fullscreen');
+    document.body.classList.remove('nb42-board-fallback');
+  }
+  function ensureBoardExitButton(host) {
+    if (!host) return;
+    var button = host.querySelector('#nb42BoardExit');
+    if (!button) {
+      button = document.createElement('button');
+      button.id = 'nb42BoardExit';
+      button.type = 'button';
+      button.textContent = 'Exit fullscreen ×';
+      button.setAttribute('aria-label', 'Exit whiteboard fullscreen');
+      button.addEventListener('click', exitBoardFullscreen);
+      host.appendChild(button);
+    }
+    button.hidden = !boardIsFullscreen(host);
+  }
+  window.nbToggleBoardFullscreen = async function () {
+    var host = boardHost();
+    if (!host) { toast('Open a room whiteboard first.'); return; }
+    if (boardIsFullscreen(host)) { exitBoardFullscreen(); return; }
+    try {
+      if (host.requestFullscreen) {
+        await host.requestFullscreen({ navigationUI: 'hide' });
+      } else {
+        host.classList.add('nb42-fallback-fullscreen');
+        document.body.classList.add('nb42-board-fallback');
+      }
+    } catch (error) {
+      // Some mobile browsers do not allow element fullscreen; use a safe full-viewport fallback.
+      host.classList.add('nb42-fallback-fullscreen');
+      document.body.classList.add('nb42-board-fallback');
+    }
+    ensureBoardExitButton(host);
+    scheduleBoardResize(180);
+  };
+  document.addEventListener('fullscreenchange', function () {
+    var host = boardHost(); ensureBoardExitButton(host); scheduleBoardResize(220);
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && document.body.classList.contains('nb42-board-fallback')) {
+      event.preventDefault(); exitBoardFullscreen();
+    }
+  }, true);
+
+  function preserveAndResizeBoard(canvas) {
+    if (!canvas || !canvas.isConnected || window.NB_BOARD == null) return;
+    var state = window.NB_BOARD;
+    if (state.canvas !== canvas || state.loading || state.drawing || NB42_BOARD_RESIZING || !state.ctx) return;
+    var rect = canvas.getBoundingClientRect();
+    if (rect.width < 100 || rect.height < 100) return;
+    var pixelRatio = Math.min(1.6, Math.max(1, Number(window.devicePixelRatio) || 1));
+    var scale = Math.min(pixelRatio, 1800 / Math.max(rect.width, rect.height));
+    var targetWidth = Math.max(360, Math.round(rect.width * scale));
+    var targetHeight = Math.max(300, Math.round(rect.height * scale));
+    if (Math.abs(canvas.width - targetWidth) < 8 && Math.abs(canvas.height - targetHeight) < 8) return;
+
+    var source;
+    try { source = canvas.toDataURL('image/png'); } catch (error) { console.warn('Could not snapshot the board before resizing:', error); return; }
+    NB42_BOARD_RESIZING = true;
+    var image = new Image();
+    image.onload = function () {
+      if (!canvas.isConnected || state.canvas !== canvas) { NB42_BOARD_RESIZING = false; return; }
+      try {
+        canvas.width = targetWidth; canvas.height = targetHeight;
+        var context = canvas.getContext('2d');
+        context.fillStyle = '#fff'; context.fillRect(0, 0, targetWidth, targetHeight);
+        // Fit the old drawing inside the new orientation without cropping or distorting it.
+        var fit = Math.min(targetWidth / image.width, targetHeight / image.height);
+        var drawWidth = image.width * fit, drawHeight = image.height * fit;
+        var offsetX = (targetWidth - drawWidth) / 2, offsetY = (targetHeight - drawHeight) / 2;
+        context.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
+        state.ctx = context; state.base = null; state.start = null; state.last = null;
+        state.undo = []; state.redo = [];
+        try { state.undo.push(context.getImageData(0, 0, targetWidth, targetHeight)); } catch (_) {}
+        clearTimeout(NB42_BOARD_SAVE_TIMER);
+        NB42_BOARD_SAVE_TIMER = setTimeout(function () {
+          if (window.nbSaveSharedBoard && state.roomId && state.canvas === canvas) window.nbSaveSharedBoard(state.roomId, true);
+        }, 1200);
+      } catch (error) { console.warn('Whiteboard resize failed:', error); }
+      NB42_BOARD_RESIZING = false;
+    };
+    image.onerror = function () { NB42_BOARD_RESIZING = false; console.warn('Could not reload the whiteboard snapshot after resize.'); };
+    image.src = source;
+  }
+  function scheduleBoardResize(delay) {
+    clearTimeout(NB42_BOARD_RESIZE_TIMER);
+    NB42_BOARD_RESIZE_TIMER = setTimeout(function () { preserveAndResizeBoard(boardCanvas()); }, delay || 120);
+  }
+  function bindResponsiveBoard() {
+    var host = boardHost(), canvas = boardCanvas();
+    if (!host || !canvas) return;
+    ensureBoardExitButton(host);
+    if (NB42_BOARD_BOUND_CANVAS === canvas && NB42_BOARD_BOUND_HOST === host && NB42_BOARD_OBSERVER) { scheduleBoardResize(180); return; }
+    if (NB42_BOARD_OBSERVER) { try { NB42_BOARD_OBSERVER.disconnect(); } catch (_) {} NB42_BOARD_OBSERVER = null; }
+    var wrap = canvas.parentElement;
+    if (typeof ResizeObserver !== 'undefined' && wrap) {
+      NB42_BOARD_OBSERVER = new ResizeObserver(function () { scheduleBoardResize(180); });
+      NB42_BOARD_OBSERVER.observe(wrap);
+      NB42_BOARD_BOUND_CANVAS = canvas; NB42_BOARD_BOUND_HOST = host;
+    }
+    scheduleBoardResize(450);
+    setTimeout(function () { scheduleBoardResize(450); }, 900);
+  }
+  window.addEventListener('resize', function () { scheduleBoardResize(180); });
+  window.addEventListener('orientationchange', function () { scheduleBoardResize(450); });
+  var nb42OldAfterRender = window.afterRender;
+  window.afterRender = function (route) {
+    if (typeof nb42OldAfterRender === 'function') nb42OldAfterRender(route);
+    if (route && route.view === 'room' && UI.roomTab === 'board') {
+      requestAnimationFrame(function () { setTimeout(bindResponsiveBoard, 250); });
+    } else {
+      if (NB42_BOARD_OBSERVER) { try { NB42_BOARD_OBSERVER.disconnect(); } catch (_) {} NB42_BOARD_OBSERVER = null; }
+      NB42_BOARD_BOUND_CANVAS = null; NB42_BOARD_BOUND_HOST = null;
+    }
+    setTimeout(bindRoomUploadInputs, 40);
+  };
+  if (typeof MutationObserver !== 'undefined') {
+    var boardMutationObserver = new MutationObserver(function () {
+      if (boardHost() && boardCanvas() && resolve().view === 'room' && UI.roomTab === 'board') bindResponsiveBoard();
+      bindRoomUploadInputs();
+    });
+    boardMutationObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  /* H. Fix text wrapping and dimensions without forcing a full redesign. */
+  var repairStyle = document.createElement('style');
+  repairStyle.id = 'nexbyte-v42-repair-style';
+  repairStyle.textContent = `
+    .btn{height:auto;min-height:44px;padding:10px 14px;line-height:1.22;white-space:normal;text-align:center;overflow-wrap:anywhere;max-width:100%;}
+    .btn-sm{height:auto;min-height:38px;padding:8px 12px;font-size:12px;line-height:1.2;}
+    .btn-block{display:flex;width:100%;}
+    .btn:disabled,.iconbtn:disabled,.chip:disabled{opacity:.58;cursor:not-allowed;transform:none;box-shadow:none;}
+    .btn svg,.btn .icon{flex:0 0 auto;}
+    .nb-record-actions{display:flex;flex-wrap:wrap;gap:8px;min-width:0;}
+    .nb-record-actions .btn{flex:1 1 96px;min-width:0;height:auto;min-height:38px;}
+    input[type=file].input{display:block;width:100%;max-width:100%;height:auto;min-height:44px;padding:9px 10px;white-space:normal;}
+    .nb-board-wrap{width:100%;height:100%;min-height:0;box-sizing:border-box;overflow:auto;}
+    .nb-board-canvas-wrap{display:flex;align-items:stretch;justify-content:stretch;width:100%;height:clamp(320px,56dvh,680px);min-height:280px;flex:0 0 auto;background:#fff;overflow:hidden;touch-action:none;}
+    #nbRoomBoard{display:block;width:100%;height:100%;max-width:none;max-height:none;aspect-ratio:auto;touch-action:none;background:#fff;cursor:crosshair;}
+    #nbBoardFullscreenHost:fullscreen,#nbBoardFullscreenHost.nb42-fallback-fullscreen{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;max-width:none;max-height:none;z-index:99999;margin:0;padding:10px;overflow:hidden;display:flex;flex-direction:column;box-sizing:border-box;border:0;border-radius:0;background:var(--bg);}
+    #nbBoardFullscreenHost:fullscreen .nb-board-canvas-wrap,#nbBoardFullscreenHost.nb42-fallback-fullscreen .nb-board-canvas-wrap{flex:1 1 auto;width:100%;height:auto;min-height:0;max-height:none;}
+    #nbBoardFullscreenHost:fullscreen #nbRoomBoard,#nbBoardFullscreenHost.nb42-fallback-fullscreen #nbRoomBoard{width:100%;height:100%;max-width:none;max-height:none;}
+    #nbBoardFullscreenHost:fullscreen>p,#nbBoardFullscreenHost.nb42-fallback-fullscreen>p{display:none;}
+    #nbBoardFullscreenHost:fullscreen .nb-board-toolbar,#nbBoardFullscreenHost.nb42-fallback-fullscreen .nb-board-toolbar{grid-template-columns:repeat(5,minmax(0,1fr));max-height:22dvh;overflow:auto;flex:0 0 auto;}
+    #nb42BoardExit{display:none;position:absolute;top:12px;right:12px;z-index:100001;min-height:42px;padding:9px 14px;border:1px solid var(--border);border-radius:999px;background:var(--card);color:var(--fg);font:600 13px Inter,system-ui,sans-serif;box-shadow:var(--shadow-lg);}
+    #nbBoardFullscreenHost:fullscreen #nb42BoardExit,#nbBoardFullscreenHost.nb42-fallback-fullscreen #nb42BoardExit{display:inline-flex;align-items:center;justify-content:center;}
+    body.nb42-board-fallback{overflow:hidden!important;}
+    @media (orientation:portrait){#nbBoardFullscreenHost:fullscreen .nb-board-toolbar,#nbBoardFullscreenHost.nb42-fallback-fullscreen .nb-board-toolbar{grid-template-columns:repeat(3,minmax(0,1fr));max-height:24dvh;}}
+    @media (orientation:landscape){#nbBoardFullscreenHost:fullscreen .nb-board-toolbar,#nbBoardFullscreenHost.nb42-fallback-fullscreen .nb-board-toolbar{grid-template-columns:repeat(6,minmax(0,1fr));max-height:28dvh;}}
+    @media (max-width:420px){.btn{font-size:13px;padding:9px 11px;}.btn-sm{font-size:11px;padding:8px 9px;}#nbBoardFullscreenHost:fullscreen,#nbBoardFullscreenHost.nb42-fallback-fullscreen{padding:6px;gap:6px;}}
+  `;
+  if (!document.getElementById(repairStyle.id)) document.head.appendChild(repairStyle);
+
+  normalizeRoomState();
+  window.NEXBYTE_REPAIR_LAYER = '4.2';
+  console.info('NEXTBYTE repair layer 4.2 loaded: uploads, room dedupe, board orientation/fullscreen, button layout.');
+})();
+</script>
+
 </body>
 </html>
