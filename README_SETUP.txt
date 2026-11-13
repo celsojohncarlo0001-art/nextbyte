@@ -1,41 +1,39 @@
-NEXTBYTE — ROOM FILE UPLOAD FIX
+NEXTBYTE CLOUD FILE RECOVERY + STORAGE DELETE FIX
 
-WHAT CHANGED
-The room-file upload handler no longer requires the active room to already exist in the local S.rooms array. It verifies membership in study_room_members, loads the room by ID from study_rooms, uploads the object to the private study-room-files bucket, and inserts the message metadata in study_room_messages. Shared-note attachment upload uses the same room-resolution helper.
+WHAT WAS FOUND
+Supabase Storage already contained uploaded study-file objects, but the subject records in user_workspaces had empty materials and syllabusFiles arrays. The application therefore had file bytes in Storage but no workspace references to display in Study Hub.
 
-This directly addresses the screenshot error:
-"Room file upload failed: Shared room not found. Reload the room and try again."
+WHAT THIS BUILD CHANGES
+1. After sign-in, NEXTBYTE lists each current subject's private user-study-files folders and reconstructs missing material/syllabus references from existing Storage objects.
+2. Recovered references are saved back into the signed-in user's user_workspaces row, then the app refreshes so the files appear in Study Hub.
+3. Older direct subject-folder uploads (userId/subjectId/filename) are recovered as study materials.
+4. Profile > Settings now includes Manage cloud files. It lists the signed-in user's accessible study files, music, and shared-room files, including unlinked older uploads.
+5. The manager provides Open, Download, and Delete from cloud actions. Deletion removes the actual Supabase Storage object and removes its workspace or room-message reference when one exists.
+6. The service-worker cache version is increased so devices fetch the updated app shell.
+7. Existing per-item Delete/Remove actions in Materials, Syllabus, Music, and Shared Room Files remain available.
 
-FILES
-- index.html: corrected app file. Replace the current repository index.html.
-- nexbyte-background.png: the existing NEXTBYTE global background; keep it beside index.html.
-- manifest.webmanifest: installable PWA manifest, orientation any.
-- sw.js: updated app-shell cache version; now also caches the background image and still bypasses Supabase API requests.
-- icon-192.png / icon-512.png: PWA icons.
-- supabase-config.js: exact public client config copied from the repository ZIP provided in this chat. Keep your latest valid config if you have changed it since that upload. Never put a service-role or secret key in this file.
-
-DEPLOY
-1. Back up the GitHub repository first.
-2. On the main branch, replace index.html.
-3. Keep nexbyte-background.png at the repository root next to index.html.
-4. Replace sw.js and manifest.webmanifest; keep both icons at the root.
-5. Keep your existing supabase-config.js if it is newer than this package.
-6. Do not delete schema.sql, NEXBYTE_ENHANCEMENTS.sql, NEXBYTE_UPLOAD_STORAGE_FIX.sql, or other existing project files.
-7. Commit the changes. Vercel should build the connected main branch.
-8. After deployment, close old NEXTBYTE tabs completely, reopen the site online, and refresh once so the updated service worker activates.
+IMPORTANT STORAGE NOTE
+Deleting the app shortcut or uninstalling the PWA from a phone does NOT delete files stored in Supabase. To reduce Supabase Storage usage, use Profile > Settings > Manage cloud files > Delete from cloud, or delete a file from its relevant Materials/Syllabus/Music/Room list.
 
 SUPABASE
-Read-only inspection of the connected NEXTBYTE project showed all three expected buckets exist as private buckets and authenticated upload policies exist. The current false room-not-found message occurs before Storage is contacted, so do not rerun or change SQL for this specific frontend bug. If a new message appears after this fix, use that exact message to diagnose the next step. Keep RLS enabled and never use a service-role key in the browser.
+No new SQL migration is required for this fix. The connected NEXTBYTE project was inspected: user-study-files, user-music, and study-room-files buckets exist as private buckets; authenticated Storage policies for personal study/music files and room-member access policies are already present. Keep RLS enabled. Do not add a service-role key to the browser.
 
-TEST AFTER DEPLOY
-1. Sign in with the account that is already a member of the room.
-2. Open the room, then open Files.
-3. Choose a small PDF or PNG. Confirm the selected filename appears.
-4. Tap Upload and share.
-5. Confirm the file card appears and can be opened/downloaded.
-6. Refresh and reopen the room; confirm the file remains.
-7. Try an authorized second room member to verify shared access.
-8. Test a small subject material and syllabus file separately.
+DEPLOY
+1. Back up your GitHub repository.
+2. On the main branch, replace index.html with this package's index.html.
+3. Replace sw.js and manifest.webmanifest.
+4. Keep icon-192.png, icon-512.png, and nexbyte-background.png in the repository root beside index.html.
+5. Keep your current supabase-config.js unchanged. It is intentionally not included in this ZIP so your real public project configuration is not overwritten.
+6. Keep schema.sql and all existing SQL migration files.
+7. Commit to main and wait for Vercel to report Ready.
+8. Close existing NEXTBYTE browser tabs fully, reopen the deployed app online, and sign in. The app will attempt to recover missing file references once per account per page load. You can also use Profile > Settings > Manage cloud files > Recover missing subject files.
 
-VALIDATION
-JavaScript syntax, HTML parsing, manifest JSON, service-worker syntax, and package integrity were checked. No live authenticated browser upload or second-account test was performed in this session.
+TEST
+1. Open Study Hub > a subject > Materials. Previously uploaded files under that subject should be restored into the list.
+2. Open the subject's Syllabus tab and check recovered syllabus attachments.
+3. Open Profile > Settings > Manage cloud files. Check that the storage objects appear, including any files from old/deleted subjects marked as Unlinked / older subject.
+4. Delete a test file from the manager and confirm it disappears from Storage and from its subject/music/room reference.
+5. Upload a new small PDF, refresh, and confirm it still appears.
+
+VERIFICATION STATUS
+Static JavaScript syntax, HTML parsing, manifest JSON, service-worker syntax, image dimensions, and ZIP integrity were checked. Supabase tables, bucket existence, and relevant Storage policies were inspected read-only. A live authenticated browser upload/delete test was not performed here; verify it after deployment.

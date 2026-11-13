@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v3-room-upload-fix';
+const CACHE_VERSION = 'nexbyte-pwa-v4-cloud-file-recovery';
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',
