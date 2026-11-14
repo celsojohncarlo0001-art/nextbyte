@@ -721,6 +721,104 @@ input[type=range]{accent-color:var(--primary);width:100%;min-height:28px}
   display:flex;align-items:center;justify-content:center;flex-shrink:0;
 }
 .nb-mini .btn.play{background:linear-gradient(135deg,#2563EB,#A78BFA);color:#fff}
+
+
+/* ============================================================
+   NEXTBYTE BOLD OUTLINE FLAT VECTOR ICON FAMILY
+   Scoped strictly to Lock-In and the standalone Music screen.
+   Protected areas (Home, Study Hub, Rooms, Notes, Tasks, Profile,
+   and the bottom navigation) intentionally retain their original UI.
+   ============================================================ */
+.nb-bold-icon{
+  display:inline-block;flex:0 0 auto;vertical-align:middle;
+  overflow:visible;shape-rendering:geometricPrecision;
+}
+.nb-bold-icon rect,.nb-bold-icon circle,.nb-bold-icon path,.nb-bold-icon line,.nb-bold-icon polyline{
+  vector-effect:non-scaling-stroke;
+}
+
+/* Lock-In only: a focused, blue-tinted surface with bold, defined controls. */
+.lockin:not(.lockin-strict){
+  background:linear-gradient(145deg,#edf5ff 0%,#f8fbff 56%,#edf2ff 100%);
+}
+.lockin:not(.lockin-strict) .hdr{
+  background:rgba(255,255,255,.9);border-bottom:1.5px solid #c7d8ed;
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+}
+.lockin:not(.lockin-strict) .card{
+  background:rgba(255,255,255,.94);border:1.5px solid #c8d9ed;
+  border-radius:21px;box-shadow:0 7px 20px rgba(30,64,115,.08);
+}
+.lockin:not(.lockin-strict) .modebtn{
+  background:#e5f0ff;border:1.5px solid #182333;color:#172235;
+  border-radius:17px;box-shadow:0 3px 0 rgba(16,24,40,.08);
+}
+.lockin:not(.lockin-strict) .modebtn.on{
+  background:#d8eaff;color:#10233d;border-color:#101820;
+  box-shadow:inset 0 -3px 0 rgba(37,99,235,.16),0 3px 0 rgba(16,24,40,.08);
+}
+.lockin:not(.lockin-strict) .iconbtn{
+  background:#e4efff;color:#142033;border:1.5px solid #142033;
+  box-shadow:0 2px 0 rgba(16,24,40,.10);
+}
+.lockin:not(.lockin-strict) .playbtn{
+  border:2px solid #101820;box-shadow:0 5px 0 rgba(16,24,40,.13);
+}
+.lockin:not(.lockin-strict) .btn{
+  border-radius:15px;font-weight:700;letter-spacing:.005em;
+}
+.lockin-strict .nb-bold-icon{filter:drop-shadow(0 1px 0 rgba(255,255,255,.16));}
+.lockin .nb-lock-complete-icon{display:flex;justify-content:center;align-items:center;margin:auto;}
+
+/* Music route only: controls and panels share one flat-vector visual language. */
+.nb-music-page .nb-music-upload,
+.nb-music-page .nb-music-player,
+.nb-music-page .card{
+  border:1.5px solid #c4d7ec;border-radius:21px;
+  box-shadow:0 8px 22px rgba(27,58,100,.09);
+}
+.nb-music-page .nb-music-upload{background:rgba(255,255,255,.94);}
+.nb-music-page .nb-music-player{background:rgba(255,255,255,.96);}
+.nb-music-page .nb-music-art{
+  border:1.5px solid #162235;border-radius:15px;
+  background:#dcecff;color:#172235;
+}
+.nb-music-page .nb-music-row{
+  background:rgba(255,255,255,.94);border:1.5px solid #c5d7e9;
+  border-radius:17px;box-shadow:0 3px 10px rgba(27,58,100,.05);
+}
+.nb-music-page .nb-music-row.active{background:#e4efff;border-color:#2f72d5;}
+.nb-music-page .nb-music-play{
+  background:#ff6682;color:#101820;border:1.7px solid #101820;
+  border-radius:13px;box-shadow:0 3px 0 rgba(16,24,40,.12);
+}
+.nb-music-page .nb-music-icon,
+.nb-music-page .iconbtn{
+  background:#e3efff;color:#142033;border:1.5px solid #142033;
+  border-radius:12px;box-shadow:0 2px 0 rgba(16,24,40,.08);
+}
+.nb-music-page .iconbtn.blue{background:#ff6682;color:#101820;border-color:#101820;}
+.nb-music-page .playbtn{
+  border:2px solid #101820;box-shadow:0 4px 0 rgba(16,24,40,.14);
+}
+.nb-music-page .seg{background:#e2edf9;border:1.5px solid #c2d5e9;}
+.nb-music-page .seg button{border-radius:12px;font-weight:700;}
+.nb-music-page .seg button.on{background:#cfe4ff;color:#10233d;box-shadow:inset 0 -2px 0 #8cb7eb;}
+.nb-music-page .chip{border:1.5px solid #b9cde4;background:#f7fbff;color:#172235;border-radius:999px;font-weight:650;}
+.nb-music-page .chip.on{background:#dbeaff;border-color:#172235;color:#11243d;}
+.nb-music-page .nb-music-heading h1{letter-spacing:-.025em;}
+.nb-music-page .nb-music-panel .btn{border-radius:15px;font-weight:700;}
+.nb-music-page .nb-music-range{accent-color:#2563eb;}
+.nb-music-page .nb-bold-icon{filter:drop-shadow(0 1px 0 rgba(16,24,40,.05));}
+@media(max-width:520px){
+  .nb-music-page .nb-music-panel{padding-left:14px;padding-right:14px;}
+  .nb-music-page .nb-music-row{gap:6px;padding:8px;}
+  .nb-music-page .nb-music-icon{width:32px;height:32px;min-width:32px;min-height:32px;}
+}
+@media(prefers-reduced-motion:reduce){
+  .lockin .nb-bold-icon,.nb-music-page .nb-bold-icon{filter:none;}
+}
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./supabase-config.js"></script>
@@ -788,6 +886,45 @@ var ICONS={
 };
 function ic(n,s){s=s||20;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+(ICONS[n]||'')+'</svg>';}
 function icf(n,s){s=s||20;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="currentColor" stroke="none">'+(ICONS[n]||'')+'</svg>';}
+
+/* Bold-outline flat-vector icons inspired by the supplied clock reference.
+   Uses the existing icon paths; only targeted Lock-In and Music views call these. */
+var NB_BOLD_ICON_COLORS = {
+  brain:['#ffe2eb','#ff5a7b'], users:['#e2e9ff','#6a76d8'], zap:['#ffe7d6','#ff913e'],
+  headphones:['#dcecff','#3489d8'], music:['#e8e0ff','#8867d7'], upload:['#dcf6f3','#22a895'],
+  plus:['#ffe9d8','#ef913e'], search:['#e3efff','#3285d3'], play:['#ffe0e8','#ff5579'],
+  pause:['#ffe0e8','#ff5579'], shuffle:['#dff5ef','#17a38c'], skipBack:['#e3efff','#3285d3'],
+  skipFwd:['#e3efff','#3285d3'], repeat:['#fff0d8','#ef9a32'], volume:['#e3efff','#3285d3'],
+  link:['#e9e3ff','#8062d0'], x:['#ffe4e4','#e45c63'], heart:['#ffe0e8','#ff5579'],
+  listChecks:['#e0f3ed','#259c76'], download:['#e0f3ed','#259c76'], trash:['#ffe4e4','#e45c63'],
+  reset:['#ffe7d6','#ff913e'], chevL:['#e3efff','#3285d3'], chevR:['#e3efff','#3285d3'],
+  award:['#fff0d8','#e9a02f'], clock:['#ffe0e8','#ff5579'], timer:['#ffe0e8','#ff5579']
+};
+function nbBoldIcon(n,s,filled){
+  s=s||20;
+  var pair=NB_BOLD_ICON_COLORS[n]||['#e3efff','#3285d3'];
+  var bg=pair[0],accent=pair[1];
+  var shape=ICONS[n]||ICONS.help||'';
+  if(n==='clock'||n==='timer'){
+    return '<svg class="nb-bold-icon" width="'+s+'" height="'+s+'" viewBox="0 0 28 28" fill="none" aria-hidden="true" focusable="false">'+
+      '<circle cx="14" cy="14" r="12.1" fill="#ff5b7b" stroke="#111820" stroke-width="1.9"/>'+
+      '<circle cx="14" cy="14" r="9.2" fill="#e6f0fa" stroke="#111820" stroke-width="1.8"/>'+
+      '<path d="M14 5.6v2.2M14 20.2v2.1M5.7 14h2.1M20.2 14h2.1M14 11v4.1l3.7 2.7" stroke="#111820" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<circle cx="14" cy="14" r="1.6" fill="#ff5b7b" stroke="#111820" stroke-width="1.3"/></svg>';
+  }
+  var fill=filled?'#111820':'none';
+  var stroke=filled?'#111820':'#111820';
+  var sw=filled?'1.35':'2.65';
+  if(filled && n==='heart') fill=accent;
+  if(filled && (n==='play'||n==='pause')) fill='#111820';
+  return '<svg class="nb-bold-icon" width="'+s+'" height="'+s+'" viewBox="0 0 28 28" fill="none" aria-hidden="true" focusable="false">'+
+    '<rect x="1.15" y="1.15" width="25.7" height="25.7" rx="7.2" fill="'+bg+'" stroke="#111820" stroke-width="1.8"/>'+
+    '<path d="M4.5 5.2Q5.3 3.9 7 3.9" stroke="#ffffff" stroke-width="1.15" stroke-linecap="round" opacity=".95"/>'+
+    '<g transform="translate(2 2)" fill="'+fill+'" stroke="'+stroke+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-linejoin="round">'+shape+'</g>'+
+    '<circle cx="23.1" cy="23.1" r="1.5" fill="'+accent+'" stroke="#111820" stroke-width=".85"/></svg>';
+}
+function nbBoldIconFilled(n,s){return nbBoldIcon(n,s,true);}
+
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function logo(size){return '<div class="logo" style="width:'+size+'px;height:'+size+'px;border-radius:'+Math.round(size*.26)+'px">'+ic('grad',size*.55)+'</div>';}
 function avatar(initials,color,size){return '<div class="avatar" style="width:'+size+'px;height:'+size+'px;background:'+color+';font-size:'+Math.round(size*.38)+'px">'+esc(initials)+'</div>';}
@@ -1179,7 +1316,7 @@ function musicCreatePlaylist(addId){var name=prompt('Name your playlist:');if(!n
 function musicDeletePlaylist(id){var playlist=S.music.playlists.filter(function(p){return p.id===id;})[0];if(!playlist)return;confirmSheet({title:'Delete playlist?',message:'The songs stay in your library. Only this playlist is removed.',confirmLabel:'Delete playlist',onConfirm:function(){S.music.playlists=S.music.playlists.filter(function(p){return p.id!==id;});if(S.music.view===id)S.music.view='all';save();render();}});}
 function musicAddToPlaylist(id){
   var track=musicTrackById(id);if(!track)return;
-  var html='<div class="f jb aic mb3"><h3 class="txl semi">Add to playlist</h3><button class="iconbtn" data-close>'+ic('x',18)+'</button></div>';
+  var html='<div class="f jb aic mb3"><h3 class="txl semi">Add to playlist</h3><button class="iconbtn" data-close>'+nbBoldIcon('x',18)+'</button></div>';
   if(!S.music.playlists.length)html+='<p class="txm muted">You do not have a playlist yet.</p>';
   else html+='<div class="fc g2">'+S.music.playlists.map(function(p){var exists=p.ids.indexOf(id)>=0;return '<button class="rowitem" data-playlist="'+esc(p.id)+'"><span class="grow txm med">'+esc(p.name)+'</span><span class="txs muted">'+(exists?'Remove':'Add')+'</span></button>';}).join('')+'</div>';
   html+='<button class="btn btn-primary btn-block mt3" data-new>Create playlist</button>';
@@ -1292,18 +1429,18 @@ function setMusicTab(tab){UI.musicTab=tab;render();}
 function filterMusicLibrary(query){UI.musicQuery=query||'';var list=document.getElementById('musicTrackList');if(list)list.innerHTML=musicTrackRows(currentMusicList(),UI.musicQuery);}
 function musicTrackRows(list,query){
   query=(query||'').toLowerCase();list=list.filter(function(t){return ((t.title||t.name)+' '+(t.artist||'')).toLowerCase().indexOf(query)>=0;});
-  if(!list.length)return '<div class="empty" style="padding:28px 16px"><div class="em">🎧</div><p class="txm muted">'+(query?'No tracks match your search.':'No songs in this view yet.')+'</p></div>';
-  return list.map(function(t,index){var active=S.music.localId===t.id&&S.music.active==='local',favorite=S.music.favorites.indexOf(t.id)>=0;return '<div class="nb-music-row'+(active?' active':'')+'"><button class="nb-music-play" onclick="playLocalMusic(\''+t.id+'\')" aria-label="Play '+esc(t.name)+'">'+(active&&S.music.playing?icf('pause',16):icf('play',16))+'</button><button class="nb-music-track" onclick="playLocalMusic(\''+t.id+'\')"><strong>'+esc(t.title||t.name)+'</strong><small>'+esc(t.artist||'Saved audio')+' · '+fmtSize(t.size)+'</small></button><button class="iconbtn nb-music-icon" onclick="musicToggleFavorite(\''+t.id+'\')" aria-label="'+(favorite?'Remove favorite':'Add favorite')+'">'+(favorite?icf('heart',17):ic('heart',17))+'</button><button class="iconbtn nb-music-icon" onclick="musicAddToPlaylist(\''+t.id+'\')" aria-label="Add to playlist">'+ic('listChecks',17)+'</button><button class="iconbtn nb-music-icon" onclick="musicDownloadOffline(\''+t.id+'\')" aria-label="Download for offline">'+ic('download',16)+'</button><button class="iconbtn nb-music-icon" onclick="musicDeleteTrack(\''+t.id+'\')" aria-label="Remove track">'+ic('trash',16)+'</button></div>';}).join('');
+  if(!list.length)return '<div class="empty" style="padding:28px 16px"><div class="em">' + nbBoldIcon('headphones',42) + '</div><p class="txm muted">'+(query?'No tracks match your search.':'No songs in this view yet.')+'</p></div>';
+  return list.map(function(t,index){var active=S.music.localId===t.id&&S.music.active==='local',favorite=S.music.favorites.indexOf(t.id)>=0;return '<div class="nb-music-row'+(active?' active':'')+'"><button class="nb-music-play" onclick="playLocalMusic(\''+t.id+'\')" aria-label="Play '+esc(t.name)+'">'+(active&&S.music.playing?nbBoldIconFilled('pause',16):nbBoldIconFilled('play',16))+'</button><button class="nb-music-track" onclick="playLocalMusic(\''+t.id+'\')"><strong>'+esc(t.title||t.name)+'</strong><small>'+esc(t.artist||'Saved audio')+' · '+fmtSize(t.size)+'</small></button><button class="iconbtn nb-music-icon" onclick="musicToggleFavorite(\''+t.id+'\')" aria-label="'+(favorite?'Remove favorite':'Add favorite')+'">'+(favorite?nbBoldIconFilled('heart',17):nbBoldIcon('heart',17))+'</button><button class="iconbtn nb-music-icon" onclick="musicAddToPlaylist(\''+t.id+'\')" aria-label="Add to playlist">'+nbBoldIcon('listChecks',17)+'</button><button class="iconbtn nb-music-icon" onclick="musicDownloadOffline(\''+t.id+'\')" aria-label="Download for offline">'+nbBoldIcon('download',16)+'</button><button class="iconbtn nb-music-icon" onclick="musicDeleteTrack(\''+t.id+'\')" aria-label="Remove track">'+nbBoldIcon('trash',16)+'</button></div>';}).join('');
 }
 function musicLibraryTab(){
   var view=S.music.view||'all',playlist=S.music.playlists.filter(function(p){return p.id===view;})[0];
   if(view!=='all'&&view!=='fav'&&!playlist){view='all';S.music.view='all';}
   var list=currentMusicList();
-  var html='<div class="nb-music-panel"><div class="nb-music-upload"><div class="f g3 aic"><div class="nb-music-art">'+ic('headphones',22)+'</div><div class="grow minw"><h2 class="txl semi">Your music library</h2><p class="txs muted">'+S.offlineMusic.length+' track(s) saved to your account</p></div></div><label class="btn btn-primary btn-block mt3" for="localMusicInput">'+ic('upload',17)+' Upload audio files</label><input id="localMusicInput" type="file" multiple accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.flac,.weba,.webm,.aif,.aiff,.3gp" style="display:none" onchange="addOfflineFiles(this)"/><p class="txs muted mt2">Your uploads are stored privately in your NEXBYTE account and available after signing in on another device.</p></div>';
-  if(!S.offlineMusic.length)html+='<div class="empty"><div class="em">🎵</div><h3 class="txl semi mb1">Your library is empty</h3><p class="txm muted">Upload MP3, M4A, AAC, WAV, or OGG files to get started.</p></div>';
+  var html='<div class="nb-music-panel"><div class="nb-music-upload"><div class="f g3 aic"><div class="nb-music-art">'+nbBoldIcon('headphones',22)+'</div><div class="grow minw"><h2 class="txl semi">Your music library</h2><p class="txs muted">'+S.offlineMusic.length+' track(s) saved to your account</p></div></div><label class="btn btn-primary btn-block mt3" for="localMusicInput">'+nbBoldIcon('upload',17)+' Upload audio files</label><input id="localMusicInput" type="file" multiple accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.flac,.weba,.webm,.aif,.aiff,.3gp" style="display:none" onchange="addOfflineFiles(this)"/><p class="txs muted mt2">Your uploads are stored privately in your NEXBYTE account and available after signing in on another device.</p></div>';
+  if(!S.offlineMusic.length)html+='<div class="empty"><div class="em">' + nbBoldIcon('music',42) + '</div><h3 class="txl semi mb1">Your library is empty</h3><p class="txm muted">Upload MP3, M4A, AAC, WAV, or OGG files to get started.</p></div>';
   else{
-    html+='<div class="hscroll mt3 nb-music-filters"><button class="chip'+(view==='all'?' on':'')+'" onclick="musicSetView(\'all\')">All songs · '+S.offlineMusic.length+'</button><button class="chip'+(view==='fav'?' on':'')+'" onclick="musicSetView(\'fav\')">♥ Favorites · '+S.music.favorites.length+'</button>'+S.music.playlists.map(function(p){return '<button class="chip'+(view===p.id?' on':'')+'" onclick="musicSetView(\''+p.id+'\')">'+esc(p.name)+' · '+p.ids.length+'</button>';}).join('')+'<button class="chip" onclick="musicCreatePlaylist()">'+ic('plus',13)+' New playlist</button></div>';
-    html+='<div class="searchbar mt3">'+ic('search',17)+'<input type="search" value="'+esc(UI.musicQuery)+'" placeholder="Search your songs…" oninput="filterMusicLibrary(this.value)" aria-label="Search audio library"/></div>';
+    html+='<div class="hscroll mt3 nb-music-filters"><button class="chip'+(view==='all'?' on':'')+'" onclick="musicSetView(\'all\')">All songs · '+S.offlineMusic.length+'</button><button class="chip'+(view==='fav'?' on':'')+'" onclick="musicSetView(\'fav\')">' + nbBoldIcon('heart',13) + ' Favorites · '+S.music.favorites.length+'</button>'+S.music.playlists.map(function(p){return '<button class="chip'+(view===p.id?' on':'')+'" onclick="musicSetView(\''+p.id+'\')">'+esc(p.name)+' · '+p.ids.length+'</button>';}).join('')+'<button class="chip" onclick="musicCreatePlaylist()">'+nbBoldIcon('plus',13)+' New playlist</button></div>';
+    html+='<div class="searchbar mt3">'+nbBoldIcon('search',17)+'<input type="search" value="'+esc(UI.musicQuery)+'" placeholder="Search your songs…" oninput="filterMusicLibrary(this.value)" aria-label="Search audio library"/></div>';
     html+='<div class="f jb aic mt3 mb2"><h3 class="txm semi">'+esc(view==='all'?'All songs':view==='fav'?'Favorites':playlist.name)+'</h3>'+(playlist?'<button class="seeall" onclick="musicDeletePlaylist(\''+playlist.id+'\')">Delete playlist</button>':'')+'</div>';
     html+='<div class="nb-music-list" id="musicTrackList">'+musicTrackRows(list,UI.musicQuery)+'</div>';
   }
@@ -1312,20 +1449,20 @@ function musicLibraryTab(){
 function activePlayerCard(){
   if(S.music.active==='local'){
     var track=musicTrackById(S.music.localId);
-    return '<div class="nb-music-player card padc"><div class="f jb aic"><div class="f g3 aic minw"><div class="nb-music-art">'+ic('music',22)+'</div><div class="grow minw"><p class="txm semi trunc">'+esc(track?track.title||track.name:'Audio track')+'</p><p class="txs muted trunc">'+esc(track?track.artist||'Saved audio':'')+'</p></div></div><button class="iconbtn" onclick="stopMusic()" aria-label="Stop playback">'+ic('x',16)+'</button></div><div class="f g2 aic mt3"><span class="txs muted" id="musicCurrentTime">0:00</span><div class="bar grow" style="height:6px"><div id="musicProgressBar" style="width:0%;background:var(--primary)"></div></div><span class="txs muted" id="musicDuration">0:00</span></div><input id="musicSeek" class="nb-music-range mt2" type="range" min="0" max="1000" value="0" oninput="window.NB_MUSIC_SEEKING=true;musicSeek(this.value)" onchange="window.NB_MUSIC_SEEKING=false" aria-label="Seek in track"/><div class="f jb aic mt3"><button class="iconbtn'+(S.music.shuffle?' blue':'')+'" onclick="musicToggleShuffle()" aria-label="Toggle shuffle">'+ic('shuffle',17)+'</button><button class="iconbtn" onclick="musicPrev()" aria-label="Previous track">'+ic('skipBack',18)+'</button><button class="playbtn" id="musicBigPlay" style="height:54px;width:54px;background:var(--primary)" onclick="musicTogglePlay()">'+(S.music.playing?icf('pause',22):icf('play',22))+'</button><button class="iconbtn" onclick="musicNext(false)" aria-label="Next track">'+ic('skipFwd',18)+'</button><button class="iconbtn'+(S.music.repeat!=='off'?' blue':'')+'" onclick="musicCycleRepeat()" aria-label="Repeat mode '+S.music.repeat+'">'+ic('repeat',17)+(S.music.repeat==='one'?'<span class="nb-repeat-one">1</span>':'')+'</button></div><div class="f g2 aic mt2"><span class="muted">'+ic('volume',16)+'</span><input class="nb-music-range" type="range" min="0" max="100" value="'+S.music.volume+'" oninput="musicVolume(this.value)" aria-label="Volume"/></div></div>';
+    return '<div class="nb-music-player card padc"><div class="f jb aic"><div class="f g3 aic minw"><div class="nb-music-art">'+nbBoldIcon('music',22)+'</div><div class="grow minw"><p class="txm semi trunc">'+esc(track?track.title||track.name:'Audio track')+'</p><p class="txs muted trunc">'+esc(track?track.artist||'Saved audio':'')+'</p></div></div><button class="iconbtn" onclick="stopMusic()" aria-label="Stop playback">'+nbBoldIcon('x',16)+'</button></div><div class="f g2 aic mt3"><span class="txs muted" id="musicCurrentTime">0:00</span><div class="bar grow" style="height:6px"><div id="musicProgressBar" style="width:0%;background:var(--primary)"></div></div><span class="txs muted" id="musicDuration">0:00</span></div><input id="musicSeek" class="nb-music-range mt2" type="range" min="0" max="1000" value="0" oninput="window.NB_MUSIC_SEEKING=true;musicSeek(this.value)" onchange="window.NB_MUSIC_SEEKING=false" aria-label="Seek in track"/><div class="f jb aic mt3"><button class="iconbtn'+(S.music.shuffle?' blue':'')+'" onclick="musicToggleShuffle()" aria-label="Toggle shuffle">'+nbBoldIcon('shuffle',17)+'</button><button class="iconbtn" onclick="musicPrev()" aria-label="Previous track">'+nbBoldIcon('skipBack',18)+'</button><button class="playbtn" id="musicBigPlay" style="height:54px;width:54px;background:var(--primary)" onclick="musicTogglePlay()">'+(S.music.playing?nbBoldIconFilled('pause',22):nbBoldIconFilled('play',22))+'</button><button class="iconbtn" onclick="musicNext(false)" aria-label="Next track">'+nbBoldIcon('skipFwd',18)+'</button><button class="iconbtn'+(S.music.repeat!=='off'?' blue':'')+'" onclick="musicCycleRepeat()" aria-label="Repeat mode '+S.music.repeat+'">'+nbBoldIcon('repeat',17)+(S.music.repeat==='one'?'<span class="nb-repeat-one">1</span>':'')+'</button></div><div class="f g2 aic mt2"><span class="muted">'+nbBoldIcon('volume',16)+'</span><input class="nb-music-range" type="range" min="0" max="100" value="'+S.music.volume+'" oninput="musicVolume(this.value)" aria-label="Volume"/></div></div>';
   }
-  if(S.music.active==='youtube')return '<div class="card padc"><div class="f jb aic mb2"><div><p class="txm semi">YouTube player</p><p class="txs muted">Video or playlist playback</p></div><div class="f g1"><button class="iconbtn" onclick="openYoutubeExternally()" title="Open in YouTube">'+ic('link',16)+'</button><button class="iconbtn" onclick="stopMusic()" title="Stop">'+ic('x',16)+'</button></div></div><div id="mediaHolder" class="nb-youtube-holder"><span class="txs muted">Loading YouTube player…</span></div><p class="txs muted mt2">Some videos disable embedding or have regional restrictions. Use “Open in YouTube” for those videos.</p></div>';
+  if(S.music.active==='youtube')return '<div class="card padc"><div class="f jb aic mb2"><div><p class="txm semi">YouTube player</p><p class="txs muted">Video or playlist playback</p></div><div class="f g1"><button class="iconbtn" onclick="openYoutubeExternally()" title="Open in YouTube">'+nbBoldIcon('link',16)+'</button><button class="iconbtn" onclick="stopMusic()" title="Stop">'+nbBoldIcon('x',16)+'</button></div></div><div id="mediaHolder" class="nb-youtube-holder"><span class="txs muted">Loading YouTube player…</span></div><p class="txs muted mt2">Some videos disable embedding or have regional restrictions. Use “Open in YouTube” for those videos.</p></div>';
   return '';
 }
 function youtubeTab(){
-  var h='<div class="nb-music-panel"><div class="card padc"><div class="f g3 aic mb2"><span class="nb-youtube-icon">'+ic('play',20)+'</span><div><h2 class="txl semi">YouTube & YouTube Music</h2><p class="txs muted">Paste a video or playlist link</p></div></div><label class="field-label" for="youtubeUrl">YouTube link</label><input id="youtubeUrl" class="input" value="'+esc(S.music.youtubeUrl||'')+'" placeholder="https://www.youtube.com/watch?v=…"/><div class="f g2 mt3"><button class="btn btn-secondary grow" onclick="saveYoutubeLink()">Save link</button><button class="btn btn-primary grow" onclick="playYoutube()">'+ic('play',15)+' Play</button></div><p class="txs muted mt2">Supports youtube.com, youtu.be, YouTube Shorts, live links, playlists, and music.youtube.com.</p></div></div>';
+  var h='<div class="nb-music-panel"><div class="card padc"><div class="f g3 aic mb2"><span class="nb-youtube-icon">'+nbBoldIcon('play',20)+'</span><div><h2 class="txl semi">YouTube & YouTube Music</h2><p class="txs muted">Paste a video or playlist link</p></div></div><label class="field-label" for="youtubeUrl">YouTube link</label><input id="youtubeUrl" class="input" value="'+esc(S.music.youtubeUrl||'')+'" placeholder="https://www.youtube.com/watch?v=…"/><div class="f g2 mt3"><button class="btn btn-secondary grow" onclick="saveYoutubeLink()">Save link</button><button class="btn btn-primary grow" onclick="playYoutube()">'+nbBoldIcon('play',15)+' Play</button></div><p class="txs muted mt2">Supports youtube.com, youtu.be, YouTube Shorts, live links, playlists, and music.youtube.com.</p></div></div>';
   return h;
 }
 function vMusic(){
-  var html='<div class="pad pt nb-music-heading"><div><h1 class="tx2 bold">Music</h1><p class="txm muted">Your private library and YouTube playback.</p></div></div>';
+  var html='<div class="nb-music-page"><div class="pad pt nb-music-heading"><div><h1 class="tx2 bold">Music</h1><p class="txm muted">Your private library and YouTube playback.</p></div></div>';
   if(S.music.active!=='none')html+='<div class="pad">'+activePlayerCard()+'</div>';
-  html+='<div class="pad mt3"><div class="seg"><button class="'+(UI.musicTab==='offline'?'on':'')+'" onclick="setMusicTab(\'offline\')">'+ic('headphones',14)+' Library</button><button class="'+(UI.musicTab==='youtube'?'on':'')+'" onclick="setMusicTab(\'youtube\')">'+ic('play',14)+' YouTube</button></div></div>';
-  html+=UI.musicTab==='youtube'?youtubeTab():musicLibraryTab();return html;
+  html+='<div class="pad mt3"><div class="seg"><button class="'+(UI.musicTab==='offline'?'on':'')+'" onclick="setMusicTab(\'offline\')">'+nbBoldIcon('headphones',14)+' Library</button><button class="'+(UI.musicTab==='youtube'?'on':'')+'" onclick="setMusicTab(\'youtube\')">'+nbBoldIcon('play',14)+' YouTube</button></div></div>';
+  html+=UI.musicTab==='youtube'?youtubeTab():musicLibraryTab();return html+'</div>';
 }
 function offlineTab(){return musicLibraryTab();}
 function musicTogglePlayFromDashboard(){if(S.music.active==='local')musicTogglePlay();else go('/music');}
@@ -1392,13 +1529,13 @@ function bottomNav(active){
   }).join('')+'</nav>';
 }
 function topBar(active){
-  var u=S.auth.user||{},dark=S.theme==='dark';
+  var u=S.auth.user||{},dark=S.theme==='dark';var pageIcon=active==='music'?nbBoldIcon:ic;
   return '<button class="brand" onclick="go(\'/dashboard\')" aria-label="NEXBYTE — go to Home">'+logo(26)+'<span class="brand-name">NEXBYTE</span></button>'+
-    '<span class="streakbadge" aria-label="Study streak: '+Number(S.focus.streak||0)+' days">'+ic('flame',13)+' '+Number(S.focus.streak||0)+'d</span>'+
+    '<span class="streakbadge" aria-label="Study streak: '+Number(S.focus.streak||0)+' days">'+pageIcon('flame',13)+' '+Number(S.focus.streak||0)+'d</span>'+
     '<div class="grow"></div>'+
-    '<button class="iconbtn" onclick="openSearch()" aria-label="Search workspace" title="Search (Ctrl+K)">'+ic('search',18)+'</button>'+
-    '<button class="iconbtn" onclick="openNotifications()" aria-label="Notifications" title="Notifications">'+ic('bell',18)+'</button>'+
-    '<button class="iconbtn" onclick="toggleTheme()" aria-label="Switch to '+(dark?'light':'dark')+' theme" title="Toggle theme">'+ic(dark?'sun':'moon',18)+'</button>'+
+    '<button class="iconbtn" onclick="openSearch()" aria-label="Search workspace" title="Search (Ctrl+K)">'+pageIcon('search',18)+'</button>'+
+    '<button class="iconbtn" onclick="openNotifications()" aria-label="Notifications" title="Notifications">'+pageIcon('bell',18)+'</button>'+
+    '<button class="iconbtn" onclick="toggleTheme()" aria-label="Switch to '+(dark?'light':'dark')+' theme" title="Toggle theme">'+pageIcon(dark?'sun':'moon',18)+'</button>'+
     '<button class="iconbtn" onclick="go(\'/profile\')" aria-label="Open profile">'+avatar(u.initials||'U',u.color||'#2563EB',28)+'</button>';
 }
 function viewFor(R){
@@ -1809,15 +1946,15 @@ function vLockIn(subjectId){
 }
 function lockSetup(s){
   var durs=[15,25,45,60];
-  return '<div class="lockin"><div class="hdr"><button class="iconbtn" onclick="go(\'/study/'+s.id+'\')">'+ic('chevL',20)+'</button><div class="grow minw"><h1 class="txl semi">Lock-In Workspace</h1><p class="txs muted">'+esc(s.code)+' · '+esc(s.name)+'</p></div></div><div class="main" style="padding:20px;display:flex;flex-direction:column;gap:20px"><div class="card padc center" style="padding:24px;border-color:'+s.color+'44;background:'+s.color+'0A"><span class="iconbtn" style="height:52px;width:52px;margin:0 auto 12px;background:'+s.color+'20;color:'+s.color+'">'+ic('zap',24)+'</span><h2 class="txl bold">Focus on '+esc(s.code)+'</h2><p class="txs muted mt1">Every completed minute is logged to the subject automatically.</p></div><div><p class="txs semi muted mb2">DURATION</p><div class="grid2">'+durs.map(function(d){var on=LOCK.duration===d*60;return '<button class="btn" style="height:52px;'+(on?'background:'+s.color+';color:#fff;border:none':'background:var(--card);border:1px solid var(--border);color:var(--muted-fg)')+'" onclick="setLockDuration('+d+')">'+d+' min</button>';}).join('')+'</div></div><div><p class="txs semi muted mb2">MODE</p><div class="f g2"><button class="modebtn'+(LOCK.mode==='solo'?' on':'')+'" style="'+(LOCK.mode==='solo'?'background:'+s.color:'')+'" onclick="setLockMode(\'solo\')">'+ic('brain',18)+'<span>Solo Lock-In</span></button><button class="modebtn'+(LOCK.mode==='room'?' on':'')+'" style="'+(LOCK.mode==='room'?'background:'+s.color:'')+'" onclick="setLockMode(\'room\')">'+ic('users',18)+'<span>Room Focus</span></button></div></div><div class="card padc"><div class="prow"><div><p class="txm med">Strict Mode</p><p class="txs muted">Blocks navigation until the timer ends</p></div><button class="toggle'+(LOCK.strict?' on':'')+'" onclick="LOCK.strict=!LOCK.strict;render()"><span></span></button></div><div class="hr"></div><div class="prow"><div><p class="txm med">Chime</p><p class="txs muted">Play a sound when the session ends</p></div><button class="toggle'+(LOCK.chime?' on':'')+'" onclick="LOCK.chime=!LOCK.chime;render()"><span></span></button></div></div><div class="card padc f g3 aic"><span class="iconbtn" style="height:44px;width:44px;background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',20)+'</span><div class="grow minw"><p class="txs muted">Music</p><p class="txm semi trunc">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active==='local'?'<button class="playbtn" style="height:40px;width:40px;background:#A78BFA" onclick="musicTogglePlay()">'+(S.music.playing?icf('pause',16):icf('play',16))+'</button>':'<button class="playbtn" style="height:40px;width:40px;background:#A78BFA" onclick="go(\'/music\')">'+ic('chevR',16)+'</button>')+'</div><button class="btn btn-primary btn-lg btn-block" onclick="startLock()">'+ic('play',20)+' Start '+Math.round(LOCK.duration/60)+'-minute session</button></div></div>';
+  return '<div class="lockin"><div class="hdr"><button class="iconbtn" onclick="go(\'/study/'+s.id+'\')">'+nbBoldIcon('chevL',20)+'</button><div class="grow minw"><h1 class="txl semi">Lock-In Workspace</h1><p class="txs muted">'+esc(s.code)+' · '+esc(s.name)+'</p></div></div><div class="main" style="padding:20px;display:flex;flex-direction:column;gap:20px"><div class="card padc center" style="padding:24px;border-color:'+s.color+'44;background:'+s.color+'0A"><span class="iconbtn" style="height:52px;width:52px;margin:0 auto 12px;background:'+s.color+'20;color:'+s.color+'">'+nbBoldIcon('zap',24)+'</span><h2 class="txl bold">Focus on '+esc(s.code)+'</h2><p class="txs muted mt1">Every completed minute is logged to the subject automatically.</p></div><div><p class="txs semi muted mb2">DURATION</p><div class="grid2">'+durs.map(function(d){var on=LOCK.duration===d*60;return '<button class="btn" style="height:52px;'+(on?'background:'+s.color+';color:#fff;border:none':'background:var(--card);border:1px solid var(--border);color:var(--muted-fg)')+'" onclick="setLockDuration('+d+')">'+d+' min</button>';}).join('')+'</div></div><div><p class="txs semi muted mb2">MODE</p><div class="f g2"><button class="modebtn'+(LOCK.mode==='solo'?' on':'')+'" style="'+(LOCK.mode==='solo'?'background:'+s.color:'')+'" onclick="setLockMode(\'solo\')">'+nbBoldIcon('brain',18)+'<span>Solo Lock-In</span></button><button class="modebtn'+(LOCK.mode==='room'?' on':'')+'" style="'+(LOCK.mode==='room'?'background:'+s.color:'')+'" onclick="setLockMode(\'room\')">'+nbBoldIcon('users',18)+'<span>Room Focus</span></button></div></div><div class="card padc"><div class="prow"><div><p class="txm med">Strict Mode</p><p class="txs muted">Blocks navigation until the timer ends</p></div><button class="toggle'+(LOCK.strict?' on':'')+'" onclick="LOCK.strict=!LOCK.strict;render()"><span></span></button></div><div class="hr"></div><div class="prow"><div><p class="txm med">Chime</p><p class="txs muted">Play a sound when the session ends</p></div><button class="toggle'+(LOCK.chime?' on':'')+'" onclick="LOCK.chime=!LOCK.chime;render()"><span></span></button></div></div><div class="card padc f g3 aic"><span class="iconbtn" style="height:44px;width:44px;background:rgba(167,139,250,.15);color:#A78BFA">'+nbBoldIcon('headphones',20)+'</span><div class="grow minw"><p class="txs muted">Music</p><p class="txm semi trunc">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active==='local'?'<button class="playbtn" style="height:40px;width:40px;background:#A78BFA" onclick="musicTogglePlay()">'+(S.music.playing?nbBoldIconFilled('pause',16):nbBoldIconFilled('play',16))+'</button>':'<button class="playbtn" style="height:40px;width:40px;background:#A78BFA" onclick="go(\'/music\')">'+nbBoldIcon('chevR',16)+'</button>')+'</div><button class="btn btn-primary btn-lg btn-block" onclick="startLock()">'+nbBoldIcon('play',20)+' Start '+Math.round(LOCK.duration/60)+'-minute session</button></div></div>';
 }
 function lockRunner(s){
   var R=130,C=2*Math.PI*R;var pct=(LOCK.duration-LOCK.left)/LOCK.duration;var bg=LOCK.strict?'lockin lockin-strict':'lockin';
-  return '<div class="'+bg+'"><div class="hdr" style="border-color:rgba(255,255,255,.06)"><div class="grow minw"><h1 class="txl semi trunc" style="color:'+s.color+'">'+esc(s.code)+' · '+esc(s.name)+'</h1><p class="txs muted">'+(LOCK.strict?'Strict Mode · ':'')+(LOCK.mode==='room'?'Room Focus':'Solo Lock-In')+'</p></div>'+(LOCK.strict?'':'<button class="iconbtn" onclick="abandonLock()">'+ic('x',18)+'</button>')+'</div><div class="main fc aic jc" style="padding:24px"><div class="ring-wrap"><svg viewBox="0 0 300 300"><circle cx="150" cy="150" r="'+R+'" fill="none" stroke="rgba(148,163,184,.22)" stroke-width="14"/><circle id="ring" cx="150" cy="150" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="14" stroke-linecap="round" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C-pct*C)+'"/></svg><div class="ring-center"><span id="timerText" class="ring-time" style="color:'+s.color+'">'+fmtTime(LOCK.left)+'</span><span class="txs muted mt1">'+Math.round(LOCK.duration/60)+'-minute session</span></div></div><div class="f g4 aic mt6"><button class="iconbtn" style="height:56px;width:56px" onclick="resetLock()">'+ic('reset',22)+'</button><button class="playbtn" style="width:72px;height:72px;background:'+s.color+';box-shadow:0 10px 30px '+s.color+'55" onclick="toggleLockRun()">'+(LOCK.running?icf('pause',28):icf('play',28))+'</button><button class="iconbtn" style="height:56px;width:56px" onclick="'+(S.music.active==='local'?'musicTogglePlay()':'go(\'/music\')')+'">'+ic('headphones',22)+'</button></div><div class="card padc mt6" style="width:100%;max-width:340px"><div class="f g3 aic"><span class="iconbtn" style="background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',18)+'</span><div class="grow minw"><p class="txs muted">'+(currentTrackSub()||'Music')+'</p><p class="txm semi trunc">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active==='local'?'<button class="iconbtn" onclick="musicTogglePlay()">'+(S.music.playing?ic('pause',16):ic('play',16))+'</button>':'<button class="iconbtn" onclick="go(\'/music\')">'+ic('chevR',16)+'</button>')+'</div></div>'+(LOCK.strict?'<p class="txs muted mt5 center">Strict Mode active — stay with it until the timer ends.</p>':'')+'</div></div>';
+  return '<div class="'+bg+'"><div class="hdr" style="border-color:rgba(255,255,255,.06)"><div class="grow minw"><h1 class="txl semi trunc" style="color:'+s.color+'">'+esc(s.code)+' · '+esc(s.name)+'</h1><p class="txs muted">'+(LOCK.strict?'Strict Mode · ':'')+(LOCK.mode==='room'?'Room Focus':'Solo Lock-In')+'</p></div>'+(LOCK.strict?'':'<button class="iconbtn" onclick="abandonLock()">'+nbBoldIcon('x',18)+'</button>')+'</div><div class="main fc aic jc" style="padding:24px"><div class="ring-wrap"><svg viewBox="0 0 300 300"><circle cx="150" cy="150" r="'+R+'" fill="none" stroke="rgba(148,163,184,.22)" stroke-width="14"/><circle id="ring" cx="150" cy="150" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="14" stroke-linecap="round" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C-pct*C)+'"/></svg><div class="ring-center"><span id="timerText" class="ring-time" style="color:'+s.color+'">'+fmtTime(LOCK.left)+'</span><span class="txs muted mt1">'+Math.round(LOCK.duration/60)+'-minute session</span></div></div><div class="f g4 aic mt6"><button class="iconbtn" style="height:56px;width:56px" onclick="resetLock()">'+nbBoldIcon('reset',22)+'</button><button class="playbtn" style="width:72px;height:72px;background:'+s.color+';box-shadow:0 10px 30px '+s.color+'55" onclick="toggleLockRun()">'+(LOCK.running?nbBoldIconFilled('pause',28):nbBoldIconFilled('play',28))+'</button><button class="iconbtn" style="height:56px;width:56px" onclick="'+(S.music.active==='local'?'musicTogglePlay()':'go(\'/music\')')+'">'+nbBoldIcon('headphones',22)+'</button></div><div class="card padc mt6" style="width:100%;max-width:340px"><div class="f g3 aic"><span class="iconbtn" style="background:rgba(167,139,250,.15);color:#A78BFA">'+nbBoldIcon('headphones',18)+'</span><div class="grow minw"><p class="txs muted">'+(currentTrackSub()||'Music')+'</p><p class="txm semi trunc">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active==='local'?'<button class="iconbtn" onclick="musicTogglePlay()">'+(S.music.playing?nbBoldIcon('pause',16):nbBoldIcon('play',16))+'</button>':'<button class="iconbtn" onclick="go(\'/music\')">'+nbBoldIcon('chevR',16)+'</button>')+'</div></div>'+(LOCK.strict?'<p class="txs muted mt5 center">Strict Mode active — stay with it until the timer ends.</p>':'')+'</div></div>';
 }
 function lockDone(s){
   var mins=Math.round(LOCK.duration/60);
-  return '<div class="lockin"><div class="hdr"><div class="grow"><h1 class="txl semi">Session complete</h1></div></div><div class="main fc aic jc" style="padding:28px;text-align:center"><div style="font-size:56px">🎉</div><h2 class="tx2 bold mt3">Nice work!</h2><p class="txm muted mt2">Your '+mins+'-minute Lock-In was written to <span class="semi" style="color:'+s.color+'">'+esc(s.code)+'</span>.</p><div class="card padc mt5" style="width:100%;max-width:340px"><div class="f jb aic mb2"><span class="txs muted">Session length</span><span class="txm semi">'+mins+' min</span></div><div class="hr mb2"></div><div class="f jb aic mb2"><span class="txs muted">Total logged</span><span class="txm semi">'+fmtHours(s.loggedSeconds)+'</span></div><div class="hr mb2"></div><div class="f jb aic"><span class="txs muted">Course progress</span><span class="txm semi" style="color:'+s.color+'">'+s.progress+'%</span></div></div><div class="f g3 mt6" style="width:100%;max-width:340px"><button class="btn btn-secondary grow" onclick="lockAgain()">'+ic('reset',18)+' Again</button><button class="btn btn-primary grow" onclick="go(\'/study/'+s.id+'\')">Done</button></div></div></div>';
+  return '<div class="lockin"><div class="hdr"><div class="grow"><h1 class="txl semi">Session complete</h1></div></div><div class="main fc aic jc" style="padding:28px;text-align:center"><div class="nb-lock-complete-icon">' + nbBoldIcon('award',64) + '</div><h2 class="tx2 bold mt3">Nice work!</h2><p class="txm muted mt2">Your '+mins+'-minute Lock-In was written to <span class="semi" style="color:'+s.color+'">'+esc(s.code)+'</span>.</p><div class="card padc mt5" style="width:100%;max-width:340px"><div class="f jb aic mb2"><span class="txs muted">Session length</span><span class="txm semi">'+mins+' min</span></div><div class="hr mb2"></div><div class="f jb aic mb2"><span class="txs muted">Total logged</span><span class="txm semi">'+fmtHours(s.loggedSeconds)+'</span></div><div class="hr mb2"></div><div class="f jb aic"><span class="txs muted">Course progress</span><span class="txm semi" style="color:'+s.color+'">'+s.progress+'%</span></div></div><div class="f g3 mt6" style="width:100%;max-width:340px"><button class="btn btn-secondary grow" onclick="lockAgain()">'+nbBoldIcon('reset',18)+' Again</button><button class="btn btn-primary grow" onclick="go(\'/study/'+s.id+'\')">Done</button></div></div></div>';
 }
 function setLockDuration(m){LOCK.duration=m*60;LOCK.left=m*60;render();}
 function setLockMode(m){LOCK.mode=m;render();}

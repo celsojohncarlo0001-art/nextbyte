@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v4-cloud-file-recovery';
+const CACHE_VERSION = 'nexbyte-pwa-v5-bold-outline-icons';
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',

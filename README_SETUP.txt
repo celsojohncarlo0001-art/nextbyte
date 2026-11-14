@@ -1,39 +1,23 @@
-NEXTBYTE CLOUD FILE RECOVERY + STORAGE DELETE FIX
+# NEXTBYTE Bold Outline Icon Redesign
 
-WHAT WAS FOUND
-Supabase Storage already contained uploaded study-file objects, but the subject records in user_workspaces had empty materials and syllabusFiles arrays. The application therefore had file bytes in Storage but no workspace references to display in Study Hub.
+## What changed
+- Added a reusable inline SVG Bold Outline Flat Vector icon helper inspired by the supplied clock reference: thick dark outlines, rounded shapes, flat pastel fills and accent colors.
+- Applied the new icon family to the standalone Lock-In Workspace and Music screen, including music library rows and playback controls.
+- Added scoped visual polish to Lock-In and Music cards, controls, chips and buttons.
+- Kept the existing bottom navigation bar unchanged.
+- Kept Home, Study Hub, Study Rooms (including its quiz/whiteboard tabs), Notes, Tasks and Profile renderers unchanged.
+- Kept the existing Supabase integration, upload/storage logic, cloud-file manager, background image, PWA manifest, service worker and icons.
 
-WHAT THIS BUILD CHANGES
-1. After sign-in, NEXTBYTE lists each current subject's private user-study-files folders and reconstructs missing material/syllabus references from existing Storage objects.
-2. Recovered references are saved back into the signed-in user's user_workspaces row, then the app refreshes so the files appear in Study Hub.
-3. Older direct subject-folder uploads (userId/subjectId/filename) are recovered as study materials.
-4. Profile > Settings now includes Manage cloud files. It lists the signed-in user's accessible study files, music, and shared-room files, including unlinked older uploads.
-5. The manager provides Open, Download, and Delete from cloud actions. Deletion removes the actual Supabase Storage object and removes its workspace or room-message reference when one exists.
-6. The service-worker cache version is increased so devices fetch the updated app shell.
-7. Existing per-item Delete/Remove actions in Materials, Syllabus, Music, and Shared Room Files remain available.
+## Protected sections
+The redesign intentionally does not touch Home, Study Hub, Study Rooms, Notes, Tasks, Profile or the bottom navigation. Quiz and whiteboard tools live inside the protected Study Rooms section in this version, and therefore remain unchanged. Settings are within the protected Profile section and remain unchanged.
 
-IMPORTANT STORAGE NOTE
-Deleting the app shortcut or uninstalling the PWA from a phone does NOT delete files stored in Supabase. To reduce Supabase Storage usage, use Profile > Settings > Manage cloud files > Delete from cloud, or delete a file from its relevant Materials/Syllabus/Music/Room list.
+## Deploy
+1. Back up the current GitHub repository.
+2. Replace only `index.html` using the file in this package.
+3. Keep your configured `supabase-config.js` from GitHub. This package intentionally does not contain a credentials file.
+4. Keep `manifest.webmanifest`, `sw.js`, `icon-192.png`, `icon-512.png`, and `nexbyte-background.png` in the repository root. Use the included copies only if you need to restore them.
+5. Commit to `main` and wait for the Vercel deployment to become Ready.
+6. Open the website online and refresh. If the old styles remain cached, close the old tab and reopen the site.
 
-SUPABASE
-No new SQL migration is required for this fix. The connected NEXTBYTE project was inspected: user-study-files, user-music, and study-room-files buckets exist as private buckets; authenticated Storage policies for personal study/music files and room-member access policies are already present. Keep RLS enabled. Do not add a service-role key to the browser.
-
-DEPLOY
-1. Back up your GitHub repository.
-2. On the main branch, replace index.html with this package's index.html.
-3. Replace sw.js and manifest.webmanifest.
-4. Keep icon-192.png, icon-512.png, and nexbyte-background.png in the repository root beside index.html.
-5. Keep your current supabase-config.js unchanged. It is intentionally not included in this ZIP so your real public project configuration is not overwritten.
-6. Keep schema.sql and all existing SQL migration files.
-7. Commit to main and wait for Vercel to report Ready.
-8. Close existing NEXTBYTE browser tabs fully, reopen the deployed app online, and sign in. The app will attempt to recover missing file references once per account per page load. You can also use Profile > Settings > Manage cloud files > Recover missing subject files.
-
-TEST
-1. Open Study Hub > a subject > Materials. Previously uploaded files under that subject should be restored into the list.
-2. Open the subject's Syllabus tab and check recovered syllabus attachments.
-3. Open Profile > Settings > Manage cloud files. Check that the storage objects appear, including any files from old/deleted subjects marked as Unlinked / older subject.
-4. Delete a test file from the manager and confirm it disappears from Storage and from its subject/music/room reference.
-5. Upload a new small PDF, refresh, and confirm it still appears.
-
-VERIFICATION STATUS
-Static JavaScript syntax, HTML parsing, manifest JSON, service-worker syntax, image dimensions, and ZIP integrity were checked. Supabase tables, bucket existence, and relevant Storage policies were inspected read-only. A live authenticated browser upload/delete test was not performed here; verify it after deployment.
+## Validation
+Static syntax and HTML checks are included in the handoff. Live visual comparison on the user's devices and live interaction testing still need to be performed.
