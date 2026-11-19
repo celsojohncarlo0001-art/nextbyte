@@ -130,7 +130,6 @@ create index if not exists study_room_boards_room_created_idx
 
 -- Realtime clients receive complete new row values for board updates.
 alter table public.study_room_boards replica identity full;
-alter table public.study_room_boards replica identity full;
 alter table public.study_room_boards enable row level security;
 revoke all on table public.study_room_boards from anon, public;
 grant select, insert, update, delete on table public.study_room_boards to authenticated;

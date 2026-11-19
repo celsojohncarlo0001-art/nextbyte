@@ -810,6 +810,9 @@ var ACHIEVEMENTS=[
 ];
 
 var KEY='nexbyte_v3';
+/* Stores only the last locally authenticated account ID so its cached workspace can
+   be reopened when the PWA starts offline and the remote SDK cannot load. */
+var LAST_AUTH_USER_KEY='nexbyte_last_authenticated_user';
 var SUPABASE_URL=window.NEXBYTE_SUPABASE_URL||'';
 var SUPABASE_ANON_KEY=window.NEXBYTE_SUPABASE_ANON_KEY||'';
 var dbClient=(window.supabase&&SUPABASE_URL&&SUPABASE_ANON_KEY)?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
@@ -853,6 +856,9 @@ function cacheWorkspaceSnapshot(){
     var payload=clone(S);
     payload.auth={isAuthenticated:!!S.auth.isAuthenticated,user:S.auth.user||null};
     localStorage.setItem(workspaceCacheKey(userId),JSON.stringify({savedAt:Date.now(),state:payload}));
+    if(S.auth&&S.auth.isAuthenticated&&S.auth.user&&S.auth.user.id){
+      localStorage.setItem(LAST_AUTH_USER_KEY,String(S.auth.user.id));
+    }
     return true;
   }catch(error){console.warn('Local workspace cache could not be updated:',error);return false;}
 }
@@ -957,7 +963,23 @@ async function loadWorkspace(user){
    /dashboard instead of leaving the user on /login or /welcome.
    ============================================================ */
 async function bootstrapAuth(){
-  if(!dbClient){render();return;}
+  if(!dbClient){
+    /* The Supabase SDK is served from a CDN. When the device is offline before
+       that script loads, restore the last account-scoped local snapshot instead
+       of showing an empty guest workspace. Cloud operations remain unavailable
+       until the browser reconnects and reloads the app. */
+    var cachedUserId=null;
+    try{cachedUserId=localStorage.getItem(LAST_AUTH_USER_KEY);}catch(storageError){console.warn('Offline account marker could not be read:',storageError);}
+    if(cachedUserId&&restoreWorkspaceSnapshot(cachedUserId)){
+      if(typeof applyTheme==='function')applyTheme();
+      render();
+      toast(typeof navigator!=='undefined'&&!navigator.onLine?'Offline mode: showing the last workspace saved on this device. Reconnect and reload to sync.':'Supabase could not initialize. Showing the last workspace saved on this device.');
+    }else{
+      render();
+      if(SUPABASE_URL&&SUPABASE_ANON_KEY)toast('The Supabase client could not load. Check your connection and reload.');
+    }
+    return;
+  }
   try{
     var result=await dbClient.auth.getSession();
     if(result.error)throw result.error;
@@ -971,6 +993,7 @@ async function bootstrapAuth(){
     dbClient.auth.onAuthStateChange(function(event,session){
       if(event==='SIGNED_OUT'){
         clearTimeout(saveTimer);clearTimeout(SAVE_TIMER);
+        try{localStorage.removeItem(LAST_AUTH_USER_KEY);}catch(storageError){console.warn('Offline account marker could not be cleared:',storageError);}
         S=defaultState();NOTE_DIRTY=false;render();
       }else if(session&&event==='SIGNED_IN'){
         setTimeout(async function(){
@@ -1552,7 +1575,9 @@ async function doLogout(){
   confirmSheet({title:'Sign out?',message:'Your saved workspace remains in your account.',confirmLabel:'Sign out',danger:false,onConfirm:async function(){
     stopMusic();
     NOTE_DIRTY=false;                /* FIX 10 */
-    if(dbClient)await dbClient.auth.signOut();S=defaultState();render();go('/welcome');
+    if(dbClient)await dbClient.auth.signOut();
+    try{localStorage.removeItem(LAST_AUTH_USER_KEY);}catch(storageError){console.warn('Offline account marker could not be cleared:',storageError);}
+    S=defaultState();render();go('/welcome');
   }});
 }
 
@@ -3193,6 +3218,8 @@ async function deleteRoomAny(id){
   }
   function nbOpenSignedFile(bucket, path, fileName, download) {
     if (!dbClient || !path) { toast('The file reference is missing.'); return; }
+    var openedWindow=null;
+    if(!download){try{openedWindow=window.open('about:blank','_blank');if(openedWindow)openedWindow.opener=null;}catch(popupError){console.warn('Could not open a new tab:',popupError);}}
     (async function () {
       try {
         await requireMusicUser();
@@ -3200,8 +3227,11 @@ async function deleteRoomAny(id){
         if (result.error) throw result.error;
         var url = result.data && result.data.signedUrl;
         if (!url) throw new Error('Supabase did not return a file link.');
-        window.open(url, '_blank', 'noopener,noreferrer');
+        if(download) window.location.assign(url);
+        else if(openedWindow&&!openedWindow.closed) openedWindow.location.replace(url);
+        else window.location.assign(url);
       } catch (error) {
+        if(openedWindow&&!openedWindow.closed)openedWindow.close();
         console.error('Could not open file', error);
         toast('Could not open file: ' + ((error && error.message) || 'Unknown error'));
       }
@@ -3209,13 +3239,21 @@ async function deleteRoomAny(id){
   }
   window.nbOpenRoomFile = async function (roomId, path, download) {
     if (!path || String(path).split('/')[0] !== String(roomId)) { toast('Invalid room file reference.'); return; }
+    var openedWindow=null;
+    if(!download){try{openedWindow=window.open('about:blank','_blank');if(openedWindow)openedWindow.opener=null;}catch(popupError){console.warn('Could not open a new tab:',popupError);}}
     try {
       await nbRequireSupabaseUser();
       var result = await dbClient.storage.from('study-room-files').createSignedUrl(path, 3600, download ? { download: true } : {});
       if (result.error) throw result.error;
       if (!result.data || !result.data.signedUrl) throw new Error('Supabase did not return a file link.');
-      window.open(result.data.signedUrl, '_blank', 'noopener,noreferrer');
-    } catch (error) { console.error('Room file open failed:', error); toast('Could not open the shared file: ' + ((error && error.message) || 'Check room membership and file permissions.')); }
+      if(download) window.location.assign(result.data.signedUrl);
+      else if(openedWindow&&!openedWindow.closed) openedWindow.location.replace(result.data.signedUrl);
+      else window.location.assign(result.data.signedUrl);
+    } catch (error) {
+      if(openedWindow&&!openedWindow.closed)openedWindow.close();
+      console.error('Room file open failed:', error);
+      toast('Could not open the shared file: ' + ((error && error.message) || 'Check room membership and file permissions.'));
+    }
   };
 
   function nbReadWorkspaceCache(userId) {
@@ -3296,6 +3334,13 @@ async function deleteRoomAny(id){
   window.addEventListener('online', function () {
     if (S && S.auth && S.auth.isAuthenticated && nbUserId()) {
       setTimeout(function () { window.saveWorkspaceNow().then(function (result) { if (!result.ok) console.warn('NEXTBYTE reconnect sync is pending:', result.error); }); }, 300);
+    }
+  });
+  window.addEventListener('online',function(){
+    if(!dbClient){
+      /* Re-fetch the external Supabase client after an offline startup. The
+         account snapshot remains in localStorage and loadWorkspace will merge it. */
+      setTimeout(function(){ if(!dbClient) window.location.reload(); },500);
     }
   });
 
@@ -5275,14 +5320,21 @@ async function deleteRoomAny(id){
   window.nbOpenCloudFileAt = async function (index, download) {
     var file = NB_CLOUD_FILE_CACHE[Number(index)];
     if (!file || !dbClient) { toast('File is no longer in the current list. Refresh and try again.'); return; }
+    var openedWindow=null;
+    if(!download){try{openedWindow=window.open('about:blank','_blank');if(openedWindow)openedWindow.opener=null;}catch(popupError){console.warn('Could not open a new tab:',popupError);}}
     try {
       await nbRequireSupabaseUser();
       var result = await dbClient.storage.from(file.bucket).createSignedUrl(file.path, 3600, download ? { download: file.name } : {});
       if (result.error) throw result.error;
       if (!result.data || !result.data.signedUrl) throw new Error('Supabase did not return a file link.');
-      if (download) window.location.href = result.data.signedUrl;
-      else window.open(result.data.signedUrl, '_blank', 'noopener,noreferrer');
-    } catch (error) { console.error('Cloud file open failed:', error); toast('Could not open file: ' + (error.message || 'Check your Storage permissions.')); }
+      if (download) window.location.assign(result.data.signedUrl);
+      else if(openedWindow&&!openedWindow.closed) openedWindow.location.replace(result.data.signedUrl);
+      else window.location.assign(result.data.signedUrl);
+    } catch (error) {
+      if(openedWindow&&!openedWindow.closed)openedWindow.close();
+      console.error('Cloud file open failed:', error);
+      toast('Could not open file: ' + (error.message || 'Check your Storage permissions.'));
+    }
   };
 
   window.nbDeleteCloudFileAt = function (index) {
@@ -5294,23 +5346,32 @@ async function deleteRoomAny(id){
       confirmLabel: 'Delete from cloud', danger: true,
       onConfirm: async function () {
         try {
-          var user = await nbRequireSupabaseUser();
-          if (file.bucket === 'study-room-files') {
-            var roomId = String(file.path).split('/')[0];
-            var rows = await dbClient.from('study_room_messages').select('id,body').eq('room_id', roomId);
-            if (rows.error) throw rows.error;
-            var matching = (rows.data || []).filter(function (row) {
-              var body = String(row.body || '');
-              if (body.indexOf('NB_SHARED_V1:') !== 0) return false;
-              try { return JSON.parse(body.slice(13)).filePath === file.path; } catch (_) { return false; }
-            });
-            for (var i = 0; i < matching.length; i++) {
-              var deletedRow = await dbClient.from('study_room_messages').delete().eq('id', matching[i].id).eq('room_id', roomId).select('id').maybeSingle();
-              if (deletedRow.error) throw deletedRow.error;
-            }
-          }
+          await nbRequireSupabaseUser();
+          /* Delete the actual Storage object first. Previously the room message
+             reference was deleted before Storage; if Storage then rejected the
+             request, the binary became an unlisted orphan with no app reference. */
           var removed = await dbClient.storage.from(file.bucket).remove([file.path]);
           if (removed.error) throw removed.error;
+          var roomMetadataCleanupFailed = false;
+          if (file.bucket === 'study-room-files') {
+            var roomId = String(file.path).split('/')[0];
+            try {
+              var rows = await dbClient.from('study_room_messages').select('id,body').eq('room_id', roomId);
+              if (rows.error) throw rows.error;
+              var matching = (rows.data || []).filter(function (row) {
+                var body = String(row.body || '');
+                if (body.indexOf('NB_SHARED_V1:') !== 0) return false;
+                try { return JSON.parse(body.slice(13)).filePath === file.path; } catch (_) { return false; }
+              });
+              for (var i = 0; i < matching.length; i++) {
+                var deletedRow = await dbClient.from('study_room_messages').delete().eq('id', matching[i].id).eq('room_id', roomId).select('id').maybeSingle();
+                if (deletedRow.error) throw deletedRow.error;
+              }
+            } catch (metadataError) {
+              roomMetadataCleanupFailed = true;
+              console.warn('The Storage object was deleted, but its room message reference could not be cleaned:', metadataError);
+            }
+          }
 
           var stateChanged = false;
           if (file.bucket === 'user-study-files') {
@@ -5341,7 +5402,9 @@ async function deleteRoomAny(id){
               toast('The cloud file was deleted, but its workspace reference could not sync yet. Reopen NEXTBYTE online to finish syncing.');
             }
           }
-          toast('File deleted from Supabase Storage. Cloud space has been freed.');
+          toast(roomMetadataCleanupFailed
+            ? 'File deleted from Supabase Storage, but its room reference could not be cleaned. Refresh the room after checking message permissions.'
+            : 'File deleted from Supabase Storage. Cloud space has been freed.');
           await refreshCloudManager(document.querySelector('.sheet') || document);
           if (typeof resolve === 'function' && resolve().view === 'room') {
             var currentRoom = (S.rooms || []).filter(function (room) { return String(room.id) === String(resolve().id); })[0];

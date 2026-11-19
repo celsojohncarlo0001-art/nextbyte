@@ -1,39 +1,38 @@
-NEXTBYTE CLOUD FILE RECOVERY + STORAGE DELETE FIX
+NEXTBYTE — REPAIR PACKAGE SETUP
 
-WHAT WAS FOUND
-Supabase Storage already contained uploaded study-file objects, but the subject records in user_workspaces had empty materials and syllabusFiles arrays. The application therefore had file bytes in Storage but no workspace references to display in Study Hub.
+BEFORE YOU START
+1. Back up the current GitHub repository and Supabase database.
+2. Keep the existing supabase-config.js project URL and public anon/publishable key. Do not replace it with a service-role key.
+3. Do not delete existing Supabase tables, buckets, user rows, or policies without reviewing them.
 
-WHAT THIS BUILD CHANGES
-1. After sign-in, NEXTBYTE lists each current subject's private user-study-files folders and reconstructs missing material/syllabus references from existing Storage objects.
-2. Recovered references are saved back into the signed-in user's user_workspaces row, then the app refreshes so the files appear in Study Hub.
-3. Older direct subject-folder uploads (userId/subjectId/filename) are recovered as study materials.
-4. Profile > Settings now includes Manage cloud files. It lists the signed-in user's accessible study files, music, and shared-room files, including unlinked older uploads.
-5. The manager provides Open, Download, and Delete from cloud actions. Deletion removes the actual Supabase Storage object and removes its workspace or room-message reference when one exists.
-6. The service-worker cache version is increased so devices fetch the updated app shell.
-7. Existing per-item Delete/Remove actions in Materials, Syllabus, Music, and Shared Room Files remain available.
-
-IMPORTANT STORAGE NOTE
-Deleting the app shortcut or uninstalling the PWA from a phone does NOT delete files stored in Supabase. To reduce Supabase Storage usage, use Profile > Settings > Manage cloud files > Delete from cloud, or delete a file from its relevant Materials/Syllabus/Music/Room list.
-
-SUPABASE
-No new SQL migration is required for this fix. The connected NEXTBYTE project was inspected: user-study-files, user-music, and study-room-files buckets exist as private buckets; authenticated Storage policies for personal study/music files and room-member access policies are already present. Keep RLS enabled. Do not add a service-role key to the browser.
+SUPABASE SQL ORDER
+1. schema.sql — run only if public.user_workspaces is missing.
+2. NEXBYTE_ROOM_SCHEMA.sql — run only if the shared-room base tables are missing. This creates missing study_rooms, study_room_members, study_room_messages, and join_study_room_by_code. It uses CREATE TABLE IF NOT EXISTS and does not drop or truncate existing data. If a same-named table already exists with different columns, stop and compare the schema first.
+3. NEXBYTE_ENHANCEMENTS.sql — run after the room base tables exist. It applies access policies, whiteboard storage, private room-file policies, and Realtime publication entries.
+4. NEXBYTE_UPLOAD_STORAGE_FIX.sql — review and run only if personal study/music buckets or policies need repair. Existing permissive policies can still allow broader access because Supabase permissive policies are OR-combined.
 
 DEPLOY
-1. Back up your GitHub repository.
-2. On the main branch, replace index.html with this package's index.html.
-3. Replace sw.js and manifest.webmanifest.
-4. Keep icon-192.png, icon-512.png, and nexbyte-background.png in the repository root beside index.html.
-5. Keep your current supabase-config.js unchanged. It is intentionally not included in this ZIP so your real public project configuration is not overwritten.
-6. Keep schema.sql and all existing SQL migration files.
-7. Commit to main and wait for Vercel to report Ready.
-8. Close existing NEXTBYTE browser tabs fully, reopen the deployed app online, and sign in. The app will attempt to recover missing file references once per account per page load. You can also use Profile > Settings > Manage cloud files > Recover missing subject files.
+1. Deploy every file in this package together from the repository root to Vercel over HTTPS.
+2. Keep index.html, supabase-config.js, sw.js, manifest.webmanifest, icon-192.png, icon-512.png, nexbyte-background.png, and nextbyte-background.png in their current relative locations.
+3. Commit to the Vercel-connected branch and wait for Ready.
+4. Open NEXTBYTE online once, sign in, then refresh once after the service worker updates.
+5. To check offline startup, first sign in and let the workspace save on the device. Then test offline on that same device. Offline snapshots do not authenticate new devices and do not include online-only cloud operations.
 
-TEST
-1. Open Study Hub > a subject > Materials. Previously uploaded files under that subject should be restored into the list.
-2. Open the subject's Syllabus tab and check recovered syllabus attachments.
-3. Open Profile > Settings > Manage cloud files. Check that the storage objects appear, including any files from old/deleted subjects marked as Unlinked / older subject.
-4. Delete a test file from the manager and confirm it disappears from Storage and from its subject/music/room reference.
-5. Upload a new small PDF, refresh, and confirm it still appears.
+REPAIRS IN THIS BUILD
+- Restores the last cached account workspace at offline startup when the Supabase JS CDN cannot load, using a local per-account snapshot on that device.
+- Clears the remembered local account marker on sign-out.
+- Reloads the app when connectivity returns after an offline startup, so Supabase can initialize and cloud sync can resume.
+- Reserves the file-open browser tab before waiting for signed-URL generation to reduce popup blocking.
+- Deletes a room Storage object before removing its shared message reference, to avoid losing the reference if Storage rejects deletion.
+- Adds NEXBYTE_ROOM_SCHEMA.sql for missing base room tables and join_study_room_by_code.
+- Updates service worker cache version to fetch the repaired shell.
 
-VERIFICATION STATUS
-Static JavaScript syntax, HTML parsing, manifest JSON, service-worker syntax, image dimensions, and ZIP integrity were checked. Supabase tables, bucket existence, and relevant Storage policies were inspected read-only. A live authenticated browser upload/delete test was not performed here; verify it after deployment.
+KNOWN LIMITATIONS
+- A live Supabase authenticated test and Vercel deployment were not possible in this repair environment. Complete the post-deployment checks in TESTING_REPORT.md.
+- Workspace is a single JSONB document; concurrent edits from multiple devices can overwrite newer data (last-write-wins).
+- Room quizzes are practice-only; answer keys are visible to room members.
+- Whiteboards synchronize whole-canvas snapshots, not individual strokes. Concurrent drawing can overwrite the latest snapshot.
+- Room Lock-In publishes member focus status, not a shared authoritative timer. Music remains local to each device.
+- Notification preferences save, but push/email notification delivery is not wired by this package.
+- Cloud files require network access; local offline file downloads are device-specific.
+- Review existing RLS policies before applying migrations; permissive policies OR together.

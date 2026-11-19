@@ -1,39 +1,52 @@
 # NEXTBYTE — Academic Collaboration Environment
 
-NEXTBYTE is a single-page academic workspace built with HTML, CSS, JavaScript, and Supabase. This repository version preserves the existing interface and Supabase account configuration and adds a repair layer for persistence, subject files, syllabus attachments, task details, shared-room activities, quizzes, whiteboards, music behavior, and PWA installation.
+NEXTBYTE is a single-page academic workspace built with HTML, CSS, JavaScript, and Supabase. This repair package keeps the existing application architecture and protected navigation areas while addressing offline startup recovery, cloud file handling, shared-room database setup, and deployment documentation.
 
-## Deployment
+## Deployment and Supabase setup
 
-1. Deploy the repository root to Vercel over HTTPS.
-2. Keep `supabase-config.js` beside `index.html`. It must contain only the Supabase project URL and public anon/publishable key. Never add a service-role or secret key to browser code.
-3. Keep `manifest.webmanifest`, `sw.js`, `icon-192.png`, and `icon-512.png` in the repository root.
-4. Run `schema.sql` only if the personal `user_workspaces` table has not already been created.
-5. Review and run `NEXBYTE_ENHANCEMENTS.sql` in the Supabase SQL Editor to add the dedicated multi-whiteboard table and the accompanying room/storage policies. Back up first and review any older policies that may be more permissive.
-6. Commit changes to the branch connected to Vercel and wait for the deployment to show **Ready**.
+1. Back up the current repository and Supabase database before deployment.
+2. Deploy the repository root to Vercel over HTTPS. Keep `index.html`, `supabase-config.js`, `manifest.webmanifest`, `sw.js`, both icon files, and the background image assets in the same root folder.
+3. Keep the existing `supabase-config.js` project URL and public publishable/anon key. It contains frontend configuration only; never add a service-role key or other secret to browser code.
+4. In Supabase SQL Editor, inspect the existing tables first. If `user_workspaces` is missing, run `schema.sql`.
+5. If the shared-room base tables are missing, review and run `NEXBYTE_ROOM_SCHEMA.sql`. It creates missing `study_rooms`, `study_room_members`, and `study_room_messages` tables plus the invite-code join RPC. It does not drop or truncate existing rows. If same-named tables already exist with a different schema, compare their columns before running it.
+6. Run `NEXBYTE_ENHANCEMENTS.sql` after the base room tables exist. It applies room/member/message access policies, the whiteboard table and policies, room-file storage policies, and Realtime publication entries.
+7. Review `NEXBYTE_UPLOAD_STORAGE_FIX.sql` separately. Run it only if the relevant personal storage buckets or policies are missing or need repair. Supabase permissive policies are OR-combined, so inspect and remove obsolete broad policies deliberately rather than adding policies blindly.
+8. Commit the source changes to the branch connected to Vercel and wait for the deployment to show **Ready**. Open the deployed site online once so the new service worker can install and cache the app shell.
 
-For the detailed setup steps, supported upload formats, limits, testing checklist, and known limitations, read `README_SETUP.txt`.
+See `README_SETUP.txt` and `TESTING_REPORT.md` for known limitations, verification status, and post-deployment checks.
 
-## Features in this repair build
+## Existing application modules retained
 
-- Supabase authentication and per-user workspace persistence.
-- Local account-scoped recovery snapshots and queued cloud saves.
-- Subject materials and separate syllabus file attachments.
-- Detailed personal tasks and status tracking.
-- Solo and Room Lock-In descriptions, with member focus status in shared rooms.
-- Shared room messages, tasks with individual member responses, notes, and files.
-- Configurable room practice quizzes with multiple question types.
-- Multiple persistent room whiteboards, fullscreen drawing tools, and Realtime refresh.
-- Adjustable Notes editor text size.
-- Music pause when the app is backgrounded, with track/position restoration for manual resume.
-- Installable PWA manifest, icons, and service-worker app-shell caching.
+- Home dashboard and bottom navigation.
+- Study Hub, subject materials, syllabus attachments, notes, and tasks.
+- Study Rooms, chat, shared tasks, shared notes, shared files, and member status.
+- Lock-In Workspace.
+- Music library and player.
+- Quiz Builder and practice participation.
+- Whiteboards.
+- Profile, settings, notifications, and cloud file manager.
+- Supabase authentication, workspace persistence, local snapshots, and PWA installation.
+
+## Repairs made in this package
+
+- Restore the last account-scoped local workspace when NEXTBYTE starts offline and the Supabase JavaScript CDN is unavailable, provided that account previously authenticated and saved a snapshot on that device.
+- Clear the local last-account marker when signing out.
+- Reload after connectivity returns from an offline startup so the Supabase client can initialize and normal cloud session/workspace recovery can resume.
+- Open cloud and room files in a browser tab reserved synchronously before the asynchronous signed-URL request, reducing popup-blocker failures.
+- Delete a shared-room Storage object before cleaning its message reference, avoiding an unlisted orphan when Storage deletion fails.
+- Add the missing shared-room base schema and secure invite-code RPC as a separate SQL migration.
+- Bump the PWA cache version so deployed devices fetch the repaired app shell.
 
 ## Important limitations
 
-- The app and SQL have not been deployed or executed against your live project as part of file generation. Test the actual Supabase policies and workflows before public use.
-- The personal workspace is still stored as one JSONB document; simultaneous edits from different devices can be last-write-wins.
-- Room quizzes are currently practice-only; answer keys are readable by room members. Do not use them for secure examinations.
-- Whiteboards save whole-canvas snapshots. Concurrent drawing can cause the latest snapshot to replace another user's latest drawing; stroke-level merge is not implemented.
-- Room Lock-In publishes each member's focus status, not a single synchronized server-authoritative timer. Music remains personal to each device.
-- Existing broad RLS policies may weaken newly added policies because permissive policies are OR-combined. Review the full policy list.
+- The code has not been deployed to your Vercel project or executed against your live Supabase database from this environment. Apply the SQL in the documented order and verify the real project after deployment.
+- The personal workspace is stored as one JSONB document. Simultaneous edits from different devices can still be last-write-wins.
+- Room quizzes are practice-only because answer keys are included in room-visible message data. Do not use them for secure examinations.
+- Whiteboards save whole-canvas snapshots. Concurrent drawing can cause a newer snapshot to replace another user's latest drawing; stroke-level merging is not implemented.
+- Room Lock-In shares each member's focus status, not a server-authoritative synchronized countdown timer. Music playback remains device-specific.
+- Notification preferences are stored, but external push/email delivery is not configured by this source package.
+- Account deletion from the authentication provider is not implemented as a client-side operation.
+- Offline account recovery uses a local snapshot on that device. Cloud data and private cloud files still require a network connection, and downloaded offline file copies do not automatically transfer to another device.
+- Existing permissive Supabase policies can weaken intended restrictions because permissive policies combine with OR semantics. Review the full policy list before public use.
 
-See `CHANGELOG.md` for the repair summary and `NEXBYTE_ENHANCEMENTS.sql` for the room/database migration.
+Do not describe any external integration as verified until the authenticated live test is complete.
