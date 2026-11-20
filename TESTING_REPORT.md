@@ -1,6 +1,6 @@
 # NEXTBYTE — Static Verification and Post-Deployment Test Report
 
-**Build date:** November 19, 2026  
+**Build date:** November 20, 2026  
 **Source:** `nextbyte-main.zip` uploaded in this conversation  
 **Verification type:** Static source and packaging checks; no live cloud deployment
 
@@ -76,3 +76,33 @@ After deploying the complete project to Vercel over HTTPS:
 - [ ] Review browser console and network logs for errors.
 
 **Status:** Static checks passed. Live integration and deployment acceptance checks remain pending. This report does not certify zero runtime errors.
+
+
+## Study Hub attachment repair — November 20, 2026
+
+| Check | Result | Notes |
+|---|---|---|
+| Per-subject Storage lookup source check | PASS | Subject entry triggers a Storage folder scan under the authenticated user's exact subject ID. |
+| Legacy attachment recovery logic | PASS (mocked) | A mocked Storage response recovered files from `materials/`, `syllabus/`, and the older direct subject-folder layout. |
+| Duplicate reference prevention | PASS (mocked) | Re-running the recovery scan added zero duplicate paths. |
+| Workspace persistence path | PASS (source review) | Newly recovered references are saved using the existing `saveWorkspaceNow()` workspace upsert; no new table was added. |
+| Filename overflow styling | PASS (source check) | Scoped flex sizing, `min-width: 0`, hidden overflow, ellipsis, and 44 px fixed-width action controls are applied to Study Hub attachments. |
+| Full filename accessibility | PASS (renderer test) | The generated attachment markup retains the complete filename in its `title` attribute, even for a long unbroken filename. |
+| Inline JavaScript syntax | PASS | All five inline script blocks and their concatenation passed `node --check` after this repair. |
+| CSS parsing | PASS | The inline stylesheet parsed without CSS syntax errors. |
+| Subject-entry scan trigger | PASS (mocked) | A route harness confirmed that entering a subject schedules one scan, ordinary rerenders do not repeat it, and leaving/re-entering schedules a fresh scan. |
+| Existing protected UI | Not browser-verified | Changes were scoped to subject attachment markup/styles and attachment loading logic. Browser visual regression testing requires a running app. |
+
+## Live checks still required
+
+The mocked Storage test verifies the recovery algorithm, not the user's live Supabase project. These checks remain unverified until deployment:
+
+- [ ] Upload a new PDF from Study Hub → open subject → Materials. Confirm it appears without leaving the subject.
+- [ ] Upload a very long filename, including one with no spaces. Confirm the card stays within its frame and all three action buttons remain visible.
+- [ ] Refresh and reopen the same subject. Confirm the attachment still appears.
+- [ ] Sign in to the same account on another device and open the subject. Confirm the file appears and can be opened/downloaded.
+- [ ] Confirm an existing Storage-only file is reattached automatically when its subject is opened, without using Manage Cloud Files.
+- [ ] Verify the `user-study-files` bucket is private and the existing Storage `SELECT` policy permits the authenticated owner to list only their own prefix.
+- [ ] Verify upload, open, download, and delete operations in the browser console and Network panel.
+
+**Current status:** Static and mocked-recovery checks passed. Live upload, storage policy, cross-device, and visual browser tests have not been performed. This does not certify zero runtime errors.

@@ -37,3 +37,24 @@
 - No authenticated browser session was available to test sign-in, Storage upload/download/delete, realtime room updates, multi-account permissions, or cross-device synchronization.
 - Browser automation was blocked in this environment; mobile/desktop UI interactions and console/network behavior must be checked after Vercel deployment.
 - No Vercel deployment was performed.
+
+
+## Study Hub attachment repair — November 20, 2026
+
+- Added automatic per-subject reconciliation with the private `user-study-files` Storage folder whenever a user enters a Study Hub subject. Legacy files that exist in Storage but are absent from the subject workspace list are attached to the matching subject automatically; Manage Cloud Files is no longer required for normal recovery.
+- Preserved exact subject-ID and authenticated-user folder matching (`<user-id>/<subject-id>/...`) and made recovery idempotent by checking the complete Storage path before inserting a workspace attachment reference.
+- Added an upload-independent recheck when a subject is entered, so previously uploaded materials and syllabus attachments can appear on a second device after signing into the same account.
+- Kept the existing workspace JSON schema and private Storage bucket. No new database table, bucket, or SQL migration was introduced.
+- Surfaced subject Storage-listing and permission failures through an on-screen message when the user is still viewing that subject, instead of leaving the failure only in the browser console.
+- Scoped the Study Hub attachment row layout so very long filenames truncate with an ellipsis inside the available text area, while the full filename remains available through the `title` attribute. File action buttons retain fixed widths on narrow screens.
+- Added dedicated responsive styles for Materials and Syllabus attachment cards without changing the protected navigation or unrelated sections.
+
+## Verification for this repair
+
+- All five inline JavaScript blocks passed Node.js syntax checking.
+- Service worker and Supabase configuration JavaScript passed syntax checking.
+- HTML parsed successfully; no duplicate static IDs were found.
+- A mocked Supabase Storage test confirmed recovery from `materials/`, `syllabus/`, and legacy root paths, and confirmed that a second scan does not create duplicate references.
+- Source checks confirmed per-subject scanning, subject path construction, accessible full-name titles, filename ellipsis styling, and fixed-width file action buttons.
+
+Live Supabase uploads, RLS, real cross-device behavior, and deployed mobile layout still require validation against the user's hosted Supabase and Vercel environment.

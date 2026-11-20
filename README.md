@@ -50,3 +50,14 @@ See `README_SETUP.txt` and `TESTING_REPORT.md` for known limitations, verificati
 - Existing permissive Supabase policies can weaken intended restrictions because permissive policies combine with OR semantics. Review the full policy list before public use.
 
 Do not describe any external integration as verified until the authenticated live test is complete.
+
+
+## Study Hub subject attachments
+
+When a user enters a subject, NEXTBYTE now checks that account's matching private Storage folder (`user-study-files/<user-id>/<subject-id>/`) and reconnects any existing `materials/`, `syllabus/`, or legacy root-level files that are missing from the subject's workspace list. References are deduplicated by full Storage path. New uploads continue to attach directly to the open subject and save through the existing `user_workspaces` record.
+
+No additional database migration is required for this repair. The existing `user-study-files` bucket must remain private, and the signed-in user's Storage `SELECT` policy must permit listing their own prefix. Review `NEXBYTE_UPLOAD_STORAGE_FIX.sql` if the project has not already been configured with the private bucket and owner-folder policies.
+
+Long attachment names are displayed with ellipsis inside the Study Hub card; hovering or focusing the filename exposes the complete text through its title attribute. File action controls remain visible on narrow layouts.
+
+For live verification, upload a disposable PDF from a subject, confirm that it appears immediately, refresh, then sign into the same account on a second device and open that subject. Also verify previously uploaded Storage files appear without opening Manage Cloud Files.
