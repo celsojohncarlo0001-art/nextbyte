@@ -88,3 +88,8 @@ Deploy the files in this project folder as the root of the existing Vercel proje
 ## Latest follow-up — Study Hub Add Task button
 
 The subject Tasks tab now uses a delegated click handler for its Add task controls and calls the enhanced global task editor directly. The buttons are explicit `type="button"` elements, so they cannot accidentally submit an enclosing form. If the editor is unavailable or fails to open, NEXTBYTE reports the issue rather than silently ignoring the click. See `TESTING_REPORT.md` for validation status.
+
+
+### Add Task runtime-error fix
+
+This build also includes a fix for the `nbProfileName is not defined` error in Study Hub → Subject → Tasks. The enhanced task editor now uses a profile-name helper defined in its own JavaScript scope. No SQL or Supabase configuration change is required.

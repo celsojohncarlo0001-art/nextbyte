@@ -130,3 +130,14 @@ Live Supabase Storage, real account policies, cross-device synchronization, and 
 - Explicitly synchronized the legacy global `openTaskSheet` identifier with the enhanced task editor function for other existing callers.
 - Bumped the PWA cache namespace to `nexbyte-pwa-v10-study-task-button-fix` so installed NEXTBYTE clients fetch the repaired task button logic.
 - No Supabase schema, Storage bucket, or user data changes were required.
+
+
+## November 20, 2026 — Study Hub Add Task runtime error correction
+
+- Fixed the actual runtime error reported by the user: `nbProfileName is not defined` when the Study Hub Add Task action opened the enhanced task editor.
+- Root cause: the profile-name helper was declared inside an earlier script's private IIFE, while the later task-editor repair layer called it from a different IIFE. The earlier helper was therefore not in scope.
+- Added a local `nbxProfileName()` helper inside the task-editor repair layer. It safely reads the current authenticated profile name and falls back to `Member` when the profile has no display name.
+- Replaced all five out-of-scope references in the enhanced task editor and Tasks renderer. The original helper references inside their original script closure remain unchanged.
+- Preserved Add Task subject preselection, task attachments, task saving, and the existing profile/authentication model.
+- Bumped the PWA cache namespace to `nexbyte-pwa-v11-task-profile-scope-fix` so installed clients request the corrected JavaScript.
+- No database migration, Storage bucket change, or user-data modification is required.

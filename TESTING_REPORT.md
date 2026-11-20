@@ -85,3 +85,29 @@ The following require the real Supabase project, authenticated user, and deploye
 ### Not verified in this environment
 
 A real interactive browser click through the deployed Vercel application, authenticated task creation, and Supabase workspace save were not available here. After deployment, open a subject → Tasks → Add task and verify that the task editor appears, then create a test task and confirm it remains after refresh.
+
+
+## Follow-up correction — `nbProfileName is not defined` in Study Hub Add Task
+
+| Check | Result | Notes |
+|---|---|---|
+| Root-cause inspection | PASS | Confirmed `nbProfileName()` was declared inside a separate earlier IIFE and was not visible to the later enhanced task-editor IIFE. |
+| Task-editor helper scope | PASS | Added `nbxProfileName()` inside the same IIFE as `window.openTaskSheet`. |
+| Leaked helper references | PASS | No `nbProfileName()` calls remain in the later IIFE; all five references now call the local helper. |
+| Legacy behavior | PASS (static) | Earlier `nbProfileName()` usages remain inside their original IIFE and are unchanged. |
+| PWA cache version | PASS | Updated to `nexbyte-pwa-v11-task-profile-scope-fix`. |
+| Inline JavaScript syntax | Pending final package check | Rechecked after the patch with Node.js below. |
+
+The root-cause correction is specifically for the error shown in the user's screenshot. The task editor now obtains the assignee's display name from the current `S.auth.user` within its own scope, falling back to `Member` when no profile name is available.
+
+Live Supabase task creation and deployment are still not verified in this local environment.
+
+
+### Final post-patch verification
+
+- All six inline script blocks passed `node --check` after the scope fix.
+- `sw.js` and the existing `supabase-config.js` passed `node --check`.
+- HTML parser and `manifest.webmanifest` JSON parsing passed.
+- Static scope assertion passed: the final Study Hub enhancement IIFE defines `nbxProfileName()` locally and contains zero calls to the out-of-scope `nbProfileName()` helper.
+- The local profile-name helper was exercised with a named profile, a displayName-only profile, and an empty profile; it returned the expected name or safe `Member` fallback.
+- Browser-driven interaction could not be completed because the local browser runtime blocked navigation to the test server (`ERR_BLOCKED_BY_ADMINISTRATOR`). Therefore, actual modal opening, task save, and Supabase persistence remain unverified until the updated project is deployed and tested on the user's site.
