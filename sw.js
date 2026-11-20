@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v7-materials-upload-live-state';
+const CACHE_VERSION = 'nexbyte-pwa-v8-study-hub-preview-folders';
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',

@@ -61,3 +61,19 @@ No additional database migration is required for this repair. The existing `user
 Long Materials names remain contained in their rows, with the full name available through the title attribute. Syllabus titles and original filenames wrap safely inside their card using a constrained grid layout, so they cannot cover the Syllabus badge or extend beyond the card. File action controls remain visible on narrow layouts. The missing external/open icon in the Materials row is now included. The PWA cache was also versioned again so installed devices can receive the immediate-upload correction.
 
 For live verification, upload a disposable PDF from a subject, confirm that it appears immediately, refresh, then sign into the same account on a second device and open that subject. Also verify previously uploaded Storage files appear without opening Manage Cloud Files.
+
+
+## Study Hub file preview and folder behavior
+
+The Study Hub Materials tab now organizes files by a category value stored in the existing `user_workspaces` JSON state. No new Storage bucket or SQL migration is required. Existing materials are categorized from their filename extension and stored MIME type when rendered, then cached as part of the next normal workspace save. The original Storage object paths are not renamed or moved.
+
+Supported in-app previews: PDF, PNG/JPG/JPEG/WEBP/GIF, TXT/Markdown, CSV, MP3/WAV/M4A/OGG. Word, PowerPoint, and Excel files display a message explaining that a compatible external application is needed; use the separate Download original action to open those files elsewhere.
+
+Open uses a private Supabase signed URL without the download option. Download requests a signed URL with a download filename. Both operations require the signed-in user to have access to the existing private `user-study-files` bucket.
+
+Materials are organized into logical folders per subject: All Files, PDF Documents, Images, Word Documents, Presentations, Spreadsheets, Text Files, Audio Files, and Other Files. Uploads from a category automatically select the detected category after upload. If the selected file does not match the folder currently open, it is placed in its detected category and a corresponding category selection is shown.
+
+
+### Deployment note
+
+Deploy the files in this project folder as the root of the existing Vercel project. Keep the existing `supabase-config.js`, project URL, and public anon/publishable key. The changes use the existing `user-study-files` private bucket and `user_workspaces` table; no SQL migration or new bucket is required. After deployment, open NEXTBYTE online once so the updated service worker (`nexbyte-pwa-v8-study-hub-preview-folders`) can install and activate.

@@ -5785,5 +5785,506 @@ async function deleteRoomAny(id){
 
 </script>
 
+
+<style id="nextbyte-study-hub-folders-preview-v1">
+.nbx-folder-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%;min-width:0}
+.nbx-folder-card{box-sizing:border-box;display:flex;align-items:center;gap:9px;min-width:0;width:100%;padding:12px;text-align:left;background:var(--card);border:1px solid var(--border);border-radius:16px;color:var(--fg)}
+.nbx-folder-card:active{transform:scale(.99)}
+.nbx-folder-icon{flex:0 0 38px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:var(--primary-soft);color:var(--primary-text);font-size:12px;font-weight:800}
+.nbx-folder-info{display:flex;flex:1 1 0;flex-direction:column;min-width:0;gap:3px}
+.nbx-folder-info strong{font-size:12px;line-height:1.25;overflow-wrap:anywhere}
+.nbx-folder-info small{font-size:10px;line-height:1.3;color:var(--muted-fg);overflow-wrap:anywhere}
+.nbx-folder-count{flex:0 0 auto;min-width:22px;height:22px;padding:0 5px;display:flex;align-items:center;justify-content:center;border-radius:999px;background:var(--secondary);font-size:10px;font-weight:700}
+.nbx-material-card{box-sizing:border-box;min-width:0;max-width:100%;overflow:hidden}
+.nbx-file-type-icon{flex:0 0 42px;width:42px;height:42px;color:var(--primary-text);background:var(--primary-soft)}
+.nbx-material-name{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word;line-height:1.35}
+.nbx-material-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;min-width:0}
+.nbx-material-actions .btn{min-height:36px;padding:0 10px;font-size:11px;gap:5px}
+.nbx-preview-title{overflow-wrap:anywhere;word-break:break-word}
+.nbx-preview-body{box-sizing:border-box;min-width:0;max-width:100%;max-height:64vh;min-height:180px;overflow:auto;border:1px solid var(--border);border-radius:14px;background:var(--bg)}
+.nbx-preview-frame{display:block;width:100%;height:62vh;min-height:360px;border:0;background:#fff}
+.nbx-preview-image{display:block;max-width:100%;max-height:62vh;object-fit:contain;margin:0 auto}
+.nbx-preview-audio{display:block;width:calc(100% - 24px);margin:24px 12px}
+.nbx-preview-text{margin:0;padding:14px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--fg)}
+.nbx-preview-table{border-collapse:collapse;width:max-content;min-width:100%;font-size:11px}
+.nbx-preview-table th,.nbx-preview-table td{padding:8px 10px;border:1px solid var(--border);text-align:left;vertical-align:top;max-width:240px;overflow-wrap:anywhere;white-space:pre-wrap}
+.nbx-preview-table th{position:sticky;top:0;background:var(--secondary);z-index:1}
+@media(max-width:390px){.nbx-folder-grid{gap:8px}.nbx-folder-card{padding:10px;gap:7px}.nbx-folder-icon{flex-basis:32px;width:32px;height:32px}.nbx-folder-info strong{font-size:11px}.nbx-folder-info small{font-size:9px}.nbx-material-actions .btn{flex:1 1 calc(50% - 7px)}}
+@media(min-width:600px){.nbx-preview-frame{height:68vh}.nbx-preview-body{max-height:70vh}}
+</style>
+
+<script>
+/* NEXTBYTE Study Hub enhancement layer — syllabus display, file preview, and folders.
+ * Uses the existing private user-study-files bucket and user_workspaces state.
+ * No extra buckets or schema migration are required.
+ */
+(function () {
+  'use strict';
+
+  var NBX_BUCKET = 'user-study-files';
+  var NBX_MAX_BYTES = 20 * 1024 * 1024;
+  var NBX_ALLOWED = ['pdf','doc','docx','ppt','pptx','xls','xlsx','txt','md','csv','png','jpg','jpeg','webp','gif','mp3','wav','m4a','ogg'];
+  var NBX_FOLDER_SELECTION = window.NB_MATERIAL_FOLDER_SELECTION || (window.NB_MATERIAL_FOLDER_SELECTION = Object.create(null));
+  var NBX_CATEGORIES = [
+    {key:'all', label:'All Files', hint:'Every material in this subject', icon:'▣'},
+    {key:'pdf', label:'PDF Documents', hint:'PDF handouts and reviewers', icon:'PDF'},
+    {key:'images', label:'Images', hint:'Photos, diagrams and screenshots', icon:'IMG'},
+    {key:'word', label:'Word Documents', hint:'DOC and DOCX files', icon:'DOC'},
+    {key:'presentations', label:'Presentations', hint:'PowerPoint slides', icon:'PPT'},
+    {key:'spreadsheets', label:'Spreadsheets', hint:'Excel workbooks', icon:'XLS'},
+    {key:'text', label:'Text Files', hint:'TXT, CSV and Markdown', icon:'TXT'},
+    {key:'audio', label:'Audio Files', hint:'MP3, WAV and other audio', icon:'♫'},
+    {key:'other', label:'Other Files', hint:'Other supported formats', icon:'…'}
+  ];
+  var NBX_CATEGORY_BY_KEY = Object.create(null);
+  NBX_CATEGORIES.forEach(function (item) { NBX_CATEGORY_BY_KEY[item.key] = item; });
+
+  function nbxExt(name) {
+    var value = String(name || '').toLowerCase().split('.');
+    return value.length > 1 ? value.pop() : '';
+  }
+  function nbxMime(file) {
+    if (file && file.type) return String(file.type).toLowerCase();
+    var map = {
+      pdf:'application/pdf', doc:'application/msword',
+      docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ppt:'application/vnd.ms-powerpoint', pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      xls:'application/vnd.ms-excel', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      txt:'text/plain', md:'text/markdown', csv:'text/csv', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', gif:'image/gif',
+      mp3:'audio/mpeg', wav:'audio/wav', m4a:'audio/mp4', ogg:'audio/ogg'
+    };
+    return map[nbxExt(file && file.name)] || 'application/octet-stream';
+  }
+  function nbxCategory(file) {
+    var name = file && (file.fileName || file.name || file.n) || '';
+    var ext = nbxExt(name);
+    var mime = String((file && (file.mime || file.fileType || file.type)) || '').toLowerCase();
+    // Prefer a recognized extension, then use the stored MIME type for legacy files.
+    if (ext === 'pdf' || mime === 'application/pdf') return 'pdf';
+    if (['png','jpg','jpeg','webp','gif'].indexOf(ext) >= 0 || mime.indexOf('image/') === 0) return 'images';
+    if (['doc','docx'].indexOf(ext) >= 0 || /msword|wordprocessingml/.test(mime)) return 'word';
+    if (['ppt','pptx'].indexOf(ext) >= 0 || /presentation|powerpoint/.test(mime)) return 'presentations';
+    if (['xls','xlsx'].indexOf(ext) >= 0 || /spreadsheet|excel/.test(mime)) return 'spreadsheets';
+    if (['txt','md','csv'].indexOf(ext) >= 0 || mime.indexOf('text/') === 0) return 'text';
+    if (['mp3','wav','m4a','ogg'].indexOf(ext) >= 0 || mime.indexOf('audio/') === 0) return 'audio';
+    var stored = String(file && file.category || '').toLowerCase();
+    return NBX_CATEGORY_BY_KEY[stored] ? stored : 'other';
+  }
+  function nbxSize(bytes) {
+    if (typeof nbFileSize === 'function') return nbFileSize(bytes || 0);
+    var size = Number(bytes) || 0;
+    return size >= 1048576 ? (size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(size / 1024)) + ' KB';
+  }
+  function nbxEscape(value) { return typeof esc === 'function' ? esc(value == null ? '' : String(value)) : String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function nbxUser() {
+    if (typeof nbRequireSupabaseUser === 'function') return nbRequireSupabaseUser();
+    if (typeof requireMusicUser === 'function') return requireMusicUser();
+    return Promise.reject(new Error('Please sign in again before uploading or opening files.'));
+  }
+  function nbxFindSubject(subjectId) {
+    return S && Array.isArray(S.subjects) ? S.subjects.find(function (item) { return item && String(item.id) === String(subjectId); }) || null : null;
+  }
+  function nbxCache() {
+    if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
+  }
+  function nbxSave() {
+    if (typeof window.saveWorkspaceNow === 'function') return window.saveWorkspaceNow();
+    if (typeof save === 'function') { save(); return Promise.resolve({ok:true, local:true}); }
+    return Promise.resolve({ok:false, error:new Error('Workspace save function is unavailable.')});
+  }
+  function nbxFileValidation(file) {
+    if (!file || !file.name) return {ok:false, message:'Choose a file first.'};
+    if (!file.size) return {ok:false, message:'The selected file is empty.'};
+    if (file.size > NBX_MAX_BYTES) return {ok:false, message:'Files must be 20 MB or smaller.'};
+    if (NBX_ALLOWED.indexOf(nbxExt(file.name)) < 0) return {ok:false, message:'Unsupported file type. Supported: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, images and audio files.'};
+    var ext = nbxExt(file.name), mime = nbxMime(file);
+    // Cross-check extension and browser MIME when the browser provides a useful type.
+    // Some platforms report application/octet-stream for Office documents; that is allowed.
+    var expected = {
+      pdf:['application/pdf'], doc:['application/msword'],
+      docx:['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      ppt:['application/vnd.ms-powerpoint'],
+      pptx:['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+      xls:['application/vnd.ms-excel'],
+      xlsx:['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+      txt:['text/plain'], md:['text/markdown','text/plain'], csv:['text/csv','application/vnd.ms-excel'],
+      png:['image/png'], jpg:['image/jpeg'], jpeg:['image/jpeg'], webp:['image/webp'], gif:['image/gif'],
+      mp3:['audio/mpeg','audio/mp3'], wav:['audio/wav','audio/x-wav'],
+      m4a:['audio/mp4','audio/x-m4a'], ogg:['audio/ogg','application/ogg']
+    }[ext];
+    if (expected && mime && mime !== 'application/octet-stream' && expected.indexOf(mime) < 0) {
+      return {ok:false, message:'The selected file extension does not match its detected file type.'};
+    }
+    return {ok:true, category:nbxCategory({fileName:file.name, mime:mime})};
+  }
+  function nbxSafeName(name) {
+    return String(name || 'file').normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^\.+/, '').slice(-100) || 'file';
+  }
+  function nbxStatus(node, text, isError) {
+    if (!node) return;
+    node.textContent = text;
+    node.style.color = isError ? 'var(--destructive)' : 'var(--muted-fg)';
+  }
+  function nbxUpload(bucket, path, file) {
+    if (!dbClient || !dbClient.storage) return Promise.reject(new Error('Supabase Storage is unavailable.'));
+    return dbClient.storage.from(bucket).upload(path, file, {upsert:false, contentType:nbxMime(file), cacheControl:'3600'}).then(function (result) {
+      if (result.error) throw result.error;
+      if (!result.data || !result.data.path) throw new Error('Storage did not confirm the uploaded file path.');
+      return result.data;
+    });
+  }
+  function nbxSetFolder(subjectId, key) {
+    NBX_FOLDER_SELECTION[String(subjectId)] = NBX_CATEGORY_BY_KEY[key] ? key : 'all';
+    render();
+  }
+  window.nbSetMaterialFolder = nbxSetFolder;
+
+  function nbxMaterialRecord(subjectId, user, file, path, displayName, category) {
+    return {
+      id:'mat_' + (typeof uid === 'function' ? uid() : Date.now()),
+      n:displayName || file.name,
+      t:nbxExt(file.name).toUpperCase(),
+      s:nbxSize(file.size),
+      path:path,
+      fileName:file.name,
+      mime:nbxMime(file),
+      size:file.size,
+      userId:String(user.id),
+      subjectId:String(subjectId),
+      category:category,
+      addedAt:new Date().toISOString()
+    };
+  }
+
+  /* New upload handler: logical categories are stored in workspace metadata; the
+     existing private bucket and user/subject path layout remain unchanged. */
+  window.addMaterial = function (subjectId, requestedCategory) {
+    var subject = nbxFindSubject(subjectId);
+    if (!subject) { toast('Subject not found. Refresh Study Hub and try again.'); return; }
+    var categoryKey = NBX_CATEGORY_BY_KEY[requestedCategory] ? requestedCategory : 'all';
+    var currentCategory = NBX_CATEGORY_BY_KEY[categoryKey] || NBX_CATEGORY_BY_KEY.all;
+    var panel = sheet(
+      '<div class="f jb aic mb3"><div><h3 class="txl semi">Upload study material</h3><p class="txs muted mt1">' + nbxEscape(categoryKey === 'all' ? 'Files are organized automatically by type.' : 'Uploading from ' + currentCategory.label + '.') + '</p></div><button class="iconbtn" data-cancel aria-label="Close">' + ic('x',18) + '</button></div>' +
+      '<div class="card padc mb3"><p class="txs semi">Supported files</p><p class="txs muted mt1">PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, images, MP3, WAV and other supported audio. Maximum 20 MB per file. Files stay private in your account.</p></div>' +
+      '<div class="fc g3"><div><label class="field-label" for="nbxMaterialFile">Choose a file</label><input id="nbxMaterialFile" class="input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.gif,.mp3,.wav,.m4a,.ogg" style="height:auto;padding:9px 12px"/></div><div><label class="field-label" for="nbxMaterialName">Display name (optional)</label><input id="nbxMaterialName" class="input" placeholder="Defaults to original filename"/></div><p id="nbxMaterialStatus" class="txs muted" role="status" aria-live="polite">Waiting for file selection · 20 MB maximum</p><button class="btn btn-primary btn-block" data-upload type="button">Upload material</button></div>'
+    );
+    var input = panel.querySelector('#nbxMaterialFile');
+    var nameInput = panel.querySelector('#nbxMaterialName');
+    var status = panel.querySelector('#nbxMaterialStatus');
+    var button = panel.querySelector('[data-upload]');
+    var busyKey = 'nbx-material:' + String(subjectId);
+    var busy = false;
+    panel.querySelector('[data-cancel]').onclick = closeTop;
+
+    async function runUpload() {
+      var file = input.files && input.files[0];
+      var check = nbxFileValidation(file);
+      if (!check.ok) { nbxStatus(status, check.message, true); toast(check.message); return; }
+      if (busy) return;
+      busy = true; button.disabled = true; button.textContent = 'Uploading…';
+      nbxStatus(status, 'Uploading ' + file.name + '…', false);
+      var uploadedPath = null;
+      try {
+        var user = await nbxUser();
+        if (!user || !user.id) throw new Error('Your sign-in session could not be verified.');
+        if (S.auth && S.auth.user && String(S.auth.user.id) !== String(user.id)) throw new Error('The signed-in account changed. Reopen the subject and retry.');
+        var liveBefore = nbxFindSubject(subjectId);
+        if (!liveBefore) throw new Error('The subject is no longer available. Reopen it and try again.');
+        uploadedPath = String(user.id) + '/' + String(subjectId) + '/materials/' + Date.now() + '_' + (typeof uid === 'function' ? uid() : Math.random().toString(36).slice(2)) + '_' + nbxSafeName(file.name);
+        await nbxUpload(NBX_BUCKET, uploadedPath, file);
+        var record = nbxMaterialRecord(subjectId, user, file, uploadedPath, (nameInput.value || '').trim() || file.name, check.category);
+        var liveSubject = nbxFindSubject(subjectId);
+        if (!liveSubject) throw new Error('The cloud upload succeeded, but this subject was removed from the current workspace. The file was kept in Cloud Files.');
+        if (!Array.isArray(liveSubject.materials)) liveSubject.materials = [];
+        if (!liveSubject.materials.some(function (item) { return item && String(item.path || '') === uploadedPath; })) liveSubject.materials.unshift(record);
+        nbxCache();
+        // Immediate render: the attachment appears before the cloud workspace save returns.
+        NBX_FOLDER_SELECTION[String(subjectId)] = requestedCategory && requestedCategory !== 'all' && requestedCategory !== check.category ? check.category : categoryKey;
+        closeTop(); render();
+        toast('File uploaded and added to ' + (NBX_CATEGORY_BY_KEY[check.category] || NBX_CATEGORY_BY_KEY.other).label + '.');
+        var saved = await nbxSave();
+        if (!saved || !saved.ok) {
+          nbxCache();
+          toast('The file is visible on this device. Cloud workspace synchronization is pending; it will retry when the connection is available.');
+          console.warn('Material metadata sync pending:', saved && saved.error);
+        } else {
+          render();
+        }
+      } catch (error) {
+        console.error('Materials upload failed:', error);
+        // Never delete a successfully uploaded object merely because a local/workspace
+        // reference could not be synchronized. The cloud file remains recoverable.
+        if (uploadedPath) {
+          try { nbxCache(); } catch (_) {}
+          toast('The file reached private cloud storage, but could not be linked to this subject: ' + (error.message || 'Retry from the subject while online.'));
+        } else {
+          nbxStatus(status, error.message || 'Upload failed. Check Storage permissions and try again.', true);
+          button.disabled = false; button.textContent = 'Retry upload'; busy = false;
+        }
+      }
+    }
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      var check = nbxFileValidation(file);
+      nbxStatus(status, check.ok ? ('Selected: ' + file.name + ' · ' + nbxSize(file.size) + ' · ' + (NBX_CATEGORY_BY_KEY[check.category] || NBX_CATEGORY_BY_KEY.other).label) : check.message, !check.ok);
+      if (check.ok) runUpload();
+    });
+    button.onclick = runUpload;
+  };
+
+  /* Syllabus uploader also attaches to the live subject object after the async
+     Storage operation and keeps uploaded files if workspace synchronization fails. */
+  window.uploadSyllabusAttachment = function (subjectId) {
+    if (!nbxFindSubject(subjectId)) { toast('Subject not found.'); return; }
+    var panel = sheet(
+      '<div class="f jb aic mb3"><h3 class="txl semi">Attach syllabus</h3><button class="iconbtn" data-cancel aria-label="Close">' + ic('x',18) + '</button></div>' +
+      '<div class="card padc mb3"><p class="txs semi">Course syllabus</p><p class="txs muted mt1">Upload the official course outline, schedule, grading policy or learning outcomes. Maximum 20 MB.</p></div>' +
+      '<div class="fc g3"><input id="nbxSyllabusFile" class="input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.png,.jpg,.jpeg,.webp"/><input id="nbxSyllabusTitle" class="input" placeholder="Attachment label (optional)"/><p id="nbxSyllabusStatus" class="txs muted" role="status" aria-live="polite">Choose a syllabus file.</p><button class="btn btn-primary btn-block" data-upload type="button">Upload syllabus</button></div>'
+    );
+    var input = panel.querySelector('#nbxSyllabusFile'), title = panel.querySelector('#nbxSyllabusTitle');
+    var status = panel.querySelector('#nbxSyllabusStatus'), button = panel.querySelector('[data-upload]'), busy = false;
+    panel.querySelector('[data-cancel]').onclick = closeTop;
+    async function runUpload() {
+      var file = input.files && input.files[0], check = nbxFileValidation(file);
+      if (!check.ok) { nbxStatus(status, check.message, true); toast(check.message); return; }
+      if (busy) return;
+      busy = true; button.disabled = true; button.textContent = 'Uploading…';
+      nbxStatus(status, 'Uploading ' + file.name + '…', false);
+      var path = null;
+      try {
+        var user = await nbxUser();
+        if (!user || !user.id) throw new Error('Your sign-in session could not be verified.');
+        path = String(user.id) + '/' + String(subjectId) + '/syllabus/' + Date.now() + '_' + (typeof uid === 'function' ? uid() : Math.random().toString(36).slice(2)) + '_' + nbxSafeName(file.name);
+        await nbxUpload(NBX_BUCKET, path, file);
+        var current = nbxFindSubject(subjectId);
+        if (!current) throw new Error('The syllabus uploaded, but its subject is no longer available. The cloud file has been kept.');
+        if (!Array.isArray(current.syllabusFiles)) current.syllabusFiles = [];
+        if (!current.syllabusFiles.some(function (item) { return item && String(item.path || '') === path; })) {
+          current.syllabusFiles.unshift({id:'syl_' + (typeof uid === 'function' ? uid() : Date.now()), title:(title.value || '').trim() || file.name, fileName:file.name, path:path, mime:nbxMime(file), size:file.size, userId:String(user.id), subjectId:String(subjectId), addedAt:new Date().toISOString()});
+        }
+        nbxCache();
+        closeTop(); render();
+        toast('Syllabus uploaded and shown in this subject.');
+        var saved = await nbxSave();
+        if (!saved || !saved.ok) {
+          nbxCache();
+          toast('Syllabus is visible on this device. Cloud workspace synchronization is pending.');
+          console.warn('Syllabus workspace sync pending:', saved && saved.error);
+        } else render();
+      } catch (error) {
+        console.error('Syllabus upload failed:', error);
+        if (path) {
+          nbxCache();
+          toast('The syllabus reached cloud storage, but its subject link could not be confirmed: ' + (error.message || 'Reopen the subject while online to recover it.'));
+        } else {
+          nbxStatus(status, error.message || 'Syllabus upload failed.', true);
+          button.disabled = false; button.textContent = 'Retry upload'; busy = false;
+        }
+      }
+    }
+    input.addEventListener('change', function () { var f = input.files && input.files[0]; if (f) { var v = nbxFileValidation(f); nbxStatus(status, v.ok ? ('Selected: ' + f.name + ' · ' + nbxSize(f.size)) : v.message, !v.ok); if (v.ok) runUpload(); } });
+    button.onclick = runUpload;
+  };
+
+  function nbxCsvRows(text) {
+    var rows = [], row = [], cell = '', quoted = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (c === '"') {
+        if (quoted && text[i + 1] === '"') { cell += '"'; i++; }
+        else quoted = !quoted;
+      } else if (c === ',' && !quoted) { row.push(cell); cell = ''; }
+      else if ((c === '\n' || c === '\r') && !quoted) {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); cell = '';
+        if (row.some(function (v) { return v !== ''; })) rows.push(row);
+        row = [];
+      } else cell += c;
+    }
+    row.push(cell); if (row.some(function (v) { return v !== ''; })) rows.push(row);
+    return rows;
+  }
+  function nbxCsvTable(rows) {
+    var table = document.createElement('table'); table.className = 'nbx-preview-table';
+    rows.slice(0,201).forEach(function (row, rowIndex) {
+      var tr = document.createElement('tr');
+      row.slice(0,20).forEach(function (value) { var cell = document.createElement(rowIndex === 0 ? 'th' : 'td'); cell.textContent = String(value); tr.appendChild(cell); });
+      table.appendChild(tr);
+    });
+    return table;
+  }
+  function nbxName(file) { return String(file.fileName || file.title || file.n || file.name || 'Study file'); }
+  function nbxCreatePreviewPanel(name, type) {
+    var panel = sheet(
+      '<div class="f jb aic g2 mb3"><div class="grow minw"><h3 class="txl semi">File preview</h3><p class="txs muted nbx-preview-title" title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</p></div><button class="iconbtn" type="button" data-close-preview aria-label="Close preview">' + ic('x',18) + '</button></div>' +
+      '<div class="nbx-preview-meta txs muted mb2">' + nbxEscape(type || 'File') + '</div><div id="nbxPreviewBody" class="nbx-preview-body"><p class="txm muted">Loading preview…</p></div>' +
+      '<div class="f g2 mt3"><button class="btn btn-primary grow" type="button" data-preview-download>' + ic('download',15) + ' Download original</button><button class="btn btn-secondary" type="button" data-close-preview-bottom>Close</button></div>'
+    );
+    panel.querySelector('[data-close-preview]').onclick = closeTop;
+    panel.querySelector('[data-close-preview-bottom]').onclick = closeTop;
+    return panel;
+  }
+  async function nbxGetSignedUrl(path, downloadName) {
+    await nbxUser();
+    var storage = dbClient.storage.from(NBX_BUCKET);
+    var result = downloadName ? await storage.createSignedUrl(path, 3600, {download:downloadName}) : await storage.createSignedUrl(path, 3600);
+    if (result.error) throw result.error;
+    var url = result.data && result.data.signedUrl;
+    if (!url) throw new Error('Supabase did not return a signed file URL.');
+    return url;
+  }
+  async function nbxDownloadPath(path, fileName) {
+    try {
+      var url = await nbxGetSignedUrl(path, fileName || 'download');
+      var anchor = document.createElement('a');
+      anchor.href = url; anchor.target = '_blank'; anchor.rel = 'noopener';
+      anchor.download = fileName || 'download';
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+    } catch (error) {
+      console.error('Study file download failed:', error);
+      toast('Could not download this file: ' + (error.message || 'Check Storage permissions.'));
+    }
+  }
+  window.nbDownloadStudyMaterial = function (subjectId, index) {
+    var subject = nbxFindSubject(subjectId), file = subject && subject.materials && subject.materials[index];
+    if (!file || !file.path) { toast('This material has no cloud file reference.'); return; }
+    nbxDownloadPath(file.path, nbxName(file));
+  };
+  window.nbDownloadSyllabusFile = function (subjectId, index) {
+    var subject = nbxFindSubject(subjectId), file = subject && subject.syllabusFiles && subject.syllabusFiles[index];
+    if (!file || !file.path) { toast('This syllabus has no cloud file reference.'); return; }
+    nbxDownloadPath(file.path, nbxName(file));
+  };
+
+  async function nbxPreviewPath(file, path, section) {
+    if (!path) { toast('This file does not have a cloud storage path.'); return; }
+    var name = nbxName(file), ext = nbxExt(name), mime = String(file.mime || file.fileType || '').toLowerCase();
+    var category = nbxCategory(file);
+    var typeLabel = (NBX_CATEGORY_BY_KEY[category] || NBX_CATEGORY_BY_KEY.other).label;
+    var panel = nbxCreatePreviewPanel(name, typeLabel);
+    panel.querySelector('[data-preview-download]').onclick = function () { nbxDownloadPath(path, name); };
+    var body = panel.querySelector('#nbxPreviewBody');
+    try {
+      var offlineCopy = null;
+      if (typeof dbGet === 'function' && typeof offlineMaterialKey === 'function') {
+        try { offlineCopy = await dbGet(offlineMaterialKey(path)); } catch (cacheError) { console.warn('Offline preview cache lookup failed:', cacheError); }
+      }
+      var url = offlineCopy && offlineCopy.blob && typeof URL !== 'undefined' && URL.createObjectURL
+        ? URL.createObjectURL(offlineCopy.blob)
+        : await nbxGetSignedUrl(path, null);
+      if (url.indexOf('blob:') === 0) setTimeout(function () { try { URL.revokeObjectURL(url); } catch (_) {} }, 10 * 60 * 1000);
+      if (!document.body.contains(panel)) return;
+      if (ext === 'pdf' || mime === 'application/pdf') {
+        var frame = document.createElement('iframe'); frame.className = 'nbx-preview-frame'; frame.title = 'PDF preview: ' + name; frame.src = url + '#toolbar=1&navpanes=0'; body.replaceChildren(frame);
+      } else if (category === 'images') {
+        var img = document.createElement('img'); img.className = 'nbx-preview-image'; img.alt = name; img.src = url; body.replaceChildren(img);
+      } else if (category === 'audio') {
+        var audio = document.createElement('audio'); audio.className = 'nbx-preview-audio'; audio.controls = true; audio.preload = 'metadata'; audio.src = url; body.replaceChildren(audio);
+      } else if (['txt','md','csv'].indexOf(ext) >= 0 || mime.indexOf('text/') === 0) {
+        var response = await fetch(url, {credentials:'omit'});
+        if (!response.ok) throw new Error('The file preview could not be loaded (' + response.status + ').');
+        var text = await response.text();
+        if (!document.body.contains(panel)) return;
+        if (ext === 'csv' || mime === 'text/csv') {
+          var rows = nbxCsvRows(text);
+          if (!rows.length) { body.textContent = 'This CSV file is empty.'; }
+          else { body.replaceChildren(nbxCsvTable(rows)); if (rows.length > 201) { var note = document.createElement('p'); note.className = 'txs muted mt2'; note.textContent = 'Showing the first 200 rows and up to 20 columns. Download the original to view the complete file.'; body.appendChild(note); } }
+        } else {
+          var pre = document.createElement('pre'); pre.className = 'nbx-preview-text'; pre.textContent = text.slice(0, 250000); body.replaceChildren(pre);
+          if (text.length > 250000) { var note2 = document.createElement('p'); note2.className = 'txs muted mt2'; note2.textContent = 'Preview limited to the first 250,000 characters. Download the original for the complete file.'; body.appendChild(note2); }
+        }
+      } else {
+        var message = document.createElement('div'); message.className = 'card padc';
+        var heading = document.createElement('p'); heading.className = 'txm semi'; heading.textContent = 'Preview is not available for this format';
+        var detail = document.createElement('p'); detail.className = 'txs muted mt1'; detail.textContent = 'This file type needs a compatible external application. Your original cloud file is safe; use Download original to open it with a suitable app.';
+        message.append(heading, detail); body.replaceChildren(message);
+      }
+    } catch (error) {
+      console.error('Study file preview failed:', error);
+      if (document.body.contains(panel)) {
+        var message = document.createElement('div'); message.className = 'card padc';
+        var heading = document.createElement('p'); heading.className = 'txm semi'; heading.textContent = 'Could not load preview';
+        var detail = document.createElement('p'); detail.className = 'txs muted mt1'; detail.textContent = (error && error.message) || 'Check your sign-in and Storage permissions, then try again.';
+        message.append(heading, detail); body.replaceChildren(message);
+      }
+    }
+  }
+  window.nbPreviewStudyMaterial = function (subjectId, index) {
+    var subject = nbxFindSubject(subjectId), file = subject && subject.materials && subject.materials[index];
+    if (!file) { toast('Material not found.'); return; }
+    nbxPreviewPath(file, file.path, 'Materials');
+  };
+  window.nbPreviewSyllabusFile = function (subjectId, index) {
+    var subject = nbxFindSubject(subjectId), file = subject && subject.syllabusFiles && subject.syllabusFiles[index];
+    if (!file) { toast('Syllabus attachment not found.'); return; }
+    nbxPreviewPath(file, file.path, 'Syllabus');
+  };
+  // Keep legacy callers working, but make Open a real preview and keep Download separate.
+  window.openMaterial = window.nbPreviewStudyMaterial;
+
+  function nbxFolderCard(subjectId, item, files) {
+    var count = item.key === 'all' ? files.length : files.filter(function (file) { return nbxCategory(file) === item.key; }).length;
+    return '<button type="button" class="nbx-folder-card" onclick="nbSetMaterialFolder(\'' + nbxEscape(subjectId) + '\',\'' + item.key + '\')"><span class="nbx-folder-icon">' + (item.key === 'all' ? ic('grid',20) : ic('file',20)) + '</span><span class="nbx-folder-info"><strong>' + nbxEscape(item.label) + '</strong><small>' + nbxEscape(item.hint) + '</small></span><span class="nbx-folder-count">' + count + '</span></button>';
+  }
+  function nbxMaterialCard(subject, material, index) {
+    var name = nbxName(material), category = nbxCategory(material), label = (NBX_CATEGORY_BY_KEY[category] || NBX_CATEGORY_BY_KEY.other).label;
+    return '<article class="card padc nbx-material-card"><div class="f aic g2"><span class="iconbtn nbx-file-type-icon" aria-hidden="true">' + ic('file',17) + '</span><div class="grow minw"><p class="txm semi nbx-material-name" title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</p><p class="txs muted mt1">' + nbxEscape(label) + ' · ' + nbxEscape(material.s || nbxSize(material.size || 0)) + '</p></div></div><div class="nbx-material-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbPreviewStudyMaterial(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Preview ' + nbxEscape(name) + '">' + ic('external',14) + ' Open</button><button type="button" class="btn btn-primary btn-sm" onclick="nbDownloadStudyMaterial(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Download ' + nbxEscape(name) + '">' + ic('download',14) + ' Download</button><button type="button" class="btn btn-secondary btn-sm" onclick="cacheMaterialOffline(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Save ' + nbxEscape(name) + ' offline">' + ic('save',14) + ' Offline</button><button type="button" class="btn btn-danger btn-sm" onclick="removeMaterial(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Delete ' + nbxEscape(name) + '">' + ic('trash',14) + ' Delete</button></div></article>';
+  }
+
+  var nbxPreviousSubjectTabBody = subjectTabBody;
+  subjectTabBody = function (subject) {
+    if (UI.subjectTab === 'syllabus') {
+      var files = Array.isArray(subject.syllabusFiles) ? subject.syllabusFiles : [];
+      var topics = Array.isArray(subject.topics) ? subject.topics : [];
+      var completed = topics.filter(function (topic) { return topic.done; }).length;
+      var pct = topics.length ? Math.round(completed / topics.length * 100) : 0;
+      var syllabusCards = files.length ? files.map(function (file, index) {
+        var name = nbxName(file);
+        return '<article class="card padc nb-subject-syllabus-card"><div class="nb-subject-syllabus-head"><div class="nb-subject-syllabus-info"><p class="txm semi nb-subject-syllabus-name" title="' + nbxEscape(file.title || name) + '">' + nbxEscape(file.title || name) + '</p><p class="txs muted mt1 nb-subject-syllabus-filename" title="' + nbxEscape(name) + '">' + nbxEscape(name) + ' · ' + nbxEscape(nbxSize(file.size || 0)) + '</p></div><span class="badge nb-subject-syllabus-badge">Syllabus</span></div><div class="nb-record-actions"><button class="btn btn-secondary" type="button" onclick="nbPreviewSyllabusFile(\'' + nbxEscape(subject.id) + '\',' + index + ')">' + ic('external',14) + ' Open</button><button class="btn btn-primary" type="button" onclick="nbDownloadSyllabusFile(\'' + nbxEscape(subject.id) + '\',' + index + ')">' + ic('download',14) + ' Download</button><button class="btn btn-secondary" type="button" onclick="replaceSyllabusAttachment(\'' + nbxEscape(subject.id) + '\',\'' + nbxEscape(file.id) + '\')">Replace</button><button class="btn btn-danger" type="button" onclick="removeSyllabusAttachment(\'' + nbxEscape(subject.id) + '\',\'' + nbxEscape(file.id) + '\')">Remove</button></div></article>';
+      }).join('') : '<div class="empty" style="padding:20px"><p class="txm muted">No syllabus attachment yet. Add the official course outline or syllabus document.</p></div>';
+      var topicHtml = topics.length ? '<div class="card padc"><div class="f jb aic mb2"><span class="txm semi">Syllabus topics</span><span class="txm semi" style="color:' + nbxEscape(subject.color) + '">' + pct + '%</span></div><div class="bar"><div style="width:' + pct + '%;background:' + nbxEscape(subject.color) + '"></div></div><div class="fc g2 mt3">' + topics.map(function (topic, index) { return '<button class="rowitem" onclick="toggleTopic(\'' + nbxEscape(subject.id) + '\',' + index + ')"><span class="checkbox' + (topic.done ? ' on' : '') + '">' + (topic.done ? ic('check',14) : '') + '</span><span class="txm">' + nbxEscape(topic.t) + '</span></button>'; }).join('') + '</div></div>' : '<div class="card padc"><p class="txm semi">Topics not added yet</p><p class="txs muted mt1">Add weekly topics or modules to track course progress.</p></div>';
+      return '<div class="fc g3"><div class="card padc"><div class="f jb aic"><div class="grow minw"><h3 class="txm semi">Course syllabus</h3><p class="txs muted mt1">Keep the official course document separate from ordinary materials.</p></div><button class="btn btn-primary btn-sm" type="button" onclick="uploadSyllabusAttachment(\'' + nbxEscape(subject.id) + '\')">' + ic('upload',15) + ' Attach file</button></div><p class="txs muted mt2">PDF, Word, PowerPoint, Excel, text, or images · 20 MB maximum per file.</p><div class="fc g2 mt3">' + syllabusCards + '</div></div>' + topicHtml + '<button class="btn btn-secondary btn-block" onclick="addTopic(\'' + nbxEscape(subject.id) + '\')">' + ic('plus',16) + ' Add syllabus topic</button></div>';
+    }
+    if (UI.subjectTab === 'materials') {
+      var materials = Array.isArray(subject.materials) ? subject.materials : [];
+      var selected = NBX_CATEGORY_BY_KEY[NBX_FOLDER_SELECTION[String(subject.id)]] ? NBX_FOLDER_SELECTION[String(subject.id)] : 'all';
+      var filtered = selected === 'all' ? materials : materials.filter(function (item) { return nbxCategory(item) === selected; });
+      var folderCards = NBX_CATEGORIES.map(function (item) { return nbxFolderCard(subject.id, item, materials); }).join('');
+      var activeLabel = (NBX_CATEGORY_BY_KEY[selected] || NBX_CATEGORY_BY_KEY.all).label;
+      var heading = selected === 'all' ? '<div class="f jb aic"><div><h3 class="txm semi">Materials folders</h3><p class="txs muted mt1">Files are grouped automatically by their verified type.</p></div></div>' : '<div class="f jb aic"><div><h3 class="txm semi">' + nbxEscape(activeLabel) + '</h3><p class="txs muted mt1">' + filtered.length + ' file(s) in this folder</p></div><button type="button" class="btn btn-secondary btn-sm" onclick="nbSetMaterialFolder(\'' + nbxEscape(subject.id) + '\',\'all\')">' + ic('chevL',14) + ' Folders</button></div>';
+      var folderView = selected === 'all' ? '<div class="nbx-folder-grid">' + folderCards + '</div>' : '';
+      var listHtml = filtered.length ? filtered.map(function (file) { return nbxMaterialCard(subject, file, materials.indexOf(file)); }).join('') : '<div class="empty"><p class="txm muted">' + (selected === 'all' ? 'No study materials uploaded yet.' : 'This folder is empty. Upload a file to add it here.') + '</p></div>';
+      var uploadLabel = selected === 'all' ? 'Upload study material' : 'Upload to ' + activeLabel;
+      return '<div class="fc g3"><div class="card padc"><h3 class="txm semi">Study materials</h3><p class="txs muted mt1">Upload handouts, worksheets, reviewers, slides, spreadsheets, images or audio. Files are private to your account and automatically sorted into folders.</p></div><div class="fc g2">' + heading + folderView + listHtml + '</div><button class="btn btn-primary btn-block" type="button" onclick="addMaterial(\'' + nbxEscape(subject.id) + '\',\'' + selected + '\')">' + ic('upload',17) + ' ' + nbxEscape(uploadLabel) + '</button><p class="txs muted">Open previews supported documents and media. Download saves the original file; Offline keeps a device copy.</p></div>';
+    }
+    return nbxPreviousSubjectTabBody(subject);
+  };
+  window.subjectTabBody = subjectTabBody;
+
+  // Older materials already in the workspace are categorized by their extension/MIME
+  // at render time. Persist inferred category quietly for the next normal save.
+  function nbxNormalizeExistingCategories(subject) {
+    var changed = false;
+    (subject.materials || []).forEach(function (item) {
+      if (item && !item.category) { item.category = nbxCategory(item); changed = true; }
+    });
+    if (changed && typeof cacheWorkspaceSnapshot === 'function') nbxCache();
+  }
+  var nbxOriginalRender = window.render || render;
+  window.render = function () {
+    var route = typeof resolve === 'function' ? resolve() : null;
+    if (route && route.view === 'subject' && UI.subjectTab === 'materials') {
+      var current = nbxFindSubject(route.id);
+      if (current) nbxNormalizeExistingCategories(current);
+    }
+    return nbxOriginalRender.apply(this, arguments);
+  };
+  try { render = window.render; } catch (_) {}
+
+  window.NEXBYTE_STUDY_HUB_FOLDERS_PREVIEW_VERSION = '1.0';
+})();
+
+</script>
 </body>
 </html>
