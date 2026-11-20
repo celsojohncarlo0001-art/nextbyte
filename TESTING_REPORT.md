@@ -111,3 +111,18 @@ Live Supabase task creation and deployment are still not verified in this local 
 - Static scope assertion passed: the final Study Hub enhancement IIFE defines `nbxProfileName()` locally and contains zero calls to the out-of-scope `nbProfileName()` helper.
 - The local profile-name helper was exercised with a named profile, a displayName-only profile, and an empty profile; it returned the expected name or safe `Member` fallback.
 - Browser-driven interaction could not be completed because the local browser runtime blocked navigation to the test server (`ERR_BLOCKED_BY_ADMINISTRATOR`). Therefore, actual modal opening, task save, and Supabase persistence remain unverified until the updated project is deployed and tested on the user's site.
+
+
+## November 20, 2026 — Task attachment Preview action correction
+
+| Check | Result | Notes |
+|---|---|---|
+| Task attachment action label | PASS (source) | Task cards now render an eye icon and the label `Preview` instead of `Open`. |
+| Preview action route | PASS (source) | The Preview button still calls `nbPreviewTaskAttachment(taskId, index)`, which resolves the current task attachment and sends it to the in-app `nbxPreviewPath` viewer. |
+| Download action separation | PASS (source) | The separate Download button calls `nbDownloadTaskAttachment(taskId, index)`, which uses the download-specific signed URL path. |
+| Accessibility | PASS (source) | Preview button has a static title and accessible name. |
+| PWA cache namespace | PASS (source) | Updated to `nexbyte-pwa-v12-task-attachment-preview-label`. |
+| Live browser preview | NOT TESTED | Actual signed URL rendering and device-specific previews require the deployed app and a signed-in Supabase account. |
+| Supabase download | NOT TESTED | Actual file retrieval was not performed against the user's hosted project. |
+
+The in-app preview implementation already existed for supported attachment types (PDF, images, text/CSV, video, and audio). This correction makes the task-card action explicitly say **Preview** and retains a distinct **Download** action. Unsupported formats continue to display the preview sheet's compatibility message and can still be downloaded separately.

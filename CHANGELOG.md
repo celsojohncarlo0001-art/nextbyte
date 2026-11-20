@@ -141,3 +141,13 @@ Live Supabase Storage, real account policies, cross-device synchronization, and 
 - Preserved Add Task subject preselection, task attachments, task saving, and the existing profile/authentication model.
 - Bumped the PWA cache namespace to `nexbyte-pwa-v11-task-profile-scope-fix` so installed clients request the corrected JavaScript.
 - No database migration, Storage bucket change, or user-data modification is required.
+
+
+## November 20, 2026 — Task attachment Preview label and action clarity
+
+- Changed the Study Hub subject task attachment action label from **Open** to **Preview** and added an eye icon, title text, and accessible label.
+- Kept the Preview action connected to the existing in-app `nbPreviewTaskAttachment` handler, which loads the attachment into the NEXTBYTE preview sheet using a private signed URL.
+- Kept Download as a separate action connected to `nbDownloadTaskAttachment`, which requests a download-disposition signed URL and downloads the original file.
+- No file paths, stored objects, task records, Supabase buckets, or database schemas were changed.
+- Bumped the PWA cache namespace to `nexbyte-pwa-v12-task-attachment-preview-label` so installed clients fetch the changed task card label.
+- No SQL migration is required.
