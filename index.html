@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <meta name="theme-color" content="#2563EB"/>
-<meta name="nexbyte-repair-layer" content="4.2"/>
+<meta name="nexbyte-repair-layer" content="4.4"/>
 <meta name="description" content="NEXBYTE — your personal academic workspace, available online and offline."/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -1146,18 +1146,29 @@ function dbDelete(id){return openMusicDB().then(function(db){return new Promise(
 function dbPut(record){return openMusicDB().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('files','readwrite'),req=tx.objectStore('files').put(record);req.onsuccess=function(){resolve(req.result);};req.onerror=function(){reject(req.error);};});});}
 function offlineMusicKey(id){return 'offline_music_'+String(id);}
 function offlineMaterialKey(path){return 'offline_material_'+String(path);}
-async function saveOfflineBlob(key,blob,name,mime,kind){
+async function saveOfflineBlob(key,blob,name,mime,kind,metadata){
   if(!blob||!blob.size)throw new Error('The downloaded file is empty.');
-  await dbPut({id:key,blob:blob,name:name||'download',mime:mime||blob.type||'application/octet-stream',kind:kind||'file',savedAt:Date.now(),size:blob.size});
+  var meta=metadata&&typeof metadata==='object'?metadata:{};
+  var inferredPath=String(key||'').indexOf('offline_material_')===0?String(key).slice('offline_material_'.length):'';
+  await dbPut({
+    id:key,blob:blob,name:name||'download',mime:mime||blob.type||'application/octet-stream',
+    kind:kind||'file',savedAt:Date.now(),size:blob.size,
+    fileId:meta.fileId||inferredPath||String(key||''),
+    storagePath:meta.storagePath||inferredPath||'',
+    bucket:meta.bucket||((inferredPath)?'user-study-files':''),
+    userId:meta.userId||''
+  });
 }
-async function downloadCloudFile(path,bucketName,name,mime,key,kind){
-  await requireMusicUser();
+async function downloadCloudFile(path,bucketName,name,mime,key,kind,metadata){
+  var user=await requireMusicUser();
+  if(metadata&&metadata.userId&&String(metadata.userId)!==String(user.id))throw new Error('This file does not belong to the currently signed-in account.');
   var result=await dbClient.storage.from(bucketName).createSignedUrl(path,60*60);
   if(result.error)throw result.error;
-  var response=await fetch(result.data.signedUrl);
+  var response=await fetch(result.data.signedUrl,{method:'GET',cache:'no-store',credentials:'omit'});
   if(!response.ok)throw new Error('Download failed ('+response.status+').');
   var blob=await response.blob();
-  await saveOfflineBlob(key,blob,name,mime||blob.type,kind);
+  if(!blob||!blob.size)throw new Error('The downloaded file is empty.');
+  await saveOfflineBlob(key,blob,name,mime||blob.type,kind,Object.assign({},metadata||{},{storagePath:path,bucket:bucketName,userId:user.id}));
   return blob.size;
 }
 window.addEventListener('online',function(){
@@ -1892,24 +1903,25 @@ async function cacheMaterialOffline(sid,index){
   var subject=subjectById(sid),material=subject&&subject.materials&&subject.materials[index];if(!material||!material.path)return;
   try{
     toast('Downloading '+(material.fileName||material.n||'study material')+' for offline use…');
-    await downloadCloudFile(material.path,'user-study-files',material.fileName||material.n||'study-material',material.mime,offlineMaterialKey(material.path),'study-material');
+    await downloadCloudFile(material.path,'user-study-files',material.fileName||material.n||'study-material',material.mime,offlineMaterialKey(material.path),'study-material',{fileId:material.id||material.path,storagePath:material.path,bucket:'user-study-files',userId:material.userId||''});
+    var offlineName = material.fileName || material.n || 'study-material';
+    if (/\.pdf$/i.test(offlineName) && typeof window.nbxEnsurePdfJs === 'function') {
+      try {
+        var offlineRecord = await dbGet(offlineMaterialKey(material.path));
+        if (!offlineRecord || !offlineRecord.blob) throw new Error('The offline file copy could not be verified.');
+        await window.nbxPreparePdfOfflinePreview(offlineRecord.blob, material.path);
+      } catch (pdfEngineError) { console.warn('PDF file saved, but the PDF viewer assets are not fully prepared yet:', pdfEngineError); toast('PDF file saved. Open its Preview once while online to prepare all required viewing assets.'); return; }
+    } else if (/\.(docx|xlsx|xls)$/i.test(offlineName) && typeof window.nbxPrepareOfficeOfflinePreview === 'function') {
+      try { await window.nbxPrepareOfficeOfflinePreview(offlineName); }
+      catch (officeEngineError) { console.warn('File saved, but its Office preview engine is not fully prepared:', officeEngineError); toast('File saved offline. Connect once and open its preview to prepare the viewing engine.'); return; }
+    }
     toast('Study material saved for offline use on this device.');
   }catch(error){console.error('Offline material download failed',error);toast('Could not save offline: '+(error.message||'Download failed'));}
 }
 async function openMaterial(sid,index){
-  var subject=subjectById(sid),material=subject&&subject.materials&&subject.materials[index];if(!material)return;
-  if(!material.path){toast('This is an older material record without an uploaded file. Upload it again to attach the actual file.');return;}
-  try{
-    var cached=await dbGet(offlineMaterialKey(material.path)).catch(function(){return null;});
-    var url;
-    if(cached&&cached.blob)url=URL.createObjectURL(cached.blob);
-    else{
-      await requireMusicUser();var result=await dbClient.storage.from('user-study-files').createSignedUrl(material.path,60*60,{download:material.fileName||material.n||true});
-      if(result.error)throw result.error;url=result.data&&result.data.signedUrl;if(!url)throw new Error('Could not create a download link.');
-    }
-    var a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.download=material.fileName||material.n||'study-material';document.body.appendChild(a);a.click();a.remove();
-    if(url.indexOf('blob:')===0)setTimeout(function(){URL.revokeObjectURL(url);},60000);
-  }catch(error){console.error('Material open failed',error);toast('Could not open this material: '+(error&&error.message?error.message:'Unknown error'));}
+  // Legacy Study Hub entry point: all material opens now use the same in-app renderer.
+  if(typeof window.nbPreviewStudyMaterial==='function') return window.nbPreviewStudyMaterial(sid,index);
+  toast('The file preview is still initializing. Please try again.');
 }
 function removeMaterial(sid,index){
   var subject=subjectById(sid),material=subject&&subject.materials&&subject.materials[index];if(!material)return;
@@ -3247,8 +3259,20 @@ async function deleteRoomAny(id){
 /* Installable PWA shell. Private Supabase API responses are never cached by the service worker. */
 (function(){
   if('serviceWorker' in navigator && location.protocol!=='file:'){
+    var nbxReloadingForControllerChange = false;
+    // When a new worker takes control, reload once so the visible application
+    // uses the same repaired HTML/JS build as the active service worker cache.
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(nbxReloadingForControllerChange) return;
+      nbxReloadingForControllerChange = true;
+      window.location.reload();
+    });
     window.addEventListener('load',function(){
-      navigator.serviceWorker.register('./sw.js').catch(function(error){console.warn('PWA service worker registration failed:',error);});
+      navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(function(registration){
+        // Force a network check for the worker script so installed PWAs do not
+        // remain on an older preview implementation cached by the browser.
+        if (registration && typeof registration.update === 'function') registration.update().catch(function(error){console.warn('PWA service worker update check failed:',error);});
+      }).catch(function(error){console.warn('PWA service worker registration failed:',error);});
     });
   }
   var installPrompt=null,installButton=null;
@@ -3567,17 +3591,10 @@ async function deleteRoomAny(id){
     };
   };
 
-  window.openMaterial = async function (subjectId, index) {
-    var subject = subjectById(subjectId), material = subject && subject.materials && subject.materials[index];
-    if (!material || !material.path) { toast('This older item has no cloud file attached. Upload the original file again.'); return; }
-    try {
-      var cached = await dbGet(offlineMaterialKey(material.path)).catch(function () { return null; });
-      if (cached && cached.blob) {
-        var localUrl = URL.createObjectURL(cached.blob);
-        window.open(localUrl, '_blank', 'noopener,noreferrer');
-        setTimeout(function () { URL.revokeObjectURL(localUrl); }, 60000);
-      } else nbOpenSignedFile('user-study-files', material.path, material.fileName || material.n, false);
-    } catch (error) { toast('Could not open material: ' + ((error && error.message) || 'Unknown error')); }
+  // Legacy calls are redirected to the same in-app preview implementation defined below.
+  window.openMaterial = function (subjectId, index) {
+    if (typeof window.nbPreviewStudyMaterial === 'function') return window.nbPreviewStudyMaterial(subjectId, index);
+    toast('The file preview is still initializing. Please try again.');
   };
 
   window.removeMaterial = function (subjectId, index) {
@@ -3678,8 +3695,10 @@ async function deleteRoomAny(id){
       var topics = Array.isArray(subject.topics) ? subject.topics : [];
       var completed = topics.filter(function (topic) { return topic.done; }).length;
       var pct = topics.length ? Math.round(completed / topics.length * 100) : 0;
-      var syllabusCards = files.length ? files.map(function (file) {
-        return '<article class="card padc nb-subject-syllabus-card"><div class="nb-subject-syllabus-head"><div class="nb-subject-syllabus-info"><p class="txm semi nb-subject-syllabus-name" title="' + esc(file.title || file.fileName || 'Syllabus') + '">' + esc(file.title || file.fileName || 'Syllabus') + '</p><p class="txs muted mt1 nb-subject-syllabus-filename" title="' + esc(file.fileName || '') + '">' + esc(file.fileName || '') + ' · ' + esc(nbFileSize(file.size || 0)) + '</p></div><span class="badge nb-subject-syllabus-badge">Syllabus</span></div><div class="nb-record-actions"><button class="btn btn-secondary" onclick="nbOpenSignedFilePublic(\'user-study-files\',\'' + esc(file.path) + '\',\'' + esc(file.fileName || file.title) + '\',false)">Open</button><button class="btn btn-primary" onclick="nbOpenSignedFilePublic(\'user-study-files\',\'' + esc(file.path) + '\',\'' + esc(file.fileName || file.title) + '\',true)">Download</button><button class="btn btn-secondary" onclick="replaceSyllabusAttachment(\'' + subject.id + '\',\'' + file.id + '\')">Replace</button><button class="btn btn-danger" onclick="removeSyllabusAttachment(\'' + subject.id + '\',\'' + file.id + '\')">Remove</button></div></article>';
+      var syllabusCards = files.length ? files.map(function (file, index) {
+        var actualName = file.fileName || file.n || file.name || file.title || 'Syllabus attachment';
+        var escapedName = esc(actualName);
+        return '<article class="card padc nb-subject-syllabus-card"><div class="nb-subject-syllabus-head"><div class="nb-subject-syllabus-info"><p class="txm semi nb-subject-syllabus-name" title="' + esc(file.title || actualName) + '">' + esc(file.title || actualName) + '</p><p class="txs muted mt1 nb-subject-syllabus-filename" title="' + escapedName + '">' + escapedName + ' · ' + esc(nbFileSize(file.size || 0)) + '</p></div><span class="badge nb-subject-syllabus-badge">Syllabus</span></div><div class="nb-record-actions"><button class="btn btn-secondary" type="button" onclick="nbPreviewSyllabusFile(\'' + esc(subject.id) + '\',' + index + ')">' + ic('eye',14) + ' Preview</button><button class="btn btn-primary" type="button" onclick="nbDownloadSyllabusFile(\'' + esc(subject.id) + '\',' + index + ')">Download</button><button class="btn btn-secondary" type="button" onclick="replaceSyllabusAttachment(\'' + esc(subject.id) + '\',\'' + esc(file.id) + '\')">Replace</button><button class="btn btn-danger" type="button" onclick="removeSyllabusAttachment(\'' + esc(subject.id) + '\',\'' + esc(file.id) + '\')">Remove</button></div></article>';
       }).join('') : '<div class="empty" style="padding:20px"><p class="txm muted">No syllabus attachment yet. Add the official course outline or syllabus document.</p></div>';
       var topicHtml = topics.length ? '<div class="card padc"><div class="f jb aic mb2"><span class="txm semi">Syllabus topics</span><span class="txm semi" style="color:' + subject.color + '">' + pct + '%</span></div><div class="bar"><div style="width:' + pct + '%;background:' + subject.color + '"></div></div><div class="fc g2 mt3">' + topics.map(function (topic, index) { return '<button class="rowitem" onclick="toggleTopic(\'' + subject.id + '\',' + index + ')"><span class="checkbox' + (topic.done ? ' on' : '') + '">' + (topic.done ? ic('check',14) : '') + '</span><span class="txm">' + esc(topic.t) + '</span></button>'; }).join('') + '</div></div>' : '<div class="card padc"><p class="txm semi">Topics not added yet</p><p class="txs muted mt1">Add weekly topics or modules to track course progress.</p></div>';
       return '<div class="fc g3"><div class="card padc"><div class="f jb aic"><div><h3 class="txm semi">Course syllabus</h3><p class="txs muted mt1">Keep the official course document separate from ordinary materials.</p></div><button class="btn btn-primary btn-sm" onclick="uploadSyllabusAttachment(\'' + subject.id + '\')">' + ic('upload',15) + ' Attach file</button></div><p class="txs muted mt2">PDF, Word, PowerPoint, Excel, text, or images · 20 MB maximum per file.</p><div class="fc g2 mt3">' + syllabusCards + '</div></div>' + topicHtml + '<button class="btn btn-secondary btn-block" onclick="addTopic(\'' + subject.id + '\')">' + ic('plus',16) + ' Add syllabus topic</button></div>';
@@ -5808,6 +5827,29 @@ async function deleteRoomAny(id){
 .nbx-preview-image{display:block;max-width:100%;max-height:62vh;object-fit:contain;margin:0 auto}
 .nbx-preview-audio{display:block;width:calc(100% - 24px);margin:24px 12px}
 .nbx-preview-text{margin:0;padding:14px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font:12px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--fg)}
+.nbx-pdf-viewer{display:flex;flex-direction:column;gap:9px;min-width:0;width:100%;padding:10px}
+.nbx-pdf-toolbar{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:6px;position:sticky;top:0;z-index:3;padding:7px;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:var(--shadow-sm)}
+.nbx-pdf-toolbar button{min-width:36px;min-height:34px;padding:5px 9px;border:1px solid var(--border);border-radius:9px;background:var(--secondary);font-size:12px;font-weight:600}
+.nbx-pdf-toolbar button:disabled{opacity:.4;cursor:not-allowed}
+.nbx-pdf-page-label{min-width:76px;text-align:center;font-size:11px;color:var(--muted-fg);font-variant-numeric:tabular-nums}
+.nbx-pdf-canvas-wrap{display:flex;justify-content:center;align-items:flex-start;min-width:0;width:100%;overflow:auto;padding:6px 0 14px}
+.nbx-pdf-canvas{display:block;max-width:none;height:auto;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.15)}
+.nbx-pdf-loading{padding:22px 12px;text-align:center;color:var(--muted-fg);font-size:12px}
+.nbx-preview-status{display:inline-flex;align-items:center;gap:5px;margin-left:6px}
+.nbx-preview-loading{min-height:180px;display:flex;align-items:center;justify-content:center;gap:10px;padding:24px;color:var(--muted-fg);font-size:13px}.nbx-preview-spinner{width:20px;height:20px;flex:0 0 20px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:nbxPreviewSpin .8s linear infinite}@keyframes nbxPreviewSpin{to{transform:rotate(360deg)}}
+.nbx-preview-body img{max-width:100%}
+.nbx-preview-body [hidden]{display:none!important}
+.nbx-docx-preview{padding:16px;background:var(--card);color:var(--fg);font-size:13px;line-height:1.65;overflow-wrap:anywhere}
+.nbx-docx-preview h1,.nbx-docx-preview h2,.nbx-docx-preview h3{margin:1em 0 .5em;font-weight:700}
+.nbx-docx-preview p{margin:.55em 0}
+.nbx-docx-preview table{border-collapse:collapse;width:100%;margin:12px 0}
+.nbx-docx-preview td,.nbx-docx-preview th{border:1px solid var(--border);padding:7px;vertical-align:top}
+.nbx-docx-preview img{max-width:100%;height:auto}
+.nbx-sheet-preview{min-width:0;padding:10px}
+.nbx-sheet-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.nbx-sheet-controls select{max-width:100%;min-width:140px;flex:1}
+.nbx-sheet-grid{min-width:0;overflow:auto}
+
 .nbx-preview-table{border-collapse:collapse;width:max-content;min-width:100%;font-size:11px}
 .nbx-preview-table th,.nbx-preview-table td{padding:8px 10px;border:1px solid var(--border);text-align:left;vertical-align:top;max-width:240px;overflow-wrap:anywhere;white-space:pre-wrap}
 .nbx-preview-table th{position:sticky;top:0;background:var(--secondary);z-index:1}
@@ -5839,6 +5881,7 @@ async function deleteRoomAny(id){
   var NBX_MAX_BYTES = 20 * 1024 * 1024;
   var NBX_ALLOWED = ['pdf','doc','docx','ppt','pptx','xls','xlsx','txt','md','csv','png','jpg','jpeg','webp','gif','mp3','wav','m4a','ogg','mp4','webm','mov','m4v'];
   var NBX_FOLDER_SELECTION = window.NB_MATERIAL_FOLDER_SELECTION || (window.NB_MATERIAL_FOLDER_SELECTION = Object.create(null));
+  var NBX_ACTIVE_PREVIEW_PANEL = null;
   var NBX_CATEGORIES = [
     {key:'all', label:'All Files', hint:'Every material in this subject', icon:'▣'},
     {key:'pdf', label:'PDF Documents', hint:'PDF handouts and reviewers', icon:'PDF'},
@@ -6138,14 +6181,29 @@ async function deleteRoomAny(id){
     });
     return table;
   }
-  function nbxName(file) { return String(file.fileName || file.title || file.n || file.name || 'Study file'); }
+  function nbxName(file) {
+    file = file || {};
+    var candidates = [file.fileName, file.n, file.name, file.title];
+    for (var i = 0; i < candidates.length; i++) {
+      var value = String(candidates[i] || '').trim();
+      if (!value) continue;
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) continue;
+      return value;
+    }
+    var path = String(file.path || '').split('/').pop();
+    if (path && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(path)) return path.replace(/^\d{10,}[_-]/, '') || 'Study file';
+    return 'Study file';
+  }
   function nbxEffectiveMime(fileName, declaredMime, responseMime) {
     var ext = nbxExt(fileName);
     var byExtension = {
       pdf:'application/pdf', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', gif:'image/gif',
       mp4:'video/mp4', m4v:'video/mp4', webm:'video/webm', mov:'video/quicktime',
       mp3:'audio/mpeg', wav:'audio/wav', m4a:'audio/mp4', ogg:'audio/ogg',
-      txt:'text/plain', md:'text/markdown', csv:'text/csv'
+      txt:'text/plain', md:'text/markdown', csv:'text/csv',
+      doc:'application/msword', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls:'application/vnd.ms-excel', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ppt:'application/vnd.ms-powerpoint', pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation'
     };
     var declared = String(declaredMime || '').toLowerCase().split(';')[0].trim();
     var response = String(responseMime || '').toLowerCase().split(';')[0].trim();
@@ -6158,21 +6216,46 @@ async function deleteRoomAny(id){
     return byExtension[ext] || declared || response || 'application/octet-stream';
   }
   function nbxCreatePreviewPanel(name, type) {
+    var accept = '.pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv,.mp3,.wav,.m4a,.ogg,.mp4,.webm,.mov,.m4v,.docx,.xlsx,.xls,.doc,.pptx,.ppt';
     var panel = sheet(
       '<div class="f jb aic g2 mb3"><div class="grow minw"><h3 class="txl semi">File preview</h3><p class="txs muted nbx-preview-title" title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</p></div><button class="iconbtn" type="button" data-close-preview aria-label="Close preview">' + ic('x',18) + '</button></div>' +
       '<div class="nbx-preview-meta txs muted mb2">' + nbxEscape(type || 'File') + '</div><div id="nbxPreviewBody" class="nbx-preview-body"><p class="txm muted">Loading preview…</p></div>' +
-      '<div class="f g2 mt3"><button class="btn btn-primary grow" type="button" data-preview-download>' + ic('download',15) + ' Download &amp; save offline</button><button class="btn btn-secondary" type="button" data-close-preview-bottom>Close</button></div>'
+      '<input type="file" data-open-device-input accept="' + accept + '" hidden />' +
+      '<div class="f g2 mt3"><button class="btn btn-secondary grow" type="button" data-open-device>' + ic('upload',15) + ' Open from Device</button><button class="btn btn-primary grow" type="button" data-preview-download>' + ic('download',15) + ' Download &amp; save offline</button></div>' +
+      '<div class="f mt2"><button class="btn btn-secondary btn-block" type="button" data-close-preview-bottom>Close</button></div>'
     );
+    NBX_ACTIVE_PREVIEW_PANEL = panel;
     panel.__nbxPreviewObjectUrl = null;
-    function closePreview() {
+    function releasePreviewResources() {
+      if (NBX_ACTIVE_PREVIEW_PANEL === panel) NBX_ACTIVE_PREVIEW_PANEL = null;
+      if (panel.__nbxPdfCleanup) {
+        try { panel.__nbxPdfCleanup(); } catch (cleanupError) { console.warn('PDF viewer cleanup failed:', cleanupError); }
+        panel.__nbxPdfCleanup = null;
+      }
       if (panel.__nbxPreviewObjectUrl) {
         try { URL.revokeObjectURL(panel.__nbxPreviewObjectUrl); } catch (_) {}
         panel.__nbxPreviewObjectUrl = null;
       }
-      closeTop();
+      if (panel.__nbxRemovalObserver) { panel.__nbxRemovalObserver.disconnect(); panel.__nbxRemovalObserver = null; }
     }
+    panel.__nbxReleasePreviewResources = releasePreviewResources;
+    if (typeof MutationObserver === 'function') {
+      panel.__nbxRemovalObserver = new MutationObserver(function () {
+        if (!panel.isConnected) releasePreviewResources();
+      });
+      panel.__nbxRemovalObserver.observe(document.body, { childList:true, subtree:true });
+    }
+    function closePreview() { releasePreviewResources(); closeTop(); }
     panel.querySelector('[data-close-preview]').onclick = closePreview;
     panel.querySelector('[data-close-preview-bottom]').onclick = closePreview;
+    var deviceButton = panel.querySelector('[data-open-device]');
+    var deviceInput = panel.querySelector('[data-open-device-input]');
+    deviceButton.onclick = function () { deviceInput.click(); };
+    deviceInput.addEventListener('change', function () {
+      var selected = deviceInput.files && deviceInput.files[0];
+      deviceInput.value = '';
+      if (selected && typeof panel.__nbxOnDeviceFile === 'function') panel.__nbxOnDeviceFile(selected);
+    });
     return panel;
   }
   async function nbxGetSignedUrl(path, downloadName) {
@@ -6184,143 +6267,652 @@ async function deleteRoomAny(id){
     if (!url) throw new Error('Supabase did not return a signed file URL.');
     return url;
   }
-  async function nbxDownloadPath(path, fileName, mime) {
+  // PDF.js is pinned to a single release. The main and worker modules are stored
+  // in IndexedDB; the service worker also caches same-version runtime resources.
+  // Offline readiness is reported only after the file and viewer caches are checked.
+  var NBX_PDFJS_VERSION = '6.5.438';
+  var NBX_PDFJS_SW_CACHE = 'nexbyte-pdfjs-assets-' + NBX_PDFJS_VERSION.replace(/\./g, '-');
+  var NBX_PDFJS_MAIN_KEY = 'nexbyte_pdfjs_main_' + NBX_PDFJS_VERSION.replace(/\./g, '_');
+  var NBX_PDFJS_WORKER_KEY = 'nexbyte_pdfjs_worker_' + NBX_PDFJS_VERSION.replace(/\./g, '_');
+  var NBX_PDFJS_LOAD_PROMISE = null;
+  var NBX_PDFJS_MODULE_URL = null;
+  var NBX_PDFJS_WORKER_URL = null;
+  var NBX_PDFJS_MAIN_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + NBX_PDFJS_VERSION + '/build/pdf.mjs';
+  var NBX_PDFJS_WORKER_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + NBX_PDFJS_VERSION + '/build/pdf.worker.mjs';
+
+  async function nbxEnsurePdfJsAssetInServiceWorkerCache(url) {
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller || !('caches' in window)) return false;
+    try {
+      var cache = await caches.open(NBX_PDFJS_SW_CACHE);
+      if (await cache.match(url)) return true;
+      // A runtime may already be in IndexedDB from a first load before the
+      // service worker controlled the page. Fetch it once again through the
+      // controlling worker so the worker's CDN cache can be populated too.
+      var response = await fetch(url, {method:'GET',mode:'cors',credentials:'omit',cache:'reload'});
+      if (!response.ok) return false;
+      await response.arrayBuffer();
+      return !!(await cache.match(url));
+    } catch (cacheError) {
+      console.warn('PDF.js runtime could not be confirmed in the service-worker cache:', cacheError);
+      return false;
+    }
+  }
+
+  async function nbxGetPdfJsResource(key, url, fileName) {
+    var cached = null;
+    if (typeof dbGet === 'function') {
+      try { cached = await dbGet(key); } catch (error) { console.warn('PDF viewer cache lookup failed:', error); }
+    }
+    if (cached && cached.blob && cached.blob.size > 10000) {
+      await nbxEnsurePdfJsAssetInServiceWorkerCache(url);
+      return cached.blob;
+    }
+    if (!navigator.onLine) throw new Error('The PDF viewer is not saved on this device yet. Connect once, preview or save the PDF, then it will be available offline.');
+    // Always retrieve the main module and worker from the same pinned CDN
+    // release. Mixing a local vendor file with a CDN worker can cause a
+    // PDF.js API/worker version mismatch that prevents rendering entirely.
+    var response = await fetch(url, { method:'GET', mode:'cors', credentials:'omit', cache:'force-cache' });
+    if (!response.ok) throw new Error('Could not download the PDF viewer component (' + response.status + ').');
+    var blob = await response.blob();
+    var prefix = (await blob.slice(0,240).text()).trim().toLowerCase();
+    if (!blob || blob.size < 10000 || prefix.indexOf('<!doctype html') === 0 || prefix.indexOf('<html') === 0) throw new Error('The PDF viewer component download was incomplete or returned an HTML error page.');
+    if (typeof saveOfflineBlob === 'function') {
+      try { await saveOfflineBlob(key, blob, fileName, 'text/javascript', 'pdfjs-engine'); }
+      catch (cacheError) { console.warn('PDF.js runtime works online, but its offline engine copy could not be saved:', cacheError); }
+    }
+    await nbxEnsurePdfJsAssetInServiceWorkerCache(url);
+    return blob;
+  }
+
+  async function nbxLoadPdfJs() {
+    if (window.NBX_PDFJS && typeof window.NBX_PDFJS.getDocument === 'function') return window.NBX_PDFJS;
+    if (NBX_PDFJS_LOAD_PROMISE) return NBX_PDFJS_LOAD_PROMISE;
+    NBX_PDFJS_LOAD_PROMISE = (async function () {
+      var mainBlob = await nbxGetPdfJsResource(NBX_PDFJS_MAIN_KEY, NBX_PDFJS_MAIN_CDN, 'pdf.mjs');
+      var workerBlob = await nbxGetPdfJsResource(NBX_PDFJS_WORKER_KEY, NBX_PDFJS_WORKER_CDN, 'pdf.worker.mjs');
+      // Prefer the version-pinned module URL so import.meta.url and any
+      // relative PDF.js runtime resources resolve against the real package path.
+      // Fall back to the locally cached module Blob for offline/strict-network
+      // cases. The worker is a Blob made from the same pinned PDF.js release.
+      NBX_PDFJS_WORKER_URL = URL.createObjectURL(new Blob([workerBlob], { type:'text/javascript' }));
+      var pdfjs;
+      try {
+        NBX_PDFJS_MODULE_URL = NBX_PDFJS_MAIN_CDN;
+        pdfjs = await import(NBX_PDFJS_MODULE_URL);
+      } catch (cdnImportError) {
+        console.warn('PDF.js CDN module import failed; trying the saved local module:', cdnImportError);
+        NBX_PDFJS_MODULE_URL = URL.createObjectURL(new Blob([mainBlob], { type:'text/javascript' }));
+        pdfjs = await import(NBX_PDFJS_MODULE_URL);
+      }
+      if (!pdfjs || typeof pdfjs.getDocument !== 'function' || !pdfjs.GlobalWorkerOptions) {
+        throw new Error('The PDF viewer library did not initialize correctly.');
+      }
+      if (pdfjs.version && String(pdfjs.version) !== NBX_PDFJS_VERSION) {
+        throw new Error('PDF.js version mismatch: expected ' + NBX_PDFJS_VERSION + ', received ' + pdfjs.version + '.');
+      }
+      pdfjs.GlobalWorkerOptions.workerSrc = NBX_PDFJS_WORKER_URL;
+      window.NBX_PDFJS = pdfjs;
+      return pdfjs;
+    })().catch(function (error) {
+      NBX_PDFJS_LOAD_PROMISE = null;
+      throw error;
+    });
+    return NBX_PDFJS_LOAD_PROMISE;
+  }
+  window.nbxEnsurePdfJs = nbxLoadPdfJs;
+
+  async function nbxRenderPdfDocument(blob, name, body, panel) {
+    var pdfjs = await nbxLoadPdfJs();
+    if (!document.body.contains(panel)) return;
+    var bytes = new Uint8Array(await blob.arrayBuffer());
+    var loadingTask = pdfjs.getDocument({
+      data: bytes,
+      useSystemFonts: true,
+      isEvalSupported: false,
+      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + NBX_PDFJS_VERSION + '/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + NBX_PDFJS_VERSION + '/standard_fonts/',
+      wasmUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + NBX_PDFJS_VERSION + '/wasm/',
+      useWorkerFetch: false,
+      useWasm: true,
+      verbosity: 0
+    });
+    var pdf = await loadingTask.promise;
+    if (!document.body.contains(panel)) { try { await pdf.destroy(); } catch (_) {} return; }
+
+    var viewer = document.createElement('div'); viewer.className = 'nbx-pdf-viewer';
+    var toolbar = document.createElement('div'); toolbar.className = 'nbx-pdf-toolbar';
+    var prev = document.createElement('button'); prev.type = 'button'; prev.textContent = '‹ Previous';
+    var pageLabel = document.createElement('span'); pageLabel.className = 'nbx-pdf-page-label';
+    var next = document.createElement('button'); next.type = 'button'; next.textContent = 'Next ›';
+    var zoomOut = document.createElement('button'); zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.setAttribute('aria-label','Zoom out');
+    var zoomIn = document.createElement('button'); zoomIn.type = 'button'; zoomIn.textContent = '+'; zoomIn.setAttribute('aria-label','Zoom in');
+    var fit = document.createElement('button'); fit.type = 'button'; fit.textContent = 'Fit width';
+    toolbar.append(prev, pageLabel, next, zoomOut, zoomIn, fit);
+    var canvasWrap = document.createElement('div'); canvasWrap.className = 'nbx-pdf-canvas-wrap';
+    var canvas = document.createElement('canvas'); canvas.className = 'nbx-pdf-canvas'; canvas.setAttribute('aria-label', 'Rendered PDF page');
+    canvasWrap.appendChild(canvas);
+    var loading = document.createElement('p'); loading.className = 'nbx-pdf-loading'; loading.textContent = 'Preparing PDF page…';
+    viewer.append(toolbar, canvasWrap, loading); body.replaceChildren(viewer);
+
+    var state = { page:1, zoom:1, renderTask:null, destroyed:false, resizeTimer:null, observer:null };
+    var context = canvas.getContext('2d', { alpha:false });
+    if (!context) throw new Error('This browser cannot create a PDF canvas. Try an updated browser.');
+    async function renderPage() {
+      if (state.destroyed || !document.body.contains(panel)) return;
+      if (state.renderTask) { try { state.renderTask.cancel(); } catch (_) {} state.renderTask = null; }
+      loading.textContent = 'Rendering page ' + state.page + ' of ' + pdf.numPages + '…';
+      prev.disabled = state.page <= 1; next.disabled = state.page >= pdf.numPages;
+      pageLabel.textContent = state.page + ' / ' + pdf.numPages;
+      var page = await pdf.getPage(state.page);
+      if (state.destroyed) return;
+      var baseViewport = page.getViewport({ scale:1 });
+      var availableWidth = Math.max(220, canvasWrap.clientWidth - 18);
+      var fitScale = availableWidth / baseViewport.width;
+      var scale = Math.max(0.35, Math.min(4, fitScale * state.zoom));
+      var viewport = page.getViewport({ scale:scale });
+      var pixelRatio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      canvas.width = Math.max(1, Math.floor(viewport.width * pixelRatio));
+      canvas.height = Math.max(1, Math.floor(viewport.height * pixelRatio));
+      canvas.style.width = Math.ceil(viewport.width) + 'px';
+      canvas.style.height = Math.ceil(viewport.height) + 'px';
+      context.setTransform(1,0,0,1,0,0);
+      context.fillStyle = '#ffffff'; context.fillRect(0,0,canvas.width,canvas.height);
+      var task = page.render({
+        canvasContext:context,
+        viewport:viewport,
+        transform:pixelRatio === 1 ? null : [pixelRatio,0,0,pixelRatio,0,0],
+        intent:'display'
+      });
+      state.renderTask = task;
+      try {
+        await task.promise;
+        if (!state.destroyed) loading.textContent = 'Page ' + state.page + ' of ' + pdf.numPages + ' · ' + Math.round(scale * 100) + '%';
+      } catch (error) {
+        if (error && (error.name === 'RenderingCancelledException' || /cancel/i.test(error.message || ''))) return;
+        throw error;
+      } finally { if (state.renderTask === task) state.renderTask = null; }
+    }
+    prev.onclick = function () { if (state.page > 1) { state.page--; renderPage().catch(showRenderError); } };
+    next.onclick = function () { if (state.page < pdf.numPages) { state.page++; renderPage().catch(showRenderError); } };
+    zoomOut.onclick = function () { state.zoom = Math.max(0.5, state.zoom / 1.2); renderPage().catch(showRenderError); };
+    zoomIn.onclick = function () { state.zoom = Math.min(3.5, state.zoom * 1.2); renderPage().catch(showRenderError); };
+    fit.onclick = function () { state.zoom = 1; renderPage().catch(showRenderError); canvasWrap.scrollTo({ top:0, left:0, behavior:'smooth' }); };
+    function showRenderError(error) {
+      console.error('PDF page rendering failed:', error);
+      loading.textContent = 'This PDF page could not be rendered. The file may be damaged or use an unsupported feature.';
+    }
+    function onResize() {
+      clearTimeout(state.resizeTimer);
+      state.resizeTimer = setTimeout(function () { renderPage().catch(showRenderError); }, 180);
+    }
+    window.addEventListener('resize', onResize);
+    if (typeof ResizeObserver === 'function') {
+      var observedWidth = canvasWrap.clientWidth;
+      state.observer = new ResizeObserver(function () {
+        var nextWidth = canvasWrap.clientWidth;
+        if (Math.abs(nextWidth - observedWidth) > 1) { observedWidth = nextWidth; onResize(); }
+      });
+      state.observer.observe(canvasWrap);
+    }
+    panel.__nbxPdfCleanup = function () {
+      state.destroyed = true; clearTimeout(state.resizeTimer);
+      window.removeEventListener('resize', onResize);
+      if (state.observer) state.observer.disconnect();
+      if (state.renderTask) { try { state.renderTask.cancel(); } catch (_) {} }
+      try { pdf.destroy(); } catch (_) {}
+    };
+    await renderPage();
+  }
+
+  async function nbxWarmPdfResources(blob, storagePath) {
+    var pdfjs = await nbxLoadPdfJs();
+    var loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(await blob.arrayBuffer()),
+      useSystemFonts: true,
+      isEvalSupported: false,
+      cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + NBX_PDFJS_VERSION + '/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + NBX_PDFJS_VERSION + '/standard_fonts/',
+      wasmUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@' + NBX_PDFJS_VERSION + '/wasm/',
+      useWorkerFetch: false,
+      useWasm: true,
+      verbosity: 0
+    });
+    var pdf = await loadingTask.promise;
+    var warmed = false;
+    try {
+      // Render every page at thumbnail scale while online. This walks each page
+      // so PDF.js requests the document-specific CMaps, fonts, and WASM helpers
+      // needed for later offline rendering on this device.
+      var canvas = document.createElement('canvas');
+      var context = canvas.getContext('2d');
+      if (!context) throw new Error('This browser cannot prepare the PDF for offline viewing.');
+      for (var pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+        var page = await pdf.getPage(pageNumber);
+        var viewport = page.getViewport({ scale:0.12 });
+        canvas.width = Math.max(1, Math.ceil(viewport.width));
+        canvas.height = Math.max(1, Math.ceil(viewport.height));
+        await page.render({ canvasContext:context, viewport:viewport, intent:'display' }).promise;
+        page.cleanup();
+      }
+      canvas.width = 0; canvas.height = 0;
+      warmed = true;
+    } finally {
+      try { await pdf.destroy(); } catch (destroyError) { console.warn('PDF warm-up cleanup failed:', destroyError); }
+    }
+    if (!warmed) throw new Error('The PDF viewer resources could not be prepared for offline use.');
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+      throw new Error('The PWA service worker is not controlling this page yet. Refresh NEXTBYTE once while online, then save the PDF offline again.');
+    }
+    if (!(await nbxPdfServiceWorkerCacheStatus())) {
+      throw new Error('The PDF viewer runtime could not be confirmed in the service-worker cache. Keep NEXTBYTE online and retry Save Offline.');
+    }
+    if (storagePath && typeof dbGet === 'function' && typeof dbPut === 'function') {
+      var offlineKey = (typeof offlineMaterialKey === 'function') ? offlineMaterialKey(storagePath) : ('offline_material_' + String(storagePath));
+      var offlineRecord = await dbGet(offlineKey);
+      if (!offlineRecord || !offlineRecord.blob || !offlineRecord.blob.size) throw new Error('The PDF is not saved in this device’s offline file cache.');
+      offlineRecord.pdfViewerReady = true;
+      offlineRecord.pdfViewerVersion = NBX_PDFJS_VERSION;
+      offlineRecord.pdfViewerPreparedAt = Date.now();
+      await dbPut(offlineRecord);
+    }
+    return true;
+  }
+  window.nbxPreparePdfOfflinePreview = nbxWarmPdfResources;
+
+  async function nbxPdfEngineCacheStatus() {
+    if (typeof dbGet !== 'function') return false;
+    try {
+      var main = await dbGet(NBX_PDFJS_MAIN_KEY), worker = await dbGet(NBX_PDFJS_WORKER_KEY);
+      return !!(main && main.blob && main.blob.size > 10000 && worker && worker.blob && worker.blob.size > 10000);
+    } catch (_) { return false; }
+  }
+  async function nbxPdfServiceWorkerCacheStatus() {
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller || !('caches' in window)) return false;
+    try {
+      var cache = await caches.open(NBX_PDFJS_SW_CACHE);
+      var main = await cache.match(NBX_PDFJS_MAIN_CDN);
+      var worker = await cache.match(NBX_PDFJS_WORKER_CDN);
+      return !!(main && worker);
+    } catch (_) { return false; }
+  }
+
+  async function nbxDownloadPath(path, fileName, mime, fileRecord) {
     var name = fileName || 'download';
     var offlineKey = (typeof offlineMaterialKey === 'function') ? offlineMaterialKey(path) : ('offline_material_' + String(path));
-    var blob = null, savedOffline = false;
+    var blob = null, savedOffline = false, viewerCached = true;
     try {
-      // Reuse a device copy when one already exists. Otherwise fetch the private
-      // signed URL as a Blob, save it in IndexedDB, and download that same Blob.
+      var sessionUser = await nbxUser();
+      if (fileRecord && fileRecord.userId && String(fileRecord.userId) !== String(sessionUser.id)) { toast('This file does not belong to the currently signed-in account.'); return false; }
       if (typeof dbGet === 'function') {
         try {
           var existing = await dbGet(offlineKey);
-          if (existing && existing.blob && existing.blob.size) { blob = existing.blob; savedOffline = true; }
+          if (existing && existing.blob && existing.blob.size && String(existing.userId || '') === String(sessionUser.id)) { blob = existing.blob; savedOffline = true; }
         } catch (cacheReadError) { console.warn('Could not read existing offline file copy:', cacheReadError); }
       }
       if (!blob) {
         var signedUrl = await nbxGetSignedUrl(path, null);
-        var response = await fetch(signedUrl, { method: 'GET', cache: 'no-store', credentials: 'omit' });
+        var response = await fetch(signedUrl, { method:'GET', cache:'no-store', credentials:'omit' });
         if (!response.ok) throw new Error('Download failed (' + response.status + ').');
         blob = await response.blob();
         if (!blob || !blob.size) throw new Error('The downloaded file is empty.');
         var finalMime = nbxEffectiveMime(name, mime, blob.type);
         if (typeof saveOfflineBlob === 'function') {
           try {
-            await saveOfflineBlob(offlineKey, blob, name, finalMime, 'study-file');
+            await saveOfflineBlob(offlineKey, new Blob([blob], {type:finalMime}), name, finalMime, 'study-file', {fileId:(fileRecord && (fileRecord.id || fileRecord.fileId)) || path,storagePath:path,bucket:NBX_BUCKET,userId:sessionUser.id});
             savedOffline = true;
-          } catch (cacheWriteError) {
-            // A quota/private-mode failure must not prevent the normal download.
-            console.warn('The file downloaded but could not be cached for offline preview:', cacheWriteError);
-          }
+          } catch (cacheWriteError) { console.warn('The file downloaded but could not be cached for offline preview:', cacheWriteError); }
         }
       }
       var downloadMime = nbxEffectiveMime(name, mime, blob.type);
-      if (blob.type !== downloadMime) blob = new Blob([blob], { type: downloadMime });
+      if (blob.type !== downloadMime) blob = new Blob([blob], { type:downloadMime });
+      if (savedOffline && typeof dbGet === 'function' && typeof dbPut === 'function') {
+        try {
+          var offlineRecord = await dbGet(offlineKey);
+          if (offlineRecord && offlineRecord.blob) {
+            offlineRecord.name = name; offlineRecord.mime = downloadMime;
+            offlineRecord.fileId = (fileRecord && (fileRecord.id || fileRecord.fileId)) || offlineRecord.fileId || path;
+            offlineRecord.storagePath = path; offlineRecord.bucket = NBX_BUCKET;
+            if (fileRecord && fileRecord.userId) offlineRecord.userId = fileRecord.userId;
+            await dbPut(offlineRecord);
+          }
+        } catch (metadataError) { console.warn('Offline file metadata could not be refreshed:', metadataError); }
+      }
+      // Save/cache the PDF renderer too, so the saved PDF can really be viewed offline.
+      if (nbxExt(name) === 'pdf') {
+        try { await nbxWarmPdfResources(blob, path); }
+        catch (pdfEngineError) { console.warn('PDF file saved, but the PDF viewer or its auxiliary assets could not be prepared:', pdfEngineError); }
+        try {
+          var preparedPdfRecord = await dbGet(offlineKey);
+          var serviceWorkerReady = await nbxPdfServiceWorkerCacheStatus();
+          viewerCached = serviceWorkerReady && await nbxPdfEngineCacheStatus() && !!(preparedPdfRecord && preparedPdfRecord.pdfViewerReady === true && preparedPdfRecord.pdfViewerVersion === NBX_PDFJS_VERSION);
+        } catch (pdfStatusError) { viewerCached = false; }
+      } else if (nbxExt(name) === 'docx') {
+        try {
+          await nbxLoadCachedScript(NBX_MAMMOTH_KEY, NBX_MAMMOTH_URL, 'mammoth', 'Word');
+          var savedWordEngine = await dbGet(NBX_MAMMOTH_KEY);
+          viewerCached = !!(savedWordEngine && savedWordEngine.blob && savedWordEngine.blob.size);
+        } catch (wordEngineError) { viewerCached = false; console.warn('DOCX saved, but its preview engine is not ready offline:', wordEngineError); }
+      } else if (nbxExt(name) === 'xlsx' || nbxExt(name) === 'xls') {
+        try {
+          await nbxLoadCachedScript(NBX_XLSX_KEY, NBX_XLSX_URL, 'XLSX', 'Spreadsheet');
+          var savedSheetEngine = await dbGet(NBX_XLSX_KEY);
+          viewerCached = !!(savedSheetEngine && savedSheetEngine.blob && savedSheetEngine.blob.size);
+        } catch (sheetEngineError) { viewerCached = false; console.warn('Spreadsheet saved, but its preview engine is not ready offline:', sheetEngineError); }
+      }
       var objectUrl = URL.createObjectURL(blob);
       var anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = name;
-      anchor.rel = 'noopener';
+      anchor.href = objectUrl; anchor.download = name; anchor.rel = 'noopener';
       document.body.appendChild(anchor); anchor.click(); anchor.remove();
       setTimeout(function () { try { URL.revokeObjectURL(objectUrl); } catch (_) {} }, 5 * 60 * 1000);
-      if (savedOffline) toast('Downloaded and saved for offline preview on this device.');
+      if (savedOffline && viewerCached) toast('Downloaded and saved for offline preview on this device.');
+      else if (savedOffline && nbxExt(name) === 'pdf') toast('File saved offline. Refresh NEXTBYTE online, then open the PDF and save it again to prepare the offline viewer.');
+      else if (savedOffline) toast('File saved on this device. Connect once and open its preview to prepare the viewer for offline use.');
       else toast('Download started. The file could not be saved for offline preview; check available device storage.');
+      return true;
     } catch (error) {
       console.error('Study file download failed:', error);
-      // Direct signed-download fallback supports browsers that block Blob downloads.
       try {
         var directUrl = await nbxGetSignedUrl(path, name);
         var fallback = document.createElement('a'); fallback.href = directUrl; fallback.target = '_blank'; fallback.rel = 'noopener'; fallback.download = name;
         document.body.appendChild(fallback); fallback.click(); fallback.remove();
         toast('Download started, but an offline preview copy could not be saved.');
+        return false;
       } catch (fallbackError) {
         console.error('Direct study file download fallback failed:', fallbackError);
         toast('Could not download this file: ' + ((fallbackError && fallbackError.message) || (error && error.message) || 'Check Storage permissions.'));
+        return false;
       }
     }
   }
   window.nbDownloadStudyMaterial = function (subjectId, index) {
     var subject = nbxFindSubject(subjectId), file = subject && subject.materials && subject.materials[index];
     if (!file || !file.path) { toast('This material has no cloud file reference.'); return; }
-    nbxDownloadPath(file.path, nbxName(file), file.mime || file.fileType || '');
+    nbxDownloadPath(file.path, nbxName(file), file.mime || file.fileType || '', file);
   };
   window.nbDownloadSyllabusFile = function (subjectId, index) {
     var subject = nbxFindSubject(subjectId), file = subject && subject.syllabusFiles && subject.syllabusFiles[index];
     if (!file || !file.path) { toast('This syllabus has no cloud file reference.'); return; }
-    nbxDownloadPath(file.path, nbxName(file), file.mime || file.fileType || '');
+    nbxDownloadPath(file.path, nbxName(file), file.mime || file.fileType || '', file);
   };
 
-  async function nbxPreviewPath(file, path, section) {
-    if (!path) { toast('This file does not have a cloud storage path.'); return; }
-    var name = nbxName(file), ext = nbxExt(name), mime = String(file.mime || file.fileType || '').toLowerCase();
+  var NBX_MAMMOTH_KEY = 'nexbyte_mammoth_1_13_0';
+  var NBX_XLSX_KEY = 'nexbyte_sheetjs_0_20_3';
+  var NBX_MAMMOTH_URL = 'https://cdn.jsdelivr.net/npm/mammoth@1.13.0/mammoth.browser.min.js';
+  var NBX_XLSX_URL = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  var NBX_LIBRARY_LOADS = Object.create(null);
+
+  async function nbxLoadCachedScript(key, url, globalName, label) {
+    if (window[globalName]) return window[globalName];
+    if (NBX_LIBRARY_LOADS[key]) return NBX_LIBRARY_LOADS[key];
+    NBX_LIBRARY_LOADS[key] = (async function () {
+      var record = null;
+      try { record = await dbGet(key); } catch (cacheError) { console.warn(label + ' cache lookup failed:', cacheError); }
+      var sourceBlob = record && record.blob && record.blob.size ? record.blob : null;
+      if (!sourceBlob) {
+        if (!navigator.onLine) throw new Error(label + ' preview engine is not saved on this device yet. Connect once and preview or save this file for offline use.');
+        var response = await fetch(url, {method:'GET',mode:'cors',credentials:'omit',cache:'force-cache'});
+        if (!response.ok) throw new Error('Could not load ' + label + ' preview engine (' + response.status + ').');
+        sourceBlob = await response.blob();
+        if (!sourceBlob || sourceBlob.size < 10000) throw new Error(label + ' preview engine download was incomplete.');
+        await saveOfflineBlob(key, sourceBlob, label + '.min.js', 'text/javascript', 'preview-engine', {fileId:key,storagePath:'',bucket:'',userId:''});
+      }
+      var scriptUrl = URL.createObjectURL(new Blob([sourceBlob], {type:'text/javascript'}));
+      try {
+        await new Promise(function (resolve, reject) {
+          var script = document.createElement('script');
+          script.async = true; script.src = scriptUrl;
+          script.onload = function () { script.remove(); resolve(); };
+          script.onerror = function () { script.remove(); reject(new Error(label + ' preview engine could not be initialized.')); };
+          document.head.appendChild(script);
+        });
+      } finally { try { URL.revokeObjectURL(scriptUrl); } catch (_) {} }
+      if (!window[globalName]) throw new Error(label + ' preview engine did not expose its browser API.');
+      return window[globalName];
+    })().catch(function (error) { delete NBX_LIBRARY_LOADS[key]; throw error; });
+    return NBX_LIBRARY_LOADS[key];
+  }
+  window.nbxPrepareOfficeOfflinePreview = async function (fileName) {
+    var extension = nbxExt(fileName);
+    if (extension === 'docx') return nbxLoadCachedScript(NBX_MAMMOTH_KEY, NBX_MAMMOTH_URL, 'mammoth', 'Word');
+    if (extension === 'xlsx' || extension === 'xls') return nbxLoadCachedScript(NBX_XLSX_KEY, NBX_XLSX_URL, 'XLSX', 'Spreadsheet');
+    return true;
+  };
+
+  function nbxSafeDocxHtml(html) {
+    var parser = new DOMParser();
+    var parsed = parser.parseFromString(String(html || ''), 'text/html');
+    var allowed = {P:1,DIV:1,H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,UL:1,OL:1,LI:1,TABLE:1,THEAD:1,TBODY:1,TFOOT:1,TR:1,TH:1,TD:1,STRONG:1,B:1,EM:1,I:1,U:1,S:1,BR:1,HR:1,BLOCKQUOTE:1,PRE:1,CODE:1,A:1,IMG:1};
+    function clean(node) {
+      if (node.nodeType === 3) return document.createTextNode(node.nodeValue || '');
+      if (node.nodeType !== 1) return document.createDocumentFragment();
+      var tag = node.tagName.toUpperCase();
+      var out = allowed[tag] ? document.createElement(tag.toLowerCase()) : document.createDocumentFragment();
+      if (tag === 'A' && out.nodeType === 1) {
+        var href = node.getAttribute('href') || '';
+        if (/^(https?:|mailto:)/i.test(href)) { out.setAttribute('href', href); out.setAttribute('target', '_blank'); out.setAttribute('rel', 'noopener noreferrer'); }
+      }
+      if (tag === 'IMG' && out.nodeType === 1) {
+        var src = node.getAttribute('src') || '';
+        if (/^data:image\/(png|jpeg|gif|webp);base64,/i.test(src)) { out.setAttribute('src', src); out.setAttribute('alt', node.getAttribute('alt') || 'Document image'); }
+      }
+      Array.prototype.forEach.call(node.childNodes, function (child) { out.appendChild(clean(child)); });
+      return out;
+    }
+    var fragment = document.createDocumentFragment();
+    Array.prototype.forEach.call(parsed.body.childNodes, function (child) { fragment.appendChild(clean(child)); });
+    return fragment;
+  }
+
+  async function nbxRenderDocx(blob, body) {
+    var mammoth = await nbxLoadCachedScript(NBX_MAMMOTH_KEY, NBX_MAMMOTH_URL, 'mammoth', 'Word');
+    var result = await mammoth.convertToHtml({arrayBuffer:await blob.arrayBuffer()});
+    var content = document.createElement('div'); content.className = 'nbx-docx-preview';
+    content.appendChild(nbxSafeDocxHtml(result.value || '<p>This Word document has no readable text.</p>'));
+    body.replaceChildren(content);
+    if (result.messages && result.messages.length) {
+      var note = document.createElement('p'); note.className = 'txs muted mt2';
+      note.textContent = result.messages.length + ' formatting or compatibility notice(s); this is a readable content preview, not a pixel-perfect Word layout.';
+      body.appendChild(note);
+    }
+  }
+
+  async function nbxRenderSpreadsheet(blob, body) {
+    var XLSX = await nbxLoadCachedScript(NBX_XLSX_KEY, NBX_XLSX_URL, 'XLSX', 'Spreadsheet');
+    var workbook = XLSX.read(await blob.arrayBuffer(), {type:'array',cellDates:true});
+    if (!workbook.SheetNames || !workbook.SheetNames.length) throw new Error('This spreadsheet contains no readable worksheets.');
+    var wrap = document.createElement('div'); wrap.className = 'nbx-sheet-preview';
+    var controls = document.createElement('div'); controls.className = 'nbx-sheet-controls';
+    var label = document.createElement('label'); label.className = 'txs semi'; label.textContent = 'Worksheet';
+    var select = document.createElement('select'); select.className = 'input'; select.setAttribute('aria-label','Choose worksheet');
+    workbook.SheetNames.forEach(function (sheetName) { var option = document.createElement('option'); option.value = sheetName; option.textContent = sheetName; select.appendChild(option); });
+    controls.append(label, select);
+    var grid = document.createElement('div'); grid.className = 'nbx-sheet-grid';
+    function renderSheet(sheetName) {
+      var sheetData = workbook.Sheets[sheetName];
+      var rows = XLSX.utils.sheet_to_json(sheetData, {header:1,defval:'',raw:false});
+      if (!rows.length) { grid.textContent = 'This worksheet is empty.'; return; }
+      grid.replaceChildren(nbxCsvTable(rows));
+      if (rows.length > 201 || rows.some(function (row) { return row.length > 20; })) {
+        var note = document.createElement('p'); note.className = 'txs muted mt2';
+        note.textContent = 'Showing up to 200 rows and 20 columns in this worksheet. Download the original for the complete spreadsheet.';
+        grid.appendChild(note);
+      }
+    }
+    select.addEventListener('change', function () { renderSheet(select.value); });
+    wrap.append(controls, grid); body.replaceChildren(wrap); renderSheet(workbook.SheetNames[0]);
+  }
+
+  async function nbxRenderBlobPreview(file, path, section, panel, suppliedBlob, suppliedOfflineCopy) {
+    var name = nbxName(file), ext = nbxExt(name), mime = String(file.mime || file.fileType || file.type || '').toLowerCase();
     var category = nbxCategory(file);
     var typeLabel = (NBX_CATEGORY_BY_KEY[category] || NBX_CATEGORY_BY_KEY.other).label;
-    var panel = nbxCreatePreviewPanel(name, typeLabel);
-    panel.querySelector('[data-preview-download]').onclick = function () { nbxDownloadPath(path, name, mime); };
     var body = panel.querySelector('#nbxPreviewBody');
-    try {
-      var offlineCopy = null;
+    var title = panel.querySelector('.nbx-preview-title');
+    var meta = panel.querySelector('.nbx-preview-meta');
+    var oldStatus = meta && meta.querySelector('[data-preview-status]');
+    if (oldStatus) oldStatus.remove();
+    if (title) { title.textContent = name; title.title = name; }
+    if (meta) meta.textContent = typeLabel + (section ? ' · ' + section : '');
+    var loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'nbx-preview-loading';
+    loadingIndicator.setAttribute('role', 'status');
+    var loadingSpinner = document.createElement('span'); loadingSpinner.className = 'nbx-preview-spinner'; loadingSpinner.setAttribute('aria-hidden', 'true');
+    var loadingLabel = document.createElement('span'); loadingLabel.textContent = 'Loading file contents…';
+    loadingIndicator.append(loadingSpinner, loadingLabel); body.replaceChildren(loadingIndicator);
+    var offlineCopy = suppliedOfflineCopy || null;
+    var previewBlob = suppliedBlob || null;
+    if (!previewBlob && path) {
+      var currentUser = await nbxUser();
+      if (file && file.userId && String(file.userId) !== String(currentUser.id)) throw new Error('This file does not belong to the currently signed-in account.');
       if (typeof dbGet === 'function' && typeof offlineMaterialKey === 'function') {
         try { offlineCopy = await dbGet(offlineMaterialKey(path)); } catch (cacheError) { console.warn('Offline preview cache lookup failed:', cacheError); }
       }
-      var previewBlob = offlineCopy && offlineCopy.blob ? offlineCopy.blob : null;
+      // Offline copies are private to the account that saved them. Ignore legacy
+      // records without an owner marker rather than risking cross-account exposure.
+      if (offlineCopy && offlineCopy.blob && String(offlineCopy.userId || '') !== String(currentUser.id)) offlineCopy = null;
+      previewBlob = offlineCopy && offlineCopy.blob ? offlineCopy.blob : null;
       if (!previewBlob) {
-        // Fetch the file bytes and preview a Blob URL. This deliberately avoids
-        // a signed URL with Content-Disposition: attachment, which can download
-        // instead of displaying the PDF in Android/PWA browsers.
+        if (!navigator.onLine) throw new Error('This file is not saved for offline use on this device. Reconnect and select Download & save offline first.');
         var previewSignedUrl = await nbxGetSignedUrl(path, null);
-        var previewResponse = await fetch(previewSignedUrl, { method: 'GET', cache: 'no-store', credentials: 'omit' });
+        var previewResponse = await fetch(previewSignedUrl, {method:'GET',cache:'no-store',credentials:'omit'});
         if (!previewResponse.ok) throw new Error('The file preview could not be loaded (' + previewResponse.status + ').');
         previewBlob = await previewResponse.blob();
-        if (!previewBlob || !previewBlob.size) throw new Error('The file is empty or could not be read.');
       }
-      var previewMime = nbxEffectiveMime(name, mime, previewBlob.type);
-      if (previewBlob.type !== previewMime) previewBlob = new Blob([previewBlob], { type: previewMime });
-      var url = URL.createObjectURL(previewBlob);
-      panel.__nbxPreviewObjectUrl = url;
-      // Safety cleanup if the sheet is dismissed by Android Back/navigation.
-      setTimeout(function () {
-        if (panel.__nbxPreviewObjectUrl === url) {
-          try { URL.revokeObjectURL(url); } catch (_) {}
-          panel.__nbxPreviewObjectUrl = null;
-        }
-      }, 30 * 60 * 1000);
-      if (!document.body.contains(panel)) { try { URL.revokeObjectURL(url); } catch (_) {} return; }
+    }
+    if (!previewBlob || !previewBlob.size) throw new Error('The selected file is empty or could not be read.');
+    var previewMime = nbxEffectiveMime(name, mime, previewBlob.type);
+    if (previewBlob.type !== previewMime) previewBlob = new Blob([previewBlob], {type:previewMime});
+    if (!document.body.contains(panel)) return;
+    var statusBadge = document.createElement('span'); statusBadge.className = 'badge nbx-preview-status';
+    statusBadge.setAttribute('data-preview-status','');
+    statusBadge.textContent = !path ? 'Opened from device · local only' : (offlineCopy && offlineCopy.blob ? 'File saved on this device' : 'Online preview · not saved offline');
+    if (meta) meta.appendChild(statusBadge);
+
+    if (ext === 'pdf' || previewMime === 'application/pdf') {
       if (offlineCopy && offlineCopy.blob) {
-        var offlineBadge = document.createElement('span'); offlineBadge.className = 'badge'; offlineBadge.textContent = 'Available offline on this device';
-        var meta = panel.querySelector('.nbx-preview-meta'); if (meta) meta.appendChild(offlineBadge);
+        var engineReady = await nbxPdfEngineCacheStatus();
+        var documentReady = offlineCopy.pdfViewerReady === true && offlineCopy.pdfViewerVersion === NBX_PDFJS_VERSION;
+        var serviceWorkerReady = await nbxPdfServiceWorkerCacheStatus();
+        if (!navigator.onLine && !(engineReady && documentReady && serviceWorkerReady)) {
+          throw new Error('This PDF is saved on this device, but its viewer resources are not fully prepared for offline use. Refresh NEXTBYTE while online, open the PDF, and select Download & save offline again.');
+        }
+        statusBadge.textContent = (engineReady && documentReady && serviceWorkerReady) ? 'PDF and viewer saved offline on this device' : 'PDF saved offline · preparing viewer resources';
       }
-      if (ext === 'pdf' || mime === 'application/pdf') {
-        var frame = document.createElement('iframe'); frame.className = 'nbx-preview-frame'; frame.title = 'PDF preview: ' + name; frame.setAttribute('loading', 'eager'); frame.src = url + '#toolbar=1&navpanes=0&view=FitH';
-        frame.setAttribute('aria-label', 'PDF document preview'); body.replaceChildren(frame);
-      } else if (category === 'images' || mime.indexOf('image/') === 0) {
-        var img = document.createElement('img'); img.className = 'nbx-preview-image'; img.alt = name; img.src = url; body.replaceChildren(img);
-      } else if (['mp4','webm','mov','m4v'].indexOf(ext) >= 0 || mime.indexOf('video/') === 0) {
-        var video = document.createElement('video'); video.className = 'nbx-preview-video'; video.controls = true; video.playsInline = true; video.preload = 'metadata'; video.src = url; body.replaceChildren(video);
-      } else if (['mp3','wav','m4a','ogg'].indexOf(ext) >= 0 || mime.indexOf('audio/') === 0) {
-        var audio = document.createElement('audio'); audio.className = 'nbx-preview-audio'; audio.controls = true; audio.preload = 'metadata'; audio.src = url; body.replaceChildren(audio);
-      } else if (['txt','md','csv'].indexOf(ext) >= 0 || mime.indexOf('text/') === 0) {
-        var text = await previewBlob.text();
-        if (!document.body.contains(panel)) return;
-        if (ext === 'csv' || mime === 'text/csv') {
-          var rows = nbxCsvRows(text);
-          if (!rows.length) { body.textContent = 'This CSV file is empty.'; }
-          else { body.replaceChildren(nbxCsvTable(rows)); if (rows.length > 201) { var note = document.createElement('p'); note.className = 'txs muted mt2'; note.textContent = 'Showing the first 200 rows and up to 20 columns. Download the original to view the complete file.'; body.appendChild(note); } }
-        } else {
-          var pre = document.createElement('pre'); pre.className = 'nbx-preview-text'; pre.textContent = text.slice(0, 250000); body.replaceChildren(pre);
-          if (text.length > 250000) { var note2 = document.createElement('p'); note2.className = 'txs muted mt2'; note2.textContent = 'Preview limited to the first 250,000 characters. Download the original for the complete file.'; body.appendChild(note2); }
+      await nbxRenderPdfDocument(previewBlob, name, body, panel);
+      if (path && offlineCopy && offlineCopy.blob && navigator.onLine && !(offlineCopy.pdfViewerReady === true && offlineCopy.pdfViewerVersion === NBX_PDFJS_VERSION)) {
+        nbxWarmPdfResources(previewBlob, path).then(function () {
+          if (statusBadge && statusBadge.isConnected) statusBadge.textContent = 'PDF and viewer saved offline on this device';
+        }).catch(function (warmError) {
+          console.warn('PDF preview works online, but offline viewer preparation is incomplete:', warmError);
+          if (statusBadge && statusBadge.isConnected) statusBadge.textContent = 'PDF saved offline · viewer setup incomplete';
+        });
+      } else if (!path && navigator.onLine) {
+        nbxWarmPdfResources(previewBlob, null).catch(function (warmError) { console.warn('Could not pre-cache all PDF helper resources:', warmError); });
+      }
+    } else if (category === 'images' || previewMime.indexOf('image/') === 0) {
+      var imageUrl = URL.createObjectURL(previewBlob); panel.__nbxPreviewObjectUrl = imageUrl;
+      var img = document.createElement('img'); img.className = 'nbx-preview-image'; img.alt = name; img.src = imageUrl;
+      img.addEventListener('error', function () { if (panel.isConnected) { body.textContent = 'This image could not be decoded by the browser. Download the original to inspect it.'; } }, {once:true});
+      body.replaceChildren(img);
+    } else if (['mp4','webm','mov','m4v'].indexOf(ext) >= 0 || previewMime.indexOf('video/') === 0) {
+      var videoUrl = URL.createObjectURL(previewBlob); panel.__nbxPreviewObjectUrl = videoUrl;
+      var video = document.createElement('video'); video.className = 'nbx-preview-video'; video.controls = true; video.playsInline = true; video.preload = 'metadata'; video.src = videoUrl; body.replaceChildren(video);
+      video.addEventListener('error', function () { if (panel.isConnected) { var note = document.createElement('p'); note.className = 'txs muted'; note.textContent = 'This video codec is not supported by this browser. Download the original to play it in a compatible app.'; body.appendChild(note); } }, {once:true});
+    } else if (['mp3','wav','m4a','ogg'].indexOf(ext) >= 0 || previewMime.indexOf('audio/') === 0) {
+      var audioUrl = URL.createObjectURL(previewBlob); panel.__nbxPreviewObjectUrl = audioUrl;
+      var audio = document.createElement('audio'); audio.className = 'nbx-preview-audio'; audio.controls = true; audio.preload = 'metadata'; audio.src = audioUrl;
+      audio.addEventListener('error', function () { if (panel.isConnected) { var note = document.createElement('p'); note.className = 'txs muted'; note.textContent = 'This audio codec is not supported by this browser. Download the original to play it in a compatible app.'; body.appendChild(note); } }, {once:true});
+      body.replaceChildren(audio);
+    } else if (['txt','md','csv'].indexOf(ext) >= 0 || previewMime.indexOf('text/') === 0) {
+      var text = await previewBlob.text();
+      if (!document.body.contains(panel)) return;
+      if (ext === 'csv' || previewMime === 'text/csv') {
+        var rows = nbxCsvRows(text);
+        if (!rows.length) body.textContent = 'This CSV file is empty.';
+        else {
+          body.replaceChildren(nbxCsvTable(rows));
+          if (rows.length > 201) { var csvNote = document.createElement('p'); csvNote.className = 'txs muted mt2'; csvNote.textContent = 'Showing the first 200 rows and up to 20 columns. Download the original to view the complete file.'; body.appendChild(csvNote); }
         }
       } else {
-        var message = document.createElement('div'); message.className = 'card padc';
-        var heading = document.createElement('p'); heading.className = 'txm semi'; heading.textContent = 'Preview is not available for this format';
-        var detail = document.createElement('p'); detail.className = 'txs muted mt1'; detail.textContent = 'This file type needs a compatible external application. Your original cloud file is safe; use Download original to open it with a suitable app.';
-        message.append(heading, detail); body.replaceChildren(message);
+        var pre = document.createElement('pre'); pre.className = 'nbx-preview-text'; pre.textContent = text.slice(0,250000); body.replaceChildren(pre);
+        if (text.length > 250000) { var textNote = document.createElement('p'); textNote.className = 'txs muted mt2'; textNote.textContent = 'Preview limited to the first 250,000 characters. Download the original for the complete file.'; body.appendChild(textNote); }
       }
+    } else if (ext === 'docx') {
+      var wordEngineRecord = await dbGet(NBX_MAMMOTH_KEY).catch(function () { return null; });
+      if (offlineCopy && offlineCopy.blob && !navigator.onLine && !(wordEngineRecord && wordEngineRecord.blob && wordEngineRecord.blob.size)) {
+        throw new Error('This DOCX is saved on this device, but the Word preview engine is not. Reconnect and open the preview once to prepare it for offline use.');
+      }
+      if (offlineCopy && offlineCopy.blob && !wordEngineRecord && statusBadge) statusBadge.textContent = 'File saved offline · preparing Word viewer';
+      await nbxRenderDocx(previewBlob, body);
+      var wordEngineReady = await dbGet(NBX_MAMMOTH_KEY).catch(function () { return null; });
+      if (offlineCopy && offlineCopy.blob && wordEngineReady && wordEngineReady.blob && statusBadge) statusBadge.textContent = 'File and Word viewer saved offline on this device';
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      var sheetEngineRecord = await dbGet(NBX_XLSX_KEY).catch(function () { return null; });
+      if (offlineCopy && offlineCopy.blob && !navigator.onLine && !(sheetEngineRecord && sheetEngineRecord.blob && sheetEngineRecord.blob.size)) {
+        throw new Error('This spreadsheet is saved on this device, but the spreadsheet preview engine is not. Reconnect and open the preview once to prepare it for offline use.');
+      }
+      if (offlineCopy && offlineCopy.blob && !sheetEngineRecord && statusBadge) statusBadge.textContent = 'File saved offline · preparing spreadsheet viewer';
+      await nbxRenderSpreadsheet(previewBlob, body);
+      var sheetEngineReady = await dbGet(NBX_XLSX_KEY).catch(function () { return null; });
+      if (offlineCopy && offlineCopy.blob && sheetEngineReady && sheetEngineReady.blob && statusBadge) statusBadge.textContent = 'File and spreadsheet viewer saved offline on this device';
+    } else {
+      var message = document.createElement('div'); message.className = 'card padc';
+      var heading = document.createElement('p'); heading.className = 'txm semi'; heading.textContent = 'In-app preview is not available for this format';
+      var detail = document.createElement('p'); detail.className = 'txs muted mt1';
+      detail.textContent = ext === 'pptx' || ext === 'ppt' ? 'PowerPoint slide layouts are not currently rendered in this version of NEXTBYTE. The original file is preserved; use Download to open it in a compatible presentation app.' : 'This file type needs a compatible external application. The original file is preserved and has not been modified.';
+      message.append(heading, detail); body.replaceChildren(message);
+    }
+  }
+
+  async function nbxPreviewPath(file, path, section) {
+    if (NBX_ACTIVE_PREVIEW_PANEL && NBX_ACTIVE_PREVIEW_PANEL.isConnected) {
+      toast('A file preview is already open. Close it before opening another file.');
+      return;
+    }
+    if (!path) { toast('This file does not have a cloud storage path. Use Open from Device to preview a file stored on your phone.'); return; }
+    var name = nbxName(file), mime = String(file.mime || file.fileType || '').toLowerCase();
+    var category = nbxCategory(file);
+    var typeLabel = (NBX_CATEGORY_BY_KEY[category] || NBX_CATEGORY_BY_KEY.other).label;
+    var panel = nbxCreatePreviewPanel(name, typeLabel + (section ? ' · ' + section : ''));
+    var downloadButton = panel.querySelector('[data-preview-download]');
+    downloadButton.onclick = async function () {
+      downloadButton.disabled = true; downloadButton.textContent = 'Saving file…';
+      try { await nbxDownloadPath(path, name, mime, file); }
+      finally {
+        if (panel.isConnected) {
+          downloadButton.disabled = false;
+          downloadButton.innerHTML = ic('download',15) + ' Download &amp; save offline';
+          var offlineRecord = await dbGet(offlineMaterialKey(path)).catch(function () { return null; });
+          var status = panel.querySelector('[data-preview-status]');
+          if (offlineRecord && offlineRecord.blob && offlineRecord.blob.size && status) status.textContent = nbxExt(name) === 'pdf' && offlineRecord.pdfViewerReady ? 'PDF and viewer saved offline on this device' : 'Available offline on this device';
+        }
+      }
+    };
+    panel.__nbxOnDeviceFile = async function (localFile) {
+      try {
+        if (panel.__nbxReleasePreviewResources) {
+          if (panel.__nbxPdfCleanup) { try { panel.__nbxPdfCleanup(); } catch (_) {} panel.__nbxPdfCleanup = null; }
+          if (panel.__nbxPreviewObjectUrl) { try { URL.revokeObjectURL(panel.__nbxPreviewObjectUrl); } catch (_) {} panel.__nbxPreviewObjectUrl = null; }
+        }
+        downloadButton.hidden = true; downloadButton.disabled = true;
+        var localName = localFile.name || 'Device file';
+        await nbxRenderBlobPreview(localFile, null, 'Open from Device', panel, localFile, null);
+      } catch (error) {
+        console.error('Device file preview failed:', error);
+        var body = panel.querySelector('#nbxPreviewBody');
+        if (body) { var message = document.createElement('div'); message.className = 'card padc'; var h = document.createElement('p'); h.className = 'txm semi'; h.textContent = 'Could not render this device file'; var d = document.createElement('p'); d.className = 'txs muted mt1'; d.textContent = error.message || 'The file type may not be supported.'; message.append(h,d); body.replaceChildren(message); }
+      }
+    };
+    try {
+      await nbxRenderBlobPreview(file, path, section, panel, null, null);
     } catch (error) {
       console.error('Study file preview failed:', error);
       if (document.body.contains(panel)) {
+        var body = panel.querySelector('#nbxPreviewBody');
         var message = document.createElement('div'); message.className = 'card padc';
-        var heading = document.createElement('p'); heading.className = 'txm semi'; heading.textContent = 'Could not load preview';
+        var heading = document.createElement('p'); heading.className = 'txm semi'; heading.textContent = 'Could not render this file';
         var detail = document.createElement('p'); detail.className = 'txs muted mt1'; detail.textContent = (error && error.message) || 'Check your sign-in and Storage permissions, then try again.';
         message.append(heading, detail); body.replaceChildren(message);
       }
@@ -6336,6 +6928,38 @@ async function deleteRoomAny(id){
     if (!file) { toast('Syllabus attachment not found.'); return; }
     nbxPreviewPath(file, file.path, 'Syllabus');
   };
+  function nbxFindCloudFileRecord(path) {
+    var wanted = String(path || '');
+    if (!wanted) return null;
+    var subjects = Array.isArray(S.subjects) ? S.subjects : [];
+    for (var si = 0; si < subjects.length; si++) {
+      var subject = subjects[si] || {};
+      var groups = [subject.materials || [], subject.syllabusFiles || []];
+      for (var gi = 0; gi < groups.length; gi++) {
+        for (var fi = 0; fi < groups[gi].length; fi++) {
+          if (String(groups[gi][fi] && groups[gi][fi].path || '') === wanted) return groups[gi][fi];
+        }
+      }
+    }
+    var tasks = Array.isArray(S.tasks) ? S.tasks : [];
+    for (var ti = 0; ti < tasks.length; ti++) {
+      var attachments = tasks[ti] && Array.isArray(tasks[ti].attachments) ? tasks[ti].attachments : [];
+      for (var ai = 0; ai < attachments.length; ai++) if (String(attachments[ai] && attachments[ai].path || '') === wanted) return attachments[ai];
+    }
+    return null;
+  }
+  // Old syllabus/cloud buttons used nbOpenSignedFilePublic(), which created a
+  // signed URL/new tab instead of invoking the in-app renderer. Route private
+  // study-file opens and downloads through the same verified preview/download code.
+  window.nbOpenSignedFilePublic = function (bucket, path, fileName, download) {
+    if (String(bucket || '') === NBX_BUCKET && path) {
+      var record = nbxFindCloudFileRecord(path) || { fileName: fileName || nbxName({path:path}), path:path };
+      if (fileName && !record.fileName) record.fileName = fileName;
+      if (download) return nbxDownloadPath(path, fileName || nbxName(record), record.mime || record.fileType || '', record);
+      return nbxPreviewPath(record, path, 'Study file');
+    }
+    return nbOpenSignedFile(bucket, path, fileName, !!download);
+  };
   // Keep legacy callers working, but make Open a real preview and keep Download separate.
   window.openMaterial = window.nbPreviewStudyMaterial;
 
@@ -6345,7 +6969,7 @@ async function deleteRoomAny(id){
   }
   function nbxMaterialCard(subject, material, index) {
     var name = nbxName(material), category = nbxCategory(material), label = (NBX_CATEGORY_BY_KEY[category] || NBX_CATEGORY_BY_KEY.other).label;
-    return '<article class="card padc nbx-material-card"><div class="f aic g2"><span class="iconbtn nbx-file-type-icon" aria-hidden="true">' + ic('file',17) + '</span><div class="grow minw"><p class="txm semi nbx-material-name" title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</p><p class="txs muted mt1">' + nbxEscape(label) + ' · ' + nbxEscape(material.s || nbxSize(material.size || 0)) + '</p></div></div><div class="nbx-material-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbPreviewStudyMaterial(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Preview ' + nbxEscape(name) + '">' + ic('external',14) + ' Open</button><button type="button" class="btn btn-primary btn-sm" onclick="nbDownloadStudyMaterial(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Download ' + nbxEscape(name) + '">' + ic('download',14) + ' Download</button><button type="button" class="btn btn-secondary btn-sm" onclick="cacheMaterialOffline(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Save ' + nbxEscape(name) + ' offline">' + ic('save',14) + ' Offline</button><button type="button" class="btn btn-danger btn-sm" onclick="removeMaterial(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Delete ' + nbxEscape(name) + '">' + ic('trash',14) + ' Delete</button></div></article>';
+    return '<article class="card padc nbx-material-card"><div class="f aic g2"><span class="iconbtn nbx-file-type-icon" aria-hidden="true">' + ic('file',17) + '</span><div class="grow minw"><p class="txm semi nbx-material-name" title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</p><p class="txs muted mt1">' + nbxEscape(label) + ' · ' + nbxEscape(material.s || nbxSize(material.size || 0)) + '</p></div></div><div class="nbx-material-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbPreviewStudyMaterial(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Preview ' + nbxEscape(name) + '">' + ic('eye',14) + ' Preview</button><button type="button" class="btn btn-primary btn-sm" onclick="nbDownloadStudyMaterial(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Download ' + nbxEscape(name) + '">' + ic('download',14) + ' Download</button><button type="button" class="btn btn-secondary btn-sm" onclick="cacheMaterialOffline(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Save ' + nbxEscape(name) + ' offline">' + ic('save',14) + ' Offline</button><button type="button" class="btn btn-danger btn-sm" onclick="removeMaterial(\'' + nbxEscape(subject.id) + '\',' + index + ')" aria-label="Delete ' + nbxEscape(name) + '">' + ic('trash',14) + ' Delete</button></div></article>';
   }
 
   var nbxPreviousSubjectTabBody = subjectTabBody;
@@ -6357,7 +6981,7 @@ async function deleteRoomAny(id){
       var pct = topics.length ? Math.round(completed / topics.length * 100) : 0;
       var syllabusCards = files.length ? files.map(function (file, index) {
         var name = nbxName(file);
-        return '<article class="card padc nb-subject-syllabus-card"><div class="nb-subject-syllabus-head"><div class="nb-subject-syllabus-info"><p class="txm semi nb-subject-syllabus-name" title="' + nbxEscape(file.title || name) + '">' + nbxEscape(file.title || name) + '</p><p class="txs muted mt1 nb-subject-syllabus-filename" title="' + nbxEscape(name) + '">' + nbxEscape(name) + ' · ' + nbxEscape(nbxSize(file.size || 0)) + '</p></div><span class="badge nb-subject-syllabus-badge">Syllabus</span></div><div class="nb-record-actions"><button class="btn btn-secondary" type="button" onclick="nbPreviewSyllabusFile(\'' + nbxEscape(subject.id) + '\',' + index + ')">' + ic('external',14) + ' Open</button><button class="btn btn-primary" type="button" onclick="nbDownloadSyllabusFile(\'' + nbxEscape(subject.id) + '\',' + index + ')">' + ic('download',14) + ' Download</button><button class="btn btn-secondary" type="button" onclick="replaceSyllabusAttachment(\'' + nbxEscape(subject.id) + '\',\'' + nbxEscape(file.id) + '\')">Replace</button><button class="btn btn-danger" type="button" onclick="removeSyllabusAttachment(\'' + nbxEscape(subject.id) + '\',\'' + nbxEscape(file.id) + '\')">Remove</button></div></article>';
+        return '<article class="card padc nb-subject-syllabus-card"><div class="nb-subject-syllabus-head"><div class="nb-subject-syllabus-info"><p class="txm semi nb-subject-syllabus-name" title="' + nbxEscape(file.title || name) + '">' + nbxEscape(file.title || name) + '</p><p class="txs muted mt1 nb-subject-syllabus-filename" title="' + nbxEscape(name) + '">' + nbxEscape(name) + ' · ' + nbxEscape(nbxSize(file.size || 0)) + '</p></div><span class="badge nb-subject-syllabus-badge">Syllabus</span></div><div class="nb-record-actions"><button class="btn btn-secondary" type="button" onclick="nbPreviewSyllabusFile(\'' + nbxEscape(subject.id) + '\',' + index + ')">' + ic('eye',14) + ' Preview</button><button class="btn btn-primary" type="button" onclick="nbDownloadSyllabusFile(\'' + nbxEscape(subject.id) + '\',' + index + ')">' + ic('download',14) + ' Download</button><button class="btn btn-secondary" type="button" onclick="replaceSyllabusAttachment(\'' + nbxEscape(subject.id) + '\',\'' + nbxEscape(file.id) + '\')">Replace</button><button class="btn btn-danger" type="button" onclick="removeSyllabusAttachment(\'' + nbxEscape(subject.id) + '\',\'' + nbxEscape(file.id) + '\')">Remove</button></div></article>';
       }).join('') : '<div class="empty" style="padding:20px"><p class="txm muted">No syllabus attachment yet. Add the official course outline or syllabus document.</p></div>';
       var topicHtml = topics.length ? '<div class="card padc"><div class="f jb aic mb2"><span class="txm semi">Syllabus topics</span><span class="txm semi" style="color:' + nbxEscape(subject.color) + '">' + pct + '%</span></div><div class="bar"><div style="width:' + pct + '%;background:' + nbxEscape(subject.color) + '"></div></div><div class="fc g2 mt3">' + topics.map(function (topic, index) { return '<button class="rowitem" onclick="toggleTopic(\'' + nbxEscape(subject.id) + '\',' + index + ')"><span class="checkbox' + (topic.done ? ' on' : '') + '">' + (topic.done ? ic('check',14) : '') + '</span><span class="txm">' + nbxEscape(topic.t) + '</span></button>'; }).join('') + '</div></div>' : '<div class="card padc"><p class="txm semi">Topics not added yet</p><p class="txs muted mt1">Add weekly topics or modules to track course progress.</p></div>';
       return '<div class="fc g3"><div class="card padc"><div class="f jb aic"><div class="grow minw"><h3 class="txm semi">Course syllabus</h3><p class="txs muted mt1">Keep the official course document separate from ordinary materials.</p></div><button class="btn btn-primary btn-sm" type="button" onclick="uploadSyllabusAttachment(\'' + nbxEscape(subject.id) + '\')">' + ic('upload',15) + ' Attach file</button></div><p class="txs muted mt2">PDF, Word, PowerPoint, Excel, text, or images · 20 MB maximum per file.</p><div class="fc g2 mt3">' + syllabusCards + '</div></div>' + topicHtml + '<button class="btn btn-secondary btn-block" onclick="addTopic(\'' + nbxEscape(subject.id) + '\')">' + ic('plus',16) + ' Add syllabus topic</button></div>';
@@ -6406,14 +7030,20 @@ async function deleteRoomAny(id){
     }
     return {ok:true};
   }
-  function nbxTaskFileName(file) { return String(file && (file.fileName || file.name || file.n) || 'Task attachment'); }
+  function nbxTaskFileName(file) {
+    file = file || {};
+    var name = String(file.fileName || file.n || file.name || file.title || '').trim();
+    if (name && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(name)) return name;
+    var pathName = String(file.path || '').split('/').pop().replace(/^\d{10,}[_-]/, '');
+    return pathName || 'Task attachment';
+  }
   function nbxTaskFileType(file) { return String(file && (file.mime || file.type) || nbxExt(nbxTaskFileName(file)).toUpperCase() || 'File'); }
   function nbxTaskAttachmentMarkup(task) {
     var files = Array.isArray(task && task.attachments) ? task.attachments : [];
     if (!files.length) return '';
     return '<div class="nbx-task-attachments"><p class="txs semi mb2">Supporting files (' + files.length + ')</p>' + files.map(function (file, index) {
       var name = nbxTaskFileName(file);
-      return '<div class="nbx-task-attachment-row"><span class="nbx-task-attachment-icon">' + ic('file',16) + '</span><div class="nbx-task-attachment-info"><strong title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</strong><small>' + nbxEscape(nbxTaskFileType(file)) + ' · ' + nbxEscape(file.size ? nbxSize(file.size) : '') + '</small></div><div class="nbx-task-attachment-actions"><button class="btn btn-secondary btn-sm" type="button" title="Preview attachment inside NEXTBYTE" aria-label="Preview attachment" onclick="nbPreviewTaskAttachment(\'' + nbxEscape(task.id) + '\',' + index + ')">' + ic('eye',14) + ' Preview</button><button class="btn btn-primary btn-sm" type="button" onclick="nbDownloadTaskAttachment(\'' + nbxEscape(task.id) + '\',' + index + ')">Download</button></div></div>';
+      return '<div class="nbx-task-attachment-row"><span class="nbx-task-attachment-icon">' + ic('file',16) + '</span><div class="nbx-task-attachment-info"><strong title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</strong><small>' + nbxEscape(nbxTaskFileType(file)) + ' · ' + nbxEscape(file.size ? nbxSize(file.size) : '') + '</small></div><div class="nbx-task-attachment-actions"><button class="btn btn-secondary btn-sm" type="button" title="Preview attachment inside NEXTBYTE" aria-label="Preview attachment" onclick="nbPreviewTaskAttachment(\'' + nbxEscape(task.id) + '\',' + index + ')">' + ic('eye',14) + ' Preview</button><button class="btn btn-primary btn-sm" type="button" onclick="nbDownloadTaskAttachment(\'' + nbxEscape(task.id) + '\',' + index + ')">Download &amp; save offline</button></div></div>';
     }).join('') + '</div>';
   }
   window.nbPreviewTaskAttachment = function (taskId, index) {
@@ -6426,7 +7056,7 @@ async function deleteRoomAny(id){
     var task = (S.tasks || []).find(function (item) { return String(item.id) === String(taskId); });
     var file = task && task.attachments && task.attachments[index];
     if (!file || !file.path) { toast('Task attachment not found.'); return; }
-    nbxDownloadPath(file.path, nbxTaskFileName(file), file.mime || file.type || '');
+    nbxDownloadPath(file.path, nbxTaskFileName(file), file.mime || file.type || '', file);
   };
   window.nbRemoveTaskAttachment = function (taskId, index) {
     var task = (S.tasks || []).find(function (item) { return String(item.id) === String(taskId); });
@@ -6720,7 +7350,8 @@ async function deleteRoomAny(id){
   };
   try { render = window.render; } catch (_) {}
 
-  window.NEXBYTE_STUDY_HUB_FOLDERS_PREVIEW_VERSION = '1.1-task-button-fix';
+  window.NEXBYTE_STUDY_HUB_FOLDERS_PREVIEW_VERSION = '1.3-unified-file-preview-r3';
+  window.NEXBYTE_FILE_PREVIEW_BUILD = '2026-11-20-unified-viewer-r3';
 })();
 
 </script>

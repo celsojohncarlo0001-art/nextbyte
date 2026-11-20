@@ -75,15 +75,15 @@ The Materials overview has a single upload entry point. After uploading from the
 
 The Create/Edit Detailed Task form now includes **Attach supporting files (optional)** directly beneath Step-by-Step Instructions. Users may select multiple files and review file names, types, and sizes before saving. Allowed file types include PDF, DOC/DOCX, images, TXT/Markdown, and supported video formats. Spreadsheet, presentation, CSV, and audio file types are rejected by extension and MIME checks. Each file is limited to 20 MB, consistent with the existing private bucket limit.
 
-Task attachments are uploaded to the existing private `user-study-files` bucket under `<user-id>/tasks/<task-id>/...`. The task's `attachments` metadata is saved inside the existing `user_workspaces` JSON state, associated with task and owner IDs. No new table, bucket, or SQL migration is required. The existing Storage policy in `NEXBYTE_UPLOAD_STORAGE_FIX.sql` expects the first path segment to equal `auth.uid()`; task attachment paths follow that rule. Task cards provide separate Open and Download actions. Removing a saved attachment removes its workspace reference only after save, then attempts to remove the private Storage object. Deleting a task also attempts cleanup after the task deletion syncs.
+Task attachments are uploaded to the existing private `user-study-files` bucket under `<user-id>/tasks/<task-id>/...`. The task's `attachments` metadata is saved inside the existing `user_workspaces` JSON state, associated with task and owner IDs. No new table, bucket, or SQL migration is required. The existing Storage policy in `NEXBYTE_UPLOAD_STORAGE_FIX.sql` expects the first path segment to equal `auth.uid()`; task attachment paths follow that rule. Task cards provide separate Preview and Download actions. Removing a saved attachment removes its workspace reference only after save, then attempts to remove the private Storage object. Deleting a task also attempts cleanup after the task deletion syncs.
 
 ## Verification status for this update
 
-Static JavaScript syntax, HTML parsing, manifest and service-worker checks, and targeted logic tests were run on this package. A live Supabase account upload, cross-device sync, actual media playback, and Vercel deployment were not available in this environment. Complete the real-account tests listed in `TESTING_REPORT.md` after deployment.
+For the current preview correction, all eight inline JavaScript blocks passed Node.js syntax checking, `sw.js` passed Node.js syntax checking, and HTML plus manifest parsing passed. The handler routing and preview controls were also checked in source. Live Supabase access, real document rendering, cross-device sync, actual media playback, and Vercel deployment remain unverified; complete the real-device tests listed in `TESTING_REPORT.md` after deployment.
 
 ### Deployment note
 
-Deploy the files in this project folder as the root of the existing Vercel project. Keep the existing `supabase-config.js`, project URL, and public anon/publishable key. The service-worker cache namespace for this update is `nexbyte-pwa-v9-video-folders-task-attachments`; open NEXTBYTE online after deployment so the updated worker can install and activate.
+Deploy the files in this project folder as the root of the existing Vercel project. Keep the existing `supabase-config.js`, project URL, and public anon/publishable key. The current service-worker cache namespace is `nexbyte-pwa-v17-file-preview-device-picker`; open NEXTBYTE online after deployment so the updated worker can install and activate.
 
 ## Latest follow-up — Study Hub Add Task button
 
@@ -95,8 +95,10 @@ The subject Tasks tab now uses a delegated click handler for its Add task contro
 This build also includes a fix for the `nbProfileName is not defined` error in Study Hub → Subject → Tasks. The enhanced task editor now uses a profile-name helper defined in its own JavaScript scope. No SQL or Supabase configuration change is required.
 
 
-## File preview and offline copies (November 2026)
+## File preview and offline copies (November 20, 2026)
 
-- Study Hub, Syllabus, and Task attachment previews now fetch private file bytes through a signed URL and create a local Blob URL for in-app rendering. This avoids opening a signed URL with an attachment disposition and prevents the preview action from intentionally downloading the file. PDFs use an embedded PDF frame; supported images, videos, audio, and text use their matching in-app viewers.
-- The **Download & save offline** action downloads the original filename and also stores a copy in this device's IndexedDB cache. When that file is previewed later, NEXTBYTE uses the local copy first, including when the device is offline.
-- Offline copies are device-specific. The user must download each file on each device where offline preview is needed. Browser storage limits and the user's device settings can affect whether a local copy can be kept; NEXTBYTE reports when the cache save fails.
+- Study Hub Materials, syllabus files, and task attachments share one private-file preview pipeline. Legacy `openMaterial()` calls route to the in-app viewer; preview does not use the old direct signed-URL/download handler.
+- PDFs render with PDF.js into an HTML canvas, with page navigation, zoom, and fit-to-width controls. Images, text/Markdown, CSV, audio, video, DOCX, and XLS/XLSX use format-specific previews. PPT/PPTX are preserved and show a compatibility message in this build.
+- **Open from Device** uses the browser file picker to read a file locally without uploading it. **Download & save offline** downloads the original filename and saves a separate account-tagged copy in this device's existing IndexedDB cache.
+- The pinned PDF.js main/worker assets and the DOCX/XLSX preview libraries load online on first use and are cached on that device. PDF offline-ready status is not shown until the PWA service worker controls the page and the PDF preparation pass completes. The compiled PDF.js distribution is not physically bundled under `vendor/pdfjs`; see that folder's README.
+- Offline copies are device-specific and account-scoped. Each device must download the file and prepare its preview engine independently. Browser storage quota and media codec support can affect offline preview or playback.

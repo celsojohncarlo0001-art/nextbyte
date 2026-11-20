@@ -1,39 +1,60 @@
-# NEXTBYTE — Preview and Offline Download Testing Report
+# NEXTBYTE — Study Hub Preview Repair Testing Report (r3)
 
 Date: November 20, 2026
 
-## Implemented
+## Scope of this repair
 
-1. Preview fetches the bytes from the authenticated private Supabase Storage signed URL and displays a local Blob URL. This prevents an attachment `Content-Disposition` header on the signed URL from turning the preview action into a download.
-2. PDF file types are normalized to `application/pdf` based on the extension when older records report a generic binary MIME type.
-3. Download fetches the original bytes, saves a copy in the existing IndexedDB cache using the same `offline_material_<storage-path>` key used by preview, and downloads the file with its original filename.
-4. Preview checks the device cache first. A locally saved file can be previewed again without a network connection.
-5. When local storage quota or browser restrictions prevent caching, the normal download continues and the user receives a warning that offline preview is not available for that file on this device.
-6. The same behavior applies to Study Hub materials, syllabus attachments, and task attachments, because they share the private `user-study-files` bucket and preview/download helpers.
+Inspected the user-provided NEXTBYTE ZIP and the reported preview screenshot. The screenshot shows a PDF preview sheet with an “Available offline on this device” status, but its content area is still a generic PDF icon, a UUID-like string, and a second Open button. That is not the current canvas-renderer interface and indicates that the app is still using an older preview implementation or an old cached application shell.
 
-## Checks performed
+The supplied project contains a `vendor/pdfjs/README.md`, but not the compiled PDF.js main module or worker. The app is CDN-backed and uses the pinned `pdfjs-dist@6.5.438` runtime with IndexedDB and service-worker caching; the README is not treated as a PDF.js engine.
 
-- All inline JavaScript blocks: syntax checked.
-- Service worker: syntax checked.
-- HTML: parsed.
-- Preview code path: verified to fetch bytes, create a Blob URL, and attach it to the PDF iframe rather than navigate an anchor to the signed URL.
-- Download code path: verified to write the same file bytes to the existing IndexedDB offline key before triggering a local Blob download.
-- MIME normalization: checked for PDF files recorded as `application/octet-stream`, as well as common image/video/text types.
-- PWA service-worker cache version: incremented.
-- ZIP archive: integrity checked.
+## Changes included
 
-## Not verified in this environment
+- Routed Syllabus Preview cards away from the old `nbOpenSignedFilePublic()` signed-URL/new-tab path and into `nbPreviewSyllabusFile(subjectId, index)`.
+- Preserved separate Syllabus Download behavior through `nbDownloadSyllabusFile()`.
+- Kept Study Hub Materials connected to `nbPreviewStudyMaterial()` and Task attachments connected to `nbPreviewTaskAttachment()`.
+- Redirected legacy `nbOpenSignedFilePublic()` calls for the private `user-study-files` bucket to the shared in-app preview renderer; other buckets retain the prior handler.
+- Hardened original filename selection so UUID-shaped storage identifiers are skipped where a better filename or path basename is available.
+- Updated PDF.js initialization to use the version-pinned package module URL first and the saved IndexedDB module Blob as a fallback; both main and worker resources are always obtained from the same pinned CDN release, avoiding accidental mixing with an older vendor copy.
+- Updated service worker cache namespace to `nexbyte-pwa-v18-unified-file-preview-r2`; app navigation fetches bypass stale HTTP cache, registration forces a check for updated worker code, and the page reloads once after a new worker takes control.
+- Preserved existing Supabase configuration, private Storage bucket/path model, existing IndexedDB store, and database schema.
 
-- Actual private Supabase Storage responses under the user's deployed account.
-- PDF rendering inside the user's particular Android browser/PWA build. The implementation now uses an inline PDF Blob URL and `application/pdf` type, but embedded PDF support still depends on the browser's PDF viewer capability.
-- Actual device download manager behavior and IndexedDB quota on the user's device.
-- Cross-device offline availability. Offline copies are intentionally device-specific; each device must download the file once while online.
+## Automated checks completed in this environment
 
-## User verification steps
+| Check | Result | Scope |
+|---|---|---|
+| HTML parsing | PASS | `index.html` parsed with BeautifulSoup's HTML parser. |
+| Inline JavaScript syntax | PASS | All six non-empty inline JavaScript blocks passed `node --check`. |
+| Service-worker JavaScript syntax | PASS | `sw.js` passed `node --check`. |
+| PWA manifest | PASS | `manifest.webmanifest` parsed as valid JSON. |
+| Syllabus Preview routing | PASS (static) | Syllabus preview button calls `nbPreviewSyllabusFile()`; download is separate. |
+| Task attachment Preview routing | PASS (static) | Task attachment button calls `nbPreviewTaskAttachment()`. |
+| Study Hub Materials routing | PASS (static) | Materials cards use `nbPreviewStudyMaterial()`; legacy `openMaterial` alias points to it. |
+| Legacy private-file routing | PASS (static) | Final `nbOpenSignedFilePublic` wrapper routes `user-study-files` preview requests through `nbxPreviewPath()`. |
+| PDF canvas renderer | PASS (static) | PDF.js `getDocument()` and `page.render()` canvas code is present; this preview path does not use a PDF iframe. |
+| Updated PWA refresh | PASS (static) | Service-worker v18 namespace, update check, no-store navigation fetch, and one-time controller-change reload are present. |
+| Supabase configuration preservation | PASS | `supabase-config.js` was kept unchanged from the supplied project ZIP. |
+| Vendor folder audit | PASS | `vendor/pdfjs/README.md` exists; no local `pdf.mjs` or `pdf.worker.mjs` is present, and docs disclose the CDN-backed design. |
+| ZIP integrity | PASS | The final archive was created and passed Python ZIP CRC/member validation. |
 
-1. Deploy the included project files to the existing Vercel project, preserving `supabase-config.js`.
-2. Open NEXTBYTE online and allow the updated service worker to activate.
-3. Open a task with a PDF attachment and choose **Preview**. The file should display within the preview panel without initiating a download.
-4. Close the preview, choose **Download** (or **Download & save offline** in the preview panel), and confirm the original file downloads.
-5. Disconnect the device from the internet, reopen the same attachment's Preview action, and confirm NEXTBYTE indicates that the file is available offline and displays the saved copy.
-6. Repeat the download separately on any other device that needs offline preview.
+## Not tested / cannot be claimed as passed
+
+- The live GitHub repository was not accessible through the connected GitHub account (no repositories were returned), so this package was patched from the uploaded project ZIP.
+- Live Vercel deployment and the deployed branch/root path.
+- Live Supabase authentication, signed-URL generation, private Storage policies, or actual user document retrieval.
+- Actual PDF.js CDN module/worker load and page rendering on the user's Android browser. This container could not resolve the CDN host.
+- Actual normal, multi-page, malformed, and generic-MIME PDF rendering in the target phone environment.
+- Full offline replay after the service worker and PDF auxiliary CMap/font/WASM assets have been populated on the phone.
+- Android file picker behavior, media codecs, DOCX/XLSX rendering, and regressions across all live NEXTBYTE screens.
+
+## Deployment and verification steps
+
+1. Back up the current GitHub repository. Extract the corrected ZIP and upload its contents to the same repository root/paths; do not upload only the ZIP file.
+2. Keep `supabase-config.js` unchanged. Commit to the Vercel-connected branch and wait for Vercel to report Ready.
+3. Open NEXTBYTE online. The new service worker checks for updates and reloads once when it takes control. If the page does not reload, close and reopen the installed PWA while online.
+4. Open one PDF from Study Hub Materials, one Syllabus file, and one Task attachment. Each should display rendered pages inside the NEXTBYTE preview sheet without the generic icon/UUID/second Open button.
+5. Test PDF previous/next page, zoom, and fit width.
+6. Use Download & Save Offline, wait for the viewer-ready status, close and reopen the file, then test with the network disabled. Repeat on each device that needs its own offline copy.
+7. Repeat with image, text, CSV, media, DOCX, and XLSX test files. PowerPoint remains preserved but is explicitly not rendered in-app in this build.
+
+A successful static check is not evidence that the deployed website or Android device has passed these live tests.

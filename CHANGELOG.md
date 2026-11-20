@@ -160,3 +160,30 @@ Live Supabase Storage, real account policies, cross-device synchronization, and 
 - Download now fetches the original file, stores a device-local IndexedDB copy under the existing `offline_material_<storage-path>` key, and downloads the original filename from a Blob URL. The cache write is best-effort: a quota failure does not block the normal download and is reported to the user.
 - Preview reuses the IndexedDB copy first and shows an **Available offline on this device** indicator when a local copy is present. The existing device-local offline cache and private Supabase bucket are reused; no database or Storage migration is required.
 - PWA cache version bumped so installed clients refresh the updated preview and download code.
+
+
+## November 20, 2026 — Study Hub PDF canvas preview and device-level offline access
+
+- Integrated the newer preview implementation into the actual deployable project rather than leaving it only inside the nested repair ZIP.
+- Redirected every legacy `openMaterial()` call to the same in-app preview handler and removed the older direct browser-tab/download override.
+- Replaced the PDF iframe/native-handler path with PDF.js canvas rendering and page navigation, zoom, and fit-to-width controls.
+- Added Open from Device, a visible loading indicator, duplicate-preview protection, and media/document compatibility messages.
+- Added DOCX and spreadsheet previews. PPT/PPTX remain preserved but are not rendered in-app.
+- Added account ownership metadata and checks for IndexedDB file copies so a cached cloud file is not reused by a different signed-in account.
+- Offline-ready status now requires the page to be controlled by the service worker as well as having the matching PDF.js runtime and prepared document record.
+- The PDF.js main/worker files are loaded from a pinned CDN and cached per device; they are not included as compiled assets in `vendor/pdfjs`. `vendor/pdfjs/README.md` documents that distinction.
+- Updated the service-worker cache namespace to `nexbyte-pwa-v17-file-preview-device-picker`. No Supabase schema, bucket, or policy migration was added.
+- Static JavaScript/HTML checks passed. Live Supabase, Vercel, CDN, and Android-device tests remain pending; see `TESTING_REPORT.md`.
+
+
+## November 20, 2026 — Unified preview routing and stale-PWA correction (r3)
+
+- Fixed the remaining Syllabus card action that called the legacy signed-URL/new-tab handler. Syllabus Preview now calls `nbPreviewSyllabusFile(subjectId, index)` and Syllabus Download uses the separate `nbDownloadSyllabusFile()` action.
+- Kept Task attachment Preview connected to `nbPreviewTaskAttachment()` and Materials Open/Preview connected to `nbPreviewStudyMaterial()`.
+- Redirected legacy `nbOpenSignedFilePublic()` calls for the private `user-study-files` bucket through the shared in-app renderer; download requests remain separate.
+- Hardened visible filename selection so UUID-shaped storage IDs are not shown as the filename when a real filename or path basename is available.
+- Updated PDF.js module initialization to prefer the pinned package URL (preserving module-relative resource resolution) and fall back to the saved module Blob when the CDN import is unavailable. The main module and worker remain pinned to the same `pdfjs-dist` release.
+- Bumped the service-worker cache namespace to `nexbyte-pwa-v18-unified-file-preview-r2`, forced a service-worker update check with `updateViaCache: none`, and added a one-time reload after a new worker takes control so an installed PWA does not continue displaying the old preview screen.
+- Preserved `supabase-config.js`, private bucket configuration, existing Storage paths, and the IndexedDB database.
+- The ZIP's `vendor/pdfjs/` directory contains a README only, not bundled PDF.js code. The loader now deliberately obtains both PDF.js main and worker modules from the same pinned CDN release so a stale or mismatched vendor file cannot break rendering.
+- Static HTML/JavaScript/manifest/ZIP checks passed for this build. Live Supabase, Vercel, CDN, and Android runtime tests still require the user's deployed environment.

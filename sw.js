@@ -4,7 +4,9 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v13-blob-preview-offline-download';
+const CACHE_VERSION = 'nexbyte-pwa-v18-unified-file-preview-r2';
+const PDFJS_ASSET_CACHE = 'nexbyte-pdfjs-assets-6-5-438';
+const PDFJS_ASSET_PREFIX = '/npm/pdfjs-dist@6.5.438/';
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',
@@ -43,12 +45,38 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const requestUrl = new URL(request.url);
-  // Never intercept cross-origin requests or Supabase API traffic.
+
+  // Cache only the exact pinned PDF.js distribution assets. PDF.js requests
+  // its worker, CMaps, standard fonts, and WASM helpers from this CDN prefix.
+  // These are static library resources, never private user documents or API data.
+  if (requestUrl.origin === 'https://cdn.jsdelivr.net' && requestUrl.pathname.startsWith(PDFJS_ASSET_PREFIX)) {
+    event.respondWith((async () => {
+      const cache = await caches.open(PDFJS_ASSET_CACHE);
+      const cached = await cache.match(request);
+      if (cached) return cached;
+      try {
+        const response = await fetch(request);
+        if (response && response.ok && (response.type === 'cors' || response.type === 'basic')) {
+          try { await cache.put(request, response.clone()); }
+          catch (cacheError) { /* A cache quota failure must not block online PDF preview. */ }
+        }
+        return response;
+      } catch (networkError) {
+        return new Response('PDF viewer asset is not cached on this device yet. Connect to the internet and open the PDF once.', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+        });
+      }
+    })());
+    return;
+  }
+
+  // Never intercept Supabase API traffic or unrelated cross-origin requests.
   if (requestUrl.origin !== self.location.origin || isSupabaseApiPath(requestUrl.pathname)) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: 'no-store' })
         .then((response) => {
           if (response && response.ok) {
             const copy = response.clone();
