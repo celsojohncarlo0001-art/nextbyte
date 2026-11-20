@@ -84,3 +84,7 @@ Static JavaScript syntax, HTML parsing, manifest and service-worker checks, and 
 ### Deployment note
 
 Deploy the files in this project folder as the root of the existing Vercel project. Keep the existing `supabase-config.js`, project URL, and public anon/publishable key. The service-worker cache namespace for this update is `nexbyte-pwa-v9-video-folders-task-attachments`; open NEXTBYTE online after deployment so the updated worker can install and activate.
+
+## Latest follow-up — Study Hub Add Task button
+
+The subject Tasks tab now uses a delegated click handler for its Add task controls and calls the enhanced global task editor directly. The buttons are explicit `type="button"` elements, so they cannot accidentally submit an enclosing form. If the editor is unavailable or fails to open, NEXTBYTE reports the issue rather than silently ignoring the click. See `TESTING_REPORT.md` for validation status.

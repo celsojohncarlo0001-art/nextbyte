@@ -121,3 +121,12 @@ Live Supabase Storage, real account policies, cross-device synchronization, and 
 - Task cards now show attachment Open and Download actions. Edit flow supports removing saved attachments, and task deletion attempts cloud object cleanup only after workspace deletion has synchronized.
 - Updated the PWA cache namespace to `nexbyte-pwa-v9-video-folders-task-attachments`.
 - No new Supabase table, bucket, or SQL migration was added.
+
+## November 20, 2026 — Study Hub subject Add Task button repair
+
+- Replaced the subject Tasks tab's inline Add task handlers with explicit `type="button"` controls carrying the current subject ID in a data attribute.
+- Added a delegated click handler for subject-task creation so the action calls the currently installed global `window.openTaskSheet` implementation directly, avoiding stale or mismatched inline function bindings after the layered task-editor enhancements.
+- Added a guard that verifies the selected subject exists and that the task editor actually opened. Failures now produce an actionable toast and console diagnostic instead of silently doing nothing.
+- Explicitly synchronized the legacy global `openTaskSheet` identifier with the enhanced task editor function for other existing callers.
+- Bumped the PWA cache namespace to `nexbyte-pwa-v10-study-task-button-fix` so installed NEXTBYTE clients fetch the repaired task button logic.
+- No Supabase schema, Storage bucket, or user data changes were required.

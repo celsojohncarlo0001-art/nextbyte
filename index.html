@@ -6548,16 +6548,57 @@ async function deleteRoomAny(id){
   subjectTabBody = function (subject) {
     if (UI.subjectTab === 'tasks') {
       var tasks = (S.tasks || []).filter(function (item) { return String(item.subjectId) === String(subject.id); });
-      if (!tasks.length) return '<div class="empty"><p class="txm muted">No tasks linked to this subject yet.</p><button class="btn btn-primary mt3" onclick="openTaskSheet(null,\'' + nbxEscape(subject.id) + '\')">Add task</button></div>';
+      var addButton = function (variant) {
+        var cls = variant === 'primary' ? 'btn btn-primary mt3' : 'btn btn-secondary btn-block mt3';
+        var label = variant === 'primary' ? 'Add task' : (ic('plus',16) + ' Add task');
+        return '<button type="button" class="' + cls + '" data-nbx-add-subject-task="' + nbxEscape(subject.id) + '">' + label + '</button>';
+      };
+      if (!tasks.length) return '<div class="empty"><p class="txm muted">No tasks linked to this subject yet.</p>' + addButton('primary') + '</div>';
       return '<div class="fc g2">' + tasks.map(function (task) {
         var desc = task.description || task.instructions || task.additionalNotes || '';
         var statusText = task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In progress' : 'To do';
-        return '<article class="card padc"><div class="f jb aic g2"><div class="grow minw"><p class="txm semi">' + nbxEscape(task.title) + '</p><p class="txs muted mt1">' + nbxEscape(task.type || 'Task') + ' · ' + nbxEscape(statusText) + '</p></div><button class="iconbtn" onclick="openTaskSheet(\'' + nbxEscape(task.id) + '\')">' + ic('edit',15) + '</button></div><p class="txs muted mt2">Due: ' + nbxEscape(task.dueDate || 'No date') + (task.dueTime ? ' · ' + nbxEscape(task.dueTime) : '') + ' · ' + nbxEscape((task.priority || 'medium').toUpperCase()) + '</p>' + (desc ? '<p class="txm mt2" style="white-space:pre-wrap">' + nbxEscape(desc) + '</p>' : '') + nbxTaskAttachmentMarkup(task) + '<button class="btn btn-secondary btn-sm mt3" onclick="cycleTask(\'' + nbxEscape(task.id) + '\')">Update status</button></article>';
-      }).join('') + '</div><button class="btn btn-secondary btn-block mt3" onclick="openTaskSheet(null,\'' + nbxEscape(subject.id) + '\')">' + ic('plus',16) + ' Add task</button>';
+        return '<article class="card padc"><div class="f jb aic g2"><div class="grow minw"><p class="txm semi">' + nbxEscape(task.title) + '</p><p class="txs muted mt1">' + nbxEscape(task.type || 'Task') + ' · ' + nbxEscape(statusText) + '</p></div><button type="button" class="iconbtn" onclick="openTaskSheet(\'' + nbxEscape(task.id) + '\')">' + ic('edit',15) + '</button></div><p class="txs muted mt2">Due: ' + nbxEscape(task.dueDate || 'No date') + (task.dueTime ? ' · ' + nbxEscape(task.dueTime) : '') + ' · ' + nbxEscape((task.priority || 'medium').toUpperCase()) + '</p>' + (desc ? '<p class="txm mt2" style="white-space:pre-wrap">' + nbxEscape(desc) + '</p>' : '') + nbxTaskAttachmentMarkup(task) + '<button type="button" class="btn btn-secondary btn-sm mt3" onclick="cycleTask(\'' + nbxEscape(task.id) + '\')">Update status</button></article>';
+      }).join('') + '</div>' + addButton('secondary');
     }
     return nbxTaskSubjectTabBody(subject);
   };
   window.subjectTabBody = subjectTabBody;
+
+  // Use delegated handling for subject-task creation. This avoids fragile inline
+  // handler name resolution after the task editor is enhanced by later scripts.
+  window.nbOpenSubjectTaskSheet = function (subjectId) {
+    var id = String(subjectId || '');
+    if (!id || !nbxFindSubject(id)) { toast('This subject could not be found. Please reopen it and try again.'); return false; }
+    var editor = window.openTaskSheet;
+    if (typeof editor !== 'function') { toast('The task editor is unavailable. Please refresh NEXTBYTE and try again.'); return false; }
+    try {
+      editor.call(window, null, id);
+      var opened = document.querySelector('.overlay #nbTaskTitle') || document.querySelector('.overlay #tTitle');
+      if (!opened) {
+        toast('The task form could not be opened. Please refresh NEXTBYTE and try again.');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Could not open the Study Hub task editor:', error);
+      toast('Could not open Add Task: ' + ((error && error.message) || 'Please refresh and try again.'));
+      return false;
+    }
+  };
+  if (!window.__NBX_SUBJECT_TASK_ADD_DELEGATE__) {
+    document.addEventListener('click', function (event) {
+      var target = event.target && event.target.closest ? event.target.closest('[data-nbx-add-subject-task]') : null;
+      if (!target) return;
+      event.preventDefault();
+      event.stopPropagation();
+      window.nbOpenSubjectTaskSheet(target.getAttribute('data-nbx-add-subject-task'));
+    }, true);
+    window.__NBX_SUBJECT_TASK_ADD_DELEGATE__ = true;
+  }
+  // Keep the global identifier and the window property in sync for legacy
+  // inline callers elsewhere in the application.
+  try { openTaskSheet = window.openTaskSheet; } catch (bindingError) { console.warn('Could not refresh the legacy task-editor binding:', bindingError); }
+
 
   // Older materials already in the workspace are categorized by their extension/MIME
   // at render time. Persist inferred category quietly for the next normal save.
@@ -6581,7 +6622,7 @@ async function deleteRoomAny(id){
   };
   try { render = window.render; } catch (_) {}
 
-  window.NEXBYTE_STUDY_HUB_FOLDERS_PREVIEW_VERSION = '1.0';
+  window.NEXBYTE_STUDY_HUB_FOLDERS_PREVIEW_VERSION = '1.1-task-button-fix';
 })();
 
 </script>

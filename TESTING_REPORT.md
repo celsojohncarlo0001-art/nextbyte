@@ -64,3 +64,24 @@ The following require the real Supabase project, authenticated user, and deploye
 - Task attachment metadata is stored with the task in the existing workspace JSONB state; no new SQL migration or bucket is required.
 - Existing audio, presentation, and spreadsheet objects are preserved. The update changes category display/metadata only; it does not move, rename, or delete Storage objects.
 - The app's workspace remains a single JSONB state document. Concurrent edits from multiple devices are still subject to the project's existing last-write-wins behavior.
+
+## Follow-up repair — Study Hub subject Add Task button
+
+### Static checks performed
+
+| Check | Result | Notes |
+|---|---|---|
+| All inline JavaScript syntax | PASS | All six inline script blocks extracted and checked with `node --check`. |
+| Service worker syntax | PASS | `sw.js` passed `node --check`. |
+| Supabase config syntax | PASS | Existing `supabase-config.js` passed `node --check`; configuration was not changed. |
+| HTML parse | PASS | Parsed with Python's HTML parser. |
+| Subject Add Task button markup | PASS (static) | Both empty and populated subject-task states now render `type="button"` controls with `data-nbx-add-subject-task`. |
+| Delegated click route | PASS (static) | A guarded document-level handler resolves the current subject and calls `window.openTaskSheet(null, subjectId)`. |
+| Modal-open guard | PASS (static) | The handler checks for the task editor fields after invoking the editor and reports failures with a toast. |
+| Legacy task-editor binding | PASS (static) | The global `openTaskSheet` identifier is synchronized with `window.openTaskSheet`. |
+| PWA cache namespace | PASS | Updated to `nexbyte-pwa-v10-study-task-button-fix`. |
+| ZIP integrity | PASS | Archive test completed after packaging. |
+
+### Not verified in this environment
+
+A real interactive browser click through the deployed Vercel application, authenticated task creation, and Supabase workspace save were not available here. After deployment, open a subject → Tasks → Add task and verify that the task editor appears, then create a test task and confirm it remains after refresh.
