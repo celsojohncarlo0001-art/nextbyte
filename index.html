@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <meta name="theme-color" content="#2563EB"/>
-<meta name="nexbyte-repair-layer" content="4.1"/>
+<meta name="nexbyte-repair-layer" content="4.2"/>
 <meta name="description" content="NEXBYTE — your personal academic workspace, available online and offline."/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -885,6 +885,7 @@ var ICONS={
   target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
   layers:'<path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/>',
   file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>',
+  video:'<rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3"/>',
   headphones:'<path d="M3 16v-4a9 9 0 0 1 18 0v4"/><path d="M21 16a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2Z"/><path d="M3 16a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2Z"/>',
   grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   rows:'<rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="12" width="18" height="5" rx="1.5"/>',
@@ -5813,6 +5814,18 @@ async function deleteRoomAny(id){
 @media(min-width:600px){.nbx-preview-frame{height:68vh}.nbx-preview-body{max-height:70vh}}
 </style>
 
+<style id="nbx-task-video-layout-v2">
+.nbx-preview-video{display:block;width:100%;max-width:100%;max-height:65vh;margin:8px auto;background:#0b1220;border-radius:14px;object-fit:contain}
+.nbx-task-upload-zone{min-width:0;padding:14px;border:1px dashed var(--border);border-radius:16px;background:var(--card)}
+.nbx-task-attachments{display:flex;flex-direction:column;gap:8px;min-width:0;margin-top:14px}
+.nbx-task-attachment-row{display:flex;align-items:center;gap:9px;min-width:0;padding:10px;border:1px solid var(--border);border-radius:12px;background:var(--card)}
+.nbx-task-attachment-icon{flex:0 0 34px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--primary-soft);color:var(--primary-text)}
+.nbx-task-attachment-info{display:flex;flex:1 1 auto;flex-direction:column;min-width:0;gap:3px}
+.nbx-task-attachment-info strong{font-size:12px;line-height:1.35;overflow-wrap:anywhere;word-break:break-word}
+.nbx-task-attachment-info small{font-size:10px;color:var(--muted-fg);overflow-wrap:anywhere}
+.nbx-task-attachment-actions{display:flex;flex:0 0 auto;gap:6px;flex-wrap:wrap}
+@media(max-width:420px){.nbx-task-attachment-row{align-items:flex-start;flex-wrap:wrap}.nbx-task-attachment-info{flex-basis:calc(100% - 48px)}.nbx-task-attachment-actions{width:100%;padding-left:43px}.nbx-task-attachment-actions .btn{flex:1 1 0}}
+</style>
 <script>
 /* NEXTBYTE Study Hub enhancement layer — syllabus display, file preview, and folders.
  * Uses the existing private user-study-files bucket and user_workspaces state.
@@ -5823,18 +5836,16 @@ async function deleteRoomAny(id){
 
   var NBX_BUCKET = 'user-study-files';
   var NBX_MAX_BYTES = 20 * 1024 * 1024;
-  var NBX_ALLOWED = ['pdf','doc','docx','ppt','pptx','xls','xlsx','txt','md','csv','png','jpg','jpeg','webp','gif','mp3','wav','m4a','ogg'];
+  var NBX_ALLOWED = ['pdf','doc','docx','ppt','pptx','xls','xlsx','txt','md','csv','png','jpg','jpeg','webp','gif','mp3','wav','m4a','ogg','mp4','webm','mov','m4v'];
   var NBX_FOLDER_SELECTION = window.NB_MATERIAL_FOLDER_SELECTION || (window.NB_MATERIAL_FOLDER_SELECTION = Object.create(null));
   var NBX_CATEGORIES = [
     {key:'all', label:'All Files', hint:'Every material in this subject', icon:'▣'},
     {key:'pdf', label:'PDF Documents', hint:'PDF handouts and reviewers', icon:'PDF'},
     {key:'images', label:'Images', hint:'Photos, diagrams and screenshots', icon:'IMG'},
     {key:'word', label:'Word Documents', hint:'DOC and DOCX files', icon:'DOC'},
-    {key:'presentations', label:'Presentations', hint:'PowerPoint slides', icon:'PPT'},
-    {key:'spreadsheets', label:'Spreadsheets', hint:'Excel workbooks', icon:'XLS'},
-    {key:'text', label:'Text Files', hint:'TXT, CSV and Markdown', icon:'TXT'},
-    {key:'audio', label:'Audio Files', hint:'MP3, WAV and other audio', icon:'♫'},
-    {key:'other', label:'Other Files', hint:'Other supported formats', icon:'…'}
+    {key:'video', label:'Video Files', hint:'MP4, WebM, MOV and M4V', icon:'▶'},
+    {key:'text', label:'Text Files', hint:'TXT and Markdown', icon:'TXT'},
+    {key:'other', label:'Other Files', hint:'Audio, spreadsheets and other supported files', icon:'…'}
   ];
   var NBX_CATEGORY_BY_KEY = Object.create(null);
   NBX_CATEGORIES.forEach(function (item) { NBX_CATEGORY_BY_KEY[item.key] = item; });
@@ -5851,7 +5862,8 @@ async function deleteRoomAny(id){
       ppt:'application/vnd.ms-powerpoint', pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       xls:'application/vnd.ms-excel', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       txt:'text/plain', md:'text/markdown', csv:'text/csv', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', gif:'image/gif',
-      mp3:'audio/mpeg', wav:'audio/wav', m4a:'audio/mp4', ogg:'audio/ogg'
+      mp3:'audio/mpeg', wav:'audio/wav', m4a:'audio/mp4', ogg:'audio/ogg',
+      mp4:'video/mp4', webm:'video/webm', mov:'video/quicktime', m4v:'video/x-m4v'
     };
     return map[nbxExt(file && file.name)] || 'application/octet-stream';
   }
@@ -5859,16 +5871,15 @@ async function deleteRoomAny(id){
     var name = file && (file.fileName || file.name || file.n) || '';
     var ext = nbxExt(name);
     var mime = String((file && (file.mime || file.fileType || file.type)) || '').toLowerCase();
-    // Prefer a recognized extension, then use the stored MIME type for legacy files.
     if (ext === 'pdf' || mime === 'application/pdf') return 'pdf';
     if (['png','jpg','jpeg','webp','gif'].indexOf(ext) >= 0 || mime.indexOf('image/') === 0) return 'images';
     if (['doc','docx'].indexOf(ext) >= 0 || /msword|wordprocessingml/.test(mime)) return 'word';
-    if (['ppt','pptx'].indexOf(ext) >= 0 || /presentation|powerpoint/.test(mime)) return 'presentations';
-    if (['xls','xlsx'].indexOf(ext) >= 0 || /spreadsheet|excel/.test(mime)) return 'spreadsheets';
-    if (['txt','md','csv'].indexOf(ext) >= 0 || mime.indexOf('text/') === 0) return 'text';
-    if (['mp3','wav','m4a','ogg'].indexOf(ext) >= 0 || mime.indexOf('audio/') === 0) return 'audio';
+    if (['mp4','webm','mov','m4v'].indexOf(ext) >= 0 || mime.indexOf('video/') === 0) return 'video';
+    if (['txt','md','csv'].indexOf(ext) >= 0 || mime === 'text/plain' || mime === 'text/markdown' || mime === 'text/csv') return 'text';
+    // Legacy audio, spreadsheet and presentation uploads remain available in All Files,
+    // but are grouped into Other Files rather than removed or moved in Storage.
     var stored = String(file && file.category || '').toLowerCase();
-    return NBX_CATEGORY_BY_KEY[stored] ? stored : 'other';
+    return NBX_CATEGORY_BY_KEY[stored] && stored !== 'all' ? stored : 'other';
   }
   function nbxSize(bytes) {
     if (typeof nbFileSize === 'function') return nbFileSize(bytes || 0);
@@ -5896,7 +5907,7 @@ async function deleteRoomAny(id){
     if (!file || !file.name) return {ok:false, message:'Choose a file first.'};
     if (!file.size) return {ok:false, message:'The selected file is empty.'};
     if (file.size > NBX_MAX_BYTES) return {ok:false, message:'Files must be 20 MB or smaller.'};
-    if (NBX_ALLOWED.indexOf(nbxExt(file.name)) < 0) return {ok:false, message:'Unsupported file type. Supported: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, images and audio files.'};
+    if (NBX_ALLOWED.indexOf(nbxExt(file.name)) < 0) return {ok:false, message:'Unsupported file type. Supported: PDF, Office documents, text, images, audio and video files.'};
     var ext = nbxExt(file.name), mime = nbxMime(file);
     // Cross-check extension and browser MIME when the browser provides a useful type.
     // Some platforms report application/octet-stream for Office documents; that is allowed.
@@ -5910,7 +5921,8 @@ async function deleteRoomAny(id){
       txt:['text/plain'], md:['text/markdown','text/plain'], csv:['text/csv','application/vnd.ms-excel'],
       png:['image/png'], jpg:['image/jpeg'], jpeg:['image/jpeg'], webp:['image/webp'], gif:['image/gif'],
       mp3:['audio/mpeg','audio/mp3'], wav:['audio/wav','audio/x-wav'],
-      m4a:['audio/mp4','audio/x-m4a'], ogg:['audio/ogg','application/ogg']
+      m4a:['audio/mp4','audio/x-m4a'], ogg:['audio/ogg','application/ogg'],
+      mp4:['video/mp4'], webm:['video/webm'], mov:['video/quicktime'], m4v:['video/x-m4v','video/mp4']
     }[ext];
     if (expected && mime && mime !== 'application/octet-stream' && expected.indexOf(mime) < 0) {
       return {ok:false, message:'The selected file extension does not match its detected file type.'};
@@ -5934,7 +5946,7 @@ async function deleteRoomAny(id){
     });
   }
   function nbxSetFolder(subjectId, key) {
-    NBX_FOLDER_SELECTION[String(subjectId)] = NBX_CATEGORY_BY_KEY[key] ? key : 'all';
+    NBX_FOLDER_SELECTION[String(subjectId)] = key === 'folders' ? 'folders' : (NBX_CATEGORY_BY_KEY[key] ? key : 'folders');
     render();
   }
   window.nbSetMaterialFolder = nbxSetFolder;
@@ -5965,8 +5977,8 @@ async function deleteRoomAny(id){
     var currentCategory = NBX_CATEGORY_BY_KEY[categoryKey] || NBX_CATEGORY_BY_KEY.all;
     var panel = sheet(
       '<div class="f jb aic mb3"><div><h3 class="txl semi">Upload study material</h3><p class="txs muted mt1">' + nbxEscape(categoryKey === 'all' ? 'Files are organized automatically by type.' : 'Uploading from ' + currentCategory.label + '.') + '</p></div><button class="iconbtn" data-cancel aria-label="Close">' + ic('x',18) + '</button></div>' +
-      '<div class="card padc mb3"><p class="txs semi">Supported files</p><p class="txs muted mt1">PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, images, MP3, WAV and other supported audio. Maximum 20 MB per file. Files stay private in your account.</p></div>' +
-      '<div class="fc g3"><div><label class="field-label" for="nbxMaterialFile">Choose a file</label><input id="nbxMaterialFile" class="input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.gif,.mp3,.wav,.m4a,.ogg" style="height:auto;padding:9px 12px"/></div><div><label class="field-label" for="nbxMaterialName">Display name (optional)</label><input id="nbxMaterialName" class="input" placeholder="Defaults to original filename"/></div><p id="nbxMaterialStatus" class="txs muted" role="status" aria-live="polite">Waiting for file selection · 20 MB maximum</p><button class="btn btn-primary btn-block" data-upload type="button">Upload material</button></div>'
+      '<div class="card padc mb3"><p class="txs semi">Supported files</p><p class="txs muted mt1">PDF, Word, PowerPoint, Excel, text, images, audio and video (MP4, WebM, MOV, M4V). Maximum 20 MB per file. Audio and legacy formats remain in Other Files. Files stay private in your account.</p></div>' +
+      '<div class="fc g3"><div><label class="field-label" for="nbxMaterialFile">Choose a file</label><input id="nbxMaterialFile" class="input" type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp,.gif,.mp3,.wav,.m4a,.ogg,.mp4,.webm,.mov,.m4v" style="height:auto;padding:9px 12px"/></div><div><label class="field-label" for="nbxMaterialName">Display name (optional)</label><input id="nbxMaterialName" class="input" placeholder="Defaults to original filename"/></div><p id="nbxMaterialStatus" class="txs muted" role="status" aria-live="polite">Waiting for file selection · 20 MB maximum</p><button class="btn btn-primary btn-block" data-upload type="button">Upload material</button></div>'
     );
     var input = panel.querySelector('#nbxMaterialFile');
     var nameInput = panel.querySelector('#nbxMaterialName');
@@ -5980,6 +5992,10 @@ async function deleteRoomAny(id){
       var file = input.files && input.files[0];
       var check = nbxFileValidation(file);
       if (!check.ok) { nbxStatus(status, check.message, true); toast(check.message); return; }
+      if (categoryKey !== 'all' && categoryKey !== 'folders' && categoryKey !== check.category) {
+        var folderError = 'This file belongs in ' + (NBX_CATEGORY_BY_KEY[check.category] || NBX_CATEGORY_BY_KEY.other).label + ', not ' + currentCategory.label + '.';
+        nbxStatus(status, folderError, true); toast(folderError); return;
+      }
       if (busy) return;
       busy = true; button.disabled = true; button.textContent = 'Uploading…';
       nbxStatus(status, 'Uploading ' + file.name + '…', false);
@@ -5999,7 +6015,7 @@ async function deleteRoomAny(id){
         if (!liveSubject.materials.some(function (item) { return item && String(item.path || '') === uploadedPath; })) liveSubject.materials.unshift(record);
         nbxCache();
         // Immediate render: the attachment appears before the cloud workspace save returns.
-        NBX_FOLDER_SELECTION[String(subjectId)] = requestedCategory && requestedCategory !== 'all' && requestedCategory !== check.category ? check.category : categoryKey;
+        NBX_FOLDER_SELECTION[String(subjectId)] = (categoryKey !== 'all' && categoryKey !== 'folders') ? categoryKey : 'all';
         closeTop(); render();
         toast('File uploaded and added to ' + (NBX_CATEGORY_BY_KEY[check.category] || NBX_CATEGORY_BY_KEY.other).label + '.');
         var saved = await nbxSave();
@@ -6179,7 +6195,9 @@ async function deleteRoomAny(id){
         var frame = document.createElement('iframe'); frame.className = 'nbx-preview-frame'; frame.title = 'PDF preview: ' + name; frame.src = url + '#toolbar=1&navpanes=0'; body.replaceChildren(frame);
       } else if (category === 'images') {
         var img = document.createElement('img'); img.className = 'nbx-preview-image'; img.alt = name; img.src = url; body.replaceChildren(img);
-      } else if (category === 'audio') {
+      } else if (['mp4','webm','mov','m4v'].indexOf(ext) >= 0 || mime.indexOf('video/') === 0) {
+        var video = document.createElement('video'); video.className = 'nbx-preview-video'; video.controls = true; video.playsInline = true; video.preload = 'metadata'; video.src = url; body.replaceChildren(video);
+      } else if (['mp3','wav','m4a','ogg'].indexOf(ext) >= 0 || mime.indexOf('audio/') === 0) {
         var audio = document.createElement('audio'); audio.className = 'nbx-preview-audio'; audio.controls = true; audio.preload = 'metadata'; audio.src = url; body.replaceChildren(audio);
       } else if (['txt','md','csv'].indexOf(ext) >= 0 || mime.indexOf('text/') === 0) {
         var response = await fetch(url, {credentials:'omit'});
@@ -6225,7 +6243,7 @@ async function deleteRoomAny(id){
 
   function nbxFolderCard(subjectId, item, files) {
     var count = item.key === 'all' ? files.length : files.filter(function (file) { return nbxCategory(file) === item.key; }).length;
-    return '<button type="button" class="nbx-folder-card" onclick="nbSetMaterialFolder(\'' + nbxEscape(subjectId) + '\',\'' + item.key + '\')"><span class="nbx-folder-icon">' + (item.key === 'all' ? ic('grid',20) : ic('file',20)) + '</span><span class="nbx-folder-info"><strong>' + nbxEscape(item.label) + '</strong><small>' + nbxEscape(item.hint) + '</small></span><span class="nbx-folder-count">' + count + '</span></button>';
+    return '<button type="button" class="nbx-folder-card" onclick="nbSetMaterialFolder(\'' + nbxEscape(subjectId) + '\',\'' + item.key + '\')"><span class="nbx-folder-icon">' + (item.key === 'all' ? ic('grid',20) : (item.key === 'video' ? ic('video',20) : ic('file',20))) + '</span><span class="nbx-folder-info"><strong>' + nbxEscape(item.label) + '</strong><small>' + nbxEscape(item.hint) + '</small></span><span class="nbx-folder-count">' + count + '</span></button>';
   }
   function nbxMaterialCard(subject, material, index) {
     var name = nbxName(material), category = nbxCategory(material), label = (NBX_CATEGORY_BY_KEY[category] || NBX_CATEGORY_BY_KEY.other).label;
@@ -6248,17 +6266,296 @@ async function deleteRoomAny(id){
     }
     if (UI.subjectTab === 'materials') {
       var materials = Array.isArray(subject.materials) ? subject.materials : [];
-      var selected = NBX_CATEGORY_BY_KEY[NBX_FOLDER_SELECTION[String(subject.id)]] ? NBX_FOLDER_SELECTION[String(subject.id)] : 'all';
-      var filtered = selected === 'all' ? materials : materials.filter(function (item) { return nbxCategory(item) === selected; });
+      var selected = NBX_FOLDER_SELECTION[String(subject.id)] || 'folders';
+      if (selected !== 'folders' && !NBX_CATEGORY_BY_KEY[selected]) selected = 'folders';
+      var filtered = selected === 'folders' ? [] : (selected === 'all' ? materials : materials.filter(function (item) { return nbxCategory(item) === selected; }));
       var folderCards = NBX_CATEGORIES.map(function (item) { return nbxFolderCard(subject.id, item, materials); }).join('');
-      var activeLabel = (NBX_CATEGORY_BY_KEY[selected] || NBX_CATEGORY_BY_KEY.all).label;
-      var heading = selected === 'all' ? '<div class="f jb aic"><div><h3 class="txm semi">Materials folders</h3><p class="txs muted mt1">Files are grouped automatically by their verified type.</p></div></div>' : '<div class="f jb aic"><div><h3 class="txm semi">' + nbxEscape(activeLabel) + '</h3><p class="txs muted mt1">' + filtered.length + ' file(s) in this folder</p></div><button type="button" class="btn btn-secondary btn-sm" onclick="nbSetMaterialFolder(\'' + nbxEscape(subject.id) + '\',\'all\')">' + ic('chevL',14) + ' Folders</button></div>';
-      var folderView = selected === 'all' ? '<div class="nbx-folder-grid">' + folderCards + '</div>' : '';
-      var listHtml = filtered.length ? filtered.map(function (file) { return nbxMaterialCard(subject, file, materials.indexOf(file)); }).join('') : '<div class="empty"><p class="txm muted">' + (selected === 'all' ? 'No study materials uploaded yet.' : 'This folder is empty. Upload a file to add it here.') + '</p></div>';
-      var uploadLabel = selected === 'all' ? 'Upload study material' : 'Upload to ' + activeLabel;
-      return '<div class="fc g3"><div class="card padc"><h3 class="txm semi">Study materials</h3><p class="txs muted mt1">Upload handouts, worksheets, reviewers, slides, spreadsheets, images or audio. Files are private to your account and automatically sorted into folders.</p></div><div class="fc g2">' + heading + folderView + listHtml + '</div><button class="btn btn-primary btn-block" type="button" onclick="addMaterial(\'' + nbxEscape(subject.id) + '\',\'' + selected + '\')">' + ic('upload',17) + ' ' + nbxEscape(uploadLabel) + '</button><p class="txs muted">Open previews supported documents and media. Download saves the original file; Offline keeps a device copy.</p></div>';
+      var activeLabel = selected === 'folders' ? 'Materials folders' : (NBX_CATEGORY_BY_KEY[selected] || NBX_CATEGORY_BY_KEY.all).label;
+      var heading = selected === 'folders'
+        ? '<div><h3 class="txm semi">Materials folders</h3><p class="txs muted mt1">Choose a folder to view your uploaded files. All Files contains every material for this subject.</p></div>'
+        : '<div class="f jb aic"><div><h3 class="txm semi">' + nbxEscape(activeLabel) + '</h3><p class="txs muted mt1">' + filtered.length + ' file(s) in this folder</p></div><button type="button" class="btn btn-secondary btn-sm" onclick="nbSetMaterialFolder(\'' + nbxEscape(subject.id) + '\',\'folders\')">' + ic('chevL',14) + ' Folders</button></div>';
+      var folderView = selected === 'folders' ? '<div class="nbx-folder-grid">' + folderCards + '</div>' : '';
+      var listHtml = selected === 'folders' ? '' : (filtered.length ? filtered.map(function (file) { return nbxMaterialCard(subject, file, materials.indexOf(file)); }).join('') : '<div class="empty"><p class="txm muted">' + (selected === 'all' ? 'No study materials uploaded yet.' : 'This folder is empty. Upload a file to add it here.') + '</p></div>');
+      var uploadLabel = selected === 'folders' || selected === 'all' ? 'Upload study material' : 'Upload to ' + activeLabel;
+      var uploadCategory = selected === 'folders' ? 'folders' : selected;
+      return '<div class="fc g3"><div class="card padc"><h3 class="txm semi">Study materials</h3><p class="txs muted mt1">Files are kept in your private account storage. Open a folder to browse files; audio and other legacy formats remain accessible in All Files and Other Files.</p></div><div class="fc g2">' + heading + folderView + listHtml + '</div><button class="btn btn-primary btn-block" type="button" onclick="addMaterial(\'' + nbxEscape(subject.id) + '\',\'' + uploadCategory + '\')">' + ic('upload',17) + ' ' + nbxEscape(uploadLabel) + '</button><p class="txs muted">Open previews supported documents and media. Download saves the original file; Offline keeps a device copy.</p></div>';
     }
     return nbxPreviousSubjectTabBody(subject);
+  };
+  window.subjectTabBody = subjectTabBody;
+
+  // Task attachments use the existing private user-study-files bucket and are
+  // referenced from the task object stored in the user's existing workspace.
+  var NBX_TASK_ALLOWED = ['pdf','doc','docx','png','jpg','jpeg','webp','gif','txt','md','mp4','webm','mov','m4v'];
+  var NBX_TASK_BLOCKED_EXT = ['xls','xlsx','ods','csv','ppt','pptx','odp','mp3','wav','m4a','ogg','oga','opus','aac','flac','aif','aiff','weba','3gp'];
+  function nbxTaskFileValidation(file) {
+    if (!file || !file.name) return {ok:false, message:'Choose a supporting file.'};
+    if (!file.size) return {ok:false, message:'The selected file is empty.'};
+    if (file.size > NBX_MAX_BYTES) return {ok:false, message:'Task attachments must be 20 MB or smaller per file.'};
+    var ext = nbxExt(file.name), mime = String(file.type || '').toLowerCase();
+    var blockedMime = mime.indexOf('audio/') === 0 || /spreadsheet|excel|powerpoint|presentation/.test(mime) || mime === 'text/csv' || mime === 'application/vnd.oasis.opendocument.spreadsheet' || mime === 'application/vnd.oasis.opendocument.presentation';
+    if (NBX_TASK_BLOCKED_EXT.indexOf(ext) >= 0 || blockedMime) return {ok:false, message:'This file type is not allowed for task instructions. Spreadsheets, presentations, CSV files and audio files are not supported.'};
+    if (NBX_TASK_ALLOWED.indexOf(ext) < 0) return {ok:false, message:'Unsupported task attachment. Use PDF, Word, image, text, or supported video files.'};
+    if (mime && mime !== 'application/octet-stream') {
+      var validMime = false;
+      if (ext === 'pdf') validMime = mime === 'application/pdf';
+      else if (ext === 'doc') validMime = mime === 'application/msword' || mime === 'application/octet-stream';
+      else if (ext === 'docx') validMime = mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || mime === 'application/zip';
+      else if (['png','jpg','jpeg','webp','gif'].indexOf(ext) >= 0) validMime = mime.indexOf('image/') === 0;
+      else if (['txt','md'].indexOf(ext) >= 0) validMime = mime.indexOf('text/') === 0 || mime === 'application/octet-stream';
+      else if (['mp4','webm','mov','m4v'].indexOf(ext) >= 0) validMime = mime.indexOf('video/') === 0 || (ext === 'mov' && mime === 'application/quicktime');
+      if (!validMime) return {ok:false, message:'The file extension does not match its detected MIME type.'};
+    }
+    return {ok:true};
+  }
+  function nbxTaskFileName(file) { return String(file && (file.fileName || file.name || file.n) || 'Task attachment'); }
+  function nbxTaskFileType(file) { return String(file && (file.mime || file.type) || nbxExt(nbxTaskFileName(file)).toUpperCase() || 'File'); }
+  function nbxTaskAttachmentMarkup(task) {
+    var files = Array.isArray(task && task.attachments) ? task.attachments : [];
+    if (!files.length) return '';
+    return '<div class="nbx-task-attachments"><p class="txs semi mb2">Supporting files (' + files.length + ')</p>' + files.map(function (file, index) {
+      var name = nbxTaskFileName(file);
+      return '<div class="nbx-task-attachment-row"><span class="nbx-task-attachment-icon">' + ic('file',16) + '</span><div class="nbx-task-attachment-info"><strong title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</strong><small>' + nbxEscape(nbxTaskFileType(file)) + ' · ' + nbxEscape(file.size ? nbxSize(file.size) : '') + '</small></div><div class="nbx-task-attachment-actions"><button class="btn btn-secondary btn-sm" type="button" onclick="nbPreviewTaskAttachment(\'' + nbxEscape(task.id) + '\',' + index + ')">Open</button><button class="btn btn-primary btn-sm" type="button" onclick="nbDownloadTaskAttachment(\'' + nbxEscape(task.id) + '\',' + index + ')">Download</button></div></div>';
+    }).join('') + '</div>';
+  }
+  window.nbPreviewTaskAttachment = function (taskId, index) {
+    var task = (S.tasks || []).find(function (item) { return String(item.id) === String(taskId); });
+    var file = task && task.attachments && task.attachments[index];
+    if (!file || !file.path) { toast('Task attachment not found.'); return; }
+    nbxPreviewPath(file, file.path, 'Task attachment');
+  };
+  window.nbDownloadTaskAttachment = function (taskId, index) {
+    var task = (S.tasks || []).find(function (item) { return String(item.id) === String(taskId); });
+    var file = task && task.attachments && task.attachments[index];
+    if (!file || !file.path) { toast('Task attachment not found.'); return; }
+    nbxDownloadPath(file.path, nbxTaskFileName(file));
+  };
+  window.nbRemoveTaskAttachment = function (taskId, index) {
+    var task = (S.tasks || []).find(function (item) { return String(item.id) === String(taskId); });
+    var file = task && task.attachments && task.attachments[index];
+    if (!task || !file) return;
+    confirmSheet({title:'Remove this task attachment?', message:'The file will be removed from this task and its private cloud copy will be deleted.', confirmLabel:'Remove attachment', onConfirm:async function () {
+      try {
+        var user = await nbxUser();
+        if (String(file.userId || user.id) !== String(user.id)) throw new Error('You do not have permission to remove this file.');
+        var removed = await dbClient.storage.from(NBX_BUCKET).remove([file.path]);
+        if (removed.error) throw removed.error;
+        task.attachments.splice(index, 1);
+        nbxCache();
+        var saved = await nbxSave();
+        render();
+        if (!saved || !saved.ok) toast('Attachment removed on this device; cloud workspace sync is pending.');
+        else toast('Task attachment removed.');
+      } catch (error) { console.error('Task attachment removal failed:', error); toast('Could not remove attachment: ' + (error.message || 'Check your storage permissions.')); }
+    }});
+  };
+
+  // Complete task editor with optional multi-file attachments. It keeps the existing
+  // task fields, then uploads files to a user-owned path before committing references.
+  window.openTaskSheet = function (editId, presetSubject) {
+    var task = editId ? (S.tasks || []).find(function (item) { return String(item.id) === String(editId); }) : null;
+    var taskWasOriginallyNew = !task;
+    var typeOptions = ['Assignment','Project','Reading','Lab','Review','Exam','Presentation','Other'];
+    var priorities = [['high','High','#FF7A7A'],['medium','Medium','#FBBF24'],['low','Low','#2DD4BF']];
+    var statusOptions = [['todo','To do'],['progress','In progress'],['done','Completed']];
+    var currentPriority = task ? task.priority : 'medium';
+    var currentStatus = task ? task.status : 'todo';
+    var currentSubject = task ? task.subjectId : (presetSubject || (S.subjects[0] && S.subjects[0].id) || '');
+    var subjectOptions = '<option value="">General / no subject</option>' + S.subjects.map(function (subject) { return '<option value="' + nbxEscape(subject.id) + '" ' + (String(subject.id) === String(currentSubject) ? 'selected' : '') + '>' + nbxEscape(subject.code + ' · ' + subject.name) + '</option>'; }).join('');
+    var panel = sheet(
+      '<div class="f jb aic mb3"><h3 class="txl semi">' + (task ? 'Edit task details' : 'Create a detailed task') + '</h3><button class="iconbtn" data-cancel type="button">' + ic('x',18) + '</button></div>' +
+      '<div class="fc g3"><div><label class="field-label" for="nbTaskTitle">Task title</label><input id="nbTaskTitle" class="input" value="' + nbxEscape(task ? task.title : '') + '" placeholder="e.g. Prepare the biology lab report"/></div>' +
+      '<div><label class="field-label" for="nbTaskDesc">What needs to be done?</label><textarea id="nbTaskDesc" class="input" rows="3" placeholder="Describe the expected work, requirements, or deliverables">' + nbxEscape(task ? task.description || '' : '') + '</textarea></div>' +
+      '<div><label class="field-label" for="nbTaskInstructions">Step-by-step instructions (optional)</label><textarea id="nbTaskInstructions" class="input" rows="3" placeholder="1. Review the lesson&#10;2. Complete the activity&#10;3. Submit your work">' + nbxEscape(task ? task.instructions || '' : '') + '</textarea></div>' +
+      '<div class="nbx-task-upload-zone"><label class="field-label" for="nbTaskAttachmentInput">Attach supporting files (optional)</label><p class="txs muted mt1">PDF, Word documents, images, text files and supported videos. Spreadsheets, presentations, CSV and audio files are not allowed. Maximum 20 MB per file.</p><input id="nbTaskAttachmentInput" class="input mt2" type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.mp4,.webm,.mov,.m4v" style="height:auto;padding:9px 12px"/><div id="nbTaskAttachmentList" class="fc g2 mt2" aria-live="polite"></div><p id="nbTaskAttachmentStatus" class="txs muted mt2" role="status">Attachments are optional. You can create a task without files.</p></div>' +
+      '<div><label class="field-label" for="nbTaskSubject">Subject</label><select id="nbTaskSubject" class="input">' + subjectOptions + '</select></div>' +
+      '<div class="f g2"><div class="grow"><label class="field-label" for="nbTaskType">Task type</label><select id="nbTaskType" class="input">' + typeOptions.map(function (type) { return '<option ' + ((task && task.type === type) || (!task && type === 'Assignment') ? 'selected' : '') + '>' + type + '</option>'; }).join('') + '</select></div><div class="grow"><label class="field-label" for="nbTaskAssignee">Assigned to</label><input id="nbTaskAssignee" class="input" value="' + nbxEscape(task ? task.assignedTo || nbProfileName() : nbProfileName()) + '"/></div></div>' +
+      '<div class="f g2"><div class="grow"><label class="field-label" for="nbTaskDue">Due date</label><input id="nbTaskDue" class="input" type="date" value="' + nbxEscape(task ? task.dueDate || '' : todayISO()) + '"/></div><div class="grow"><label class="field-label" for="nbTaskTime">Due time</label><input id="nbTaskTime" class="input" type="time" value="' + nbxEscape(task ? task.dueTime || '' : '') + '"/></div></div>' +
+      '<div><label class="field-label">Priority</label><div class="f g2" id="nbTaskPriorities">' + priorities.map(function (item) { return '<button type="button" class="btn grow" data-priority="' + item[0] + '" style="height:40px;' + (currentPriority === item[0] ? 'background:' + item[2] + ';color:#fff;border:none' : 'background:var(--card);border:1px solid var(--border);color:var(--muted-fg)') + '">' + item[1] + '</button>'; }).join('') + '</div></div>' +
+      '<div><label class="field-label">Status</label><div class="seg" id="nbTaskStatuses">' + statusOptions.map(function (item) { return '<button type="button" data-status="' + item[0] + '" class="' + (currentStatus === item[0] ? 'on' : '') + '">' + item[1] + '</button>'; }).join('') + '</div></div>' +
+      '<div><label class="field-label" for="nbTaskNotes">Additional notes (optional)</label><textarea id="nbTaskNotes" class="input" rows="2" placeholder="References, reminders, or submission details">' + nbxEscape(task ? task.additionalNotes || '' : '') + '</textarea></div>' +
+      '<button class="btn btn-primary btn-block" data-save type="button">' + (task ? 'Save task changes' : 'Create task') + '</button></div>'
+    );
+    var choice = {priority:currentPriority, status:currentStatus};
+    var input = panel.querySelector('#nbTaskAttachmentInput');
+    var list = panel.querySelector('#nbTaskAttachmentList');
+    var statusNode = panel.querySelector('#nbTaskAttachmentStatus');
+    var saveButton = panel.querySelector('[data-save]');
+    var pendingFiles = [];
+    var originalAttachments = Array.isArray(task && task.attachments) ? task.attachments.slice() : [];
+    var keepAttachments = originalAttachments.slice();
+    var busy = false;
+    panel.querySelector('[data-cancel]').onclick = closeTop;
+    panel.querySelectorAll('[data-priority]').forEach(function (button) { button.onclick = function () {
+      choice.priority = button.dataset.priority;
+      panel.querySelectorAll('[data-priority]').forEach(function (item) { var color = {high:'#FF7A7A',medium:'#FBBF24',low:'#2DD4BF'}[item.dataset.priority]; var selected = item.dataset.priority === choice.priority; item.style.background = selected ? color : 'var(--card)'; item.style.color = selected ? '#fff' : 'var(--muted-fg)'; item.style.border = selected ? 'none' : '1px solid var(--border)'; });
+    }; });
+    panel.querySelectorAll('[data-status]').forEach(function (button) { button.onclick = function () { choice.status = button.dataset.status; panel.querySelectorAll('[data-status]').forEach(function (item) { item.classList.toggle('on', item === button); }); }; });
+
+    function updateTaskAttachmentList() {
+      var savedHtml = keepAttachments.map(function (file, index) {
+        var name = nbxTaskFileName(file);
+        return '<div class="nbx-task-attachment-row"><span class="nbx-task-attachment-icon">' + ic('file',16) + '</span><div class="nbx-task-attachment-info"><strong title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</strong><small>Saved · ' + nbxEscape(nbxTaskFileType(file)) + ' · ' + nbxEscape(file.size ? nbxSize(file.size) : 'Cloud file') + '</small></div><button type="button" class="btn btn-danger btn-sm" data-remove-saved="' + index + '">Remove</button></div>';
+      }).join('');
+      var pendingHtml = pendingFiles.map(function (file, index) {
+        return '<div class="nbx-task-attachment-row"><span class="nbx-task-attachment-icon">' + ic('file-plus',16) + '</span><div class="nbx-task-attachment-info"><strong title="' + nbxEscape(file.name) + '">' + nbxEscape(file.name) + '</strong><small>Ready to upload · ' + nbxEscape(nbxTaskFileType(file)) + ' · ' + nbxEscape(nbxSize(file.size)) + '</small></div><button type="button" class="btn btn-secondary btn-sm" data-remove-pending="' + index + '">Remove</button></div>';
+      }).join('');
+      list.innerHTML = savedHtml + pendingHtml || '<p class="txs muted">No supporting files attached.</p>';
+      list.querySelectorAll('[data-remove-saved]').forEach(function (button) { button.onclick = function () { keepAttachments.splice(Number(button.dataset.removeSaved),1); updateTaskAttachmentList(); }; });
+      list.querySelectorAll('[data-remove-pending]').forEach(function (button) { button.onclick = function () { pendingFiles.splice(Number(button.dataset.removePending),1); updateTaskAttachmentList(); }; });
+      statusNode.textContent = (keepAttachments.length + pendingFiles.length) + ' attachment(s) · Attachments are optional.';
+    }
+    updateTaskAttachmentList();
+    input.addEventListener('change', function () {
+      Array.prototype.slice.call(input.files || []).forEach(function (file) {
+        var check = nbxTaskFileValidation(file);
+        if (!check.ok) { toast(file.name + ': ' + check.message); return; }
+        var duplicate = pendingFiles.some(function (existing) { return existing.name === file.name && existing.size === file.size && existing.lastModified === file.lastModified; });
+        if (!duplicate) pendingFiles.push(file);
+      });
+      input.value = '';
+      updateTaskAttachmentList();
+    });
+
+    saveButton.onclick = async function () {
+      if (busy) return;
+      var title = panel.querySelector('#nbTaskTitle').value.trim();
+      if (!title) { toast('Enter a task title.'); return; }
+      // Revalidate all pending files immediately before upload.
+      for (var validationIndex = 0; validationIndex < pendingFiles.length; validationIndex++) {
+        var validated = nbxTaskFileValidation(pendingFiles[validationIndex]);
+        if (!validated.ok) { toast(pendingFiles[validationIndex].name + ': ' + validated.message); return; }
+      }
+      busy = true; saveButton.disabled = true; saveButton.textContent = pendingFiles.length ? 'Uploading attachments…' : 'Saving…';
+      var taskId = task ? task.id : (typeof uid === 'function' ? uid() : 'task_' + Date.now());
+      var uploadedPaths = [], newRecords = [];
+      try {
+        if (pendingFiles.length) {
+          var user = await nbxUser();
+          if (!user || !user.id) throw new Error('Please sign in again before attaching task files.');
+          if (S.auth && S.auth.user && String(S.auth.user.id) !== String(user.id)) throw new Error('Your signed-in account changed. Reopen the task and try again.');
+          for (var fileIndex = 0; fileIndex < pendingFiles.length; fileIndex++) {
+            var file = pendingFiles[fileIndex];
+            var path = String(user.id) + '/tasks/' + String(taskId) + '/' + Date.now() + '_' + (typeof uid === 'function' ? uid() : Math.random().toString(36).slice(2)) + '_' + nbxSafeName(file.name);
+            await nbxUpload(NBX_BUCKET, path, file);
+            uploadedPaths.push(path);
+            newRecords.push({id:'taskfile_' + (typeof uid === 'function' ? uid() : Date.now()), fileName:file.name, n:file.name, path:path, mime:nbxMime(file), size:file.size, userId:String(user.id), taskId:String(taskId), addedAt:new Date().toISOString()});
+          }
+        }
+      } catch (uploadError) {
+        if (uploadedPaths.length && dbClient && dbClient.storage) {
+          try { var cleanup = await dbClient.storage.from(NBX_BUCKET).remove(uploadedPaths); if (cleanup.error) console.warn('Some incomplete task uploads could not be cleaned up:', cleanup.error); }
+          catch (cleanupError) { console.warn('Task attachment cleanup failed:', cleanupError); }
+        }
+        console.error('Task attachment upload failed:', uploadError);
+        statusNode.textContent = uploadError.message || 'Attachment upload failed.';
+        toast('Task files were not attached: ' + (uploadError.message || 'Upload failed.'));
+        saveButton.disabled = false; saveButton.textContent = task ? 'Save task changes' : 'Create task'; busy = false;
+        return;
+      }
+
+      var data = {
+        title:title,
+        description:panel.querySelector('#nbTaskDesc').value.trim(),
+        instructions:panel.querySelector('#nbTaskInstructions').value.trim(),
+        subjectId:panel.querySelector('#nbTaskSubject').value || null,
+        type:panel.querySelector('#nbTaskType').value,
+        assignedTo:panel.querySelector('#nbTaskAssignee').value.trim() || nbProfileName(),
+        dueDate:panel.querySelector('#nbTaskDue').value,
+        dueTime:panel.querySelector('#nbTaskTime').value,
+        priority:choice.priority,
+        status:choice.status,
+        additionalNotes:panel.querySelector('#nbTaskNotes').value.trim(),
+        attachments:keepAttachments.concat(newRecords),
+        updatedAt:new Date().toISOString()
+      };
+      var wasEdit = !!task;
+      if (task) Object.assign(task, data);
+      else {
+        task = Object.assign({id:taskId, createdAt:new Date().toISOString(), createdBy:typeof nbUserId === 'function' ? nbUserId() : null}, data);
+        S.tasks.unshift(task);
+      }
+      // Files have been uploaded and are now referenced by the task. Clear the
+      // pending queue before any save retry so they are never uploaded twice.
+      pendingFiles = [];
+      updateTaskAttachmentList();
+      nbxCache();
+      saveButton.textContent = 'Saving task…';
+      var saved;
+      try { saved = await nbxSave(); }
+      catch (saveError) { saved = {ok:false, error:saveError}; }
+      if (!saved || !saved.ok) {
+        saveButton.disabled = false; saveButton.textContent = 'Retry save'; busy = false;
+        nbxCache();
+        toast('Task and uploaded files are saved on this device. Cloud workspace synchronization is pending; retry the save when online.');
+        console.warn('Task workspace sync pending:', saved && saved.error);
+        return;
+      }
+      // Remove cloud objects only after the updated task record has synchronized.
+      var removedAttachments = originalAttachments.filter(function (oldFile) {
+        return oldFile && oldFile.path && !keepAttachments.some(function (kept) { return kept && String(kept.path) === String(oldFile.path); });
+      });
+      for (var removedIndex = 0; removedIndex < removedAttachments.length; removedIndex++) {
+        try {
+          var removeResult = await dbClient.storage.from(NBX_BUCKET).remove([removedAttachments[removedIndex].path]);
+          if (removeResult.error) console.warn('Removed task attachment remains in private Storage:', removeResult.error);
+        } catch (removeError) { console.warn('Could not remove replaced task attachment from Storage:', removeError); }
+      }
+      NOTE_DIRTY = false; closeTop(); render(); toast(taskWasOriginallyNew ? 'Task created.' : 'Task updated.');
+    };
+  };
+
+  window.vTasks = function () {
+    var counts = taskCounts();
+    var list = S.tasks.filter(function (task) { return UI.taskFilter === 'all' || task.status === UI.taskFilter; }).slice().sort(function (a,b) { return String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')); });
+    var html = '<div class="pad pt" style="padding-top:20px;padding-bottom:12px"><div class="f jb aic"><div><h1 class="tx2 bold">Tasks</h1><p class="txm muted">' + counts.done + ' of ' + counts.all + ' complete · ' + counts.overdue + ' overdue</p></div><button class="btn btn-sm" style="background:#2563EB;color:#fff" onclick="openTaskSheet(null)">' + ic('plus',17) + ' Add task</button></div></div><div class="pad grid3"><div class="stat"><span class="txl bold">' + counts.dueToday + '</span><span class="txs muted">Due today</span></div><div class="stat"><span class="txl bold">' + counts.week + '</span><span class="txs muted">Due this week</span></div><div class="stat"><span class="txl bold">' + counts.overdue + '</span><span class="txs muted">Overdue</span></div></div><div class="pad mt3"><div class="hscroll">' + [['all','All'],['todo','To do'],['progress','In progress'],['done','Completed']].map(function(f){return '<button class="chip' + (UI.taskFilter===f[0]?' on':'') + '" onclick="setTaskFilter(\'' + f[0] + '\')">' + f[1] + '</button>';}).join('') + '</div></div><div class="pad mt3 pb fc g2">';
+    if (!list.length) html += '<div class="empty"><p class="txm muted">No tasks match this view.</p></div>';
+    html += list.map(function (task) {
+      var subject = subjectById(task.subjectId), overdue = task.status !== 'done' && task.dueDate && task.dueDate < todayISO();
+      return '<article class="card padc"><div class="f jb aic g2"><div class="grow minw"><p class="txm semi">' + esc(task.title) + '</p><p class="txs muted mt1">' + esc(task.type || 'Task') + ' · ' + esc(subject ? subject.code : 'General') + '</p></div><span class="badge pri-' + esc(task.priority || 'medium') + '">' + esc((task.priority || 'medium').toUpperCase()) + '</span></div><p class="txs mt2" style="color:' + (overdue ? '#dc2626' : 'var(--muted-fg)') + '">Due ' + esc(task.dueDate || 'not set') + (task.dueTime ? ' at ' + esc(task.dueTime) : '') + (overdue ? ' · OVERDUE' : '') + '</p>' + ((task.description || task.instructions) ? '<p class="txm mt2" style="white-space:pre-wrap">' + esc(task.description || task.instructions) + '</p>' : '<p class="txs muted mt2">No description provided.</p>') + nbxTaskAttachmentMarkup(task) + '<div class="f jb aic mt3"><span class="badge">' + esc(task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In progress' : 'To do') + '</span><div class="f g1"><button class="btn btn-secondary btn-sm" onclick="openTaskSheet(\'' + task.id + '\')">Edit details</button><button class="btn btn-sm" style="background:var(--secondary);color:var(--fg)" onclick="cycleTask(\'' + task.id + '\')">Next status</button><button class="btn btn-danger btn-sm" onclick="nbDeletePersonalTask(\'' + task.id + '\')">Delete</button></div></div><p class="txs muted mt2">Assigned to: ' + esc(task.assignedTo || nbProfileName()) + '</p></article>';
+    }).join('');
+    return html + '</div>';
+  };
+
+  // Remove a task's cloud attachments only after the task deletion has synced.
+  window.nbDeletePersonalTask = function (taskId) {
+    var task = (S.tasks || []).find(function (item) { return String(item.id) === String(taskId); });
+    if (!task) return;
+    confirmSheet({title:'Delete this task?', message:'“' + task.title + '” and its supporting file references will be removed from your personal workspace.', confirmLabel:'Delete task', danger:true, onConfirm:async function () {
+      var previous = S.tasks.slice();
+      S.tasks = S.tasks.filter(function (item) { return String(item.id) !== String(taskId); });
+      nbxCache();
+      var result = await nbxSave();
+      if (!result || !result.ok) {
+        S.tasks = previous; nbxCache();
+        toast('Could not delete the task: ' + ((result && result.error && result.error.message) || 'Cloud synchronization failed.'));
+        render(); return;
+      }
+      var attachments = Array.isArray(task.attachments) ? task.attachments.filter(function (file) { return file && file.path; }) : [];
+      for (var index = 0; index < attachments.length; index++) {
+        try {
+          var removed = await dbClient.storage.from(NBX_BUCKET).remove([attachments[index].path]);
+          if (removed.error) console.warn('Task was deleted but a private attachment could not be removed from Storage:', removed.error);
+        } catch (error) { console.warn('Task attachment cleanup after delete failed:', error); }
+      }
+      toast('Task deleted.'); render();
+    }});
+  };
+
+  // Extend subject-specific task cards with attachment links while retaining the
+  // original subject task controls and status behavior.
+  var nbxTaskSubjectTabBody = subjectTabBody;
+  subjectTabBody = function (subject) {
+    if (UI.subjectTab === 'tasks') {
+      var tasks = (S.tasks || []).filter(function (item) { return String(item.subjectId) === String(subject.id); });
+      if (!tasks.length) return '<div class="empty"><p class="txm muted">No tasks linked to this subject yet.</p><button class="btn btn-primary mt3" onclick="openTaskSheet(null,\'' + nbxEscape(subject.id) + '\')">Add task</button></div>';
+      return '<div class="fc g2">' + tasks.map(function (task) {
+        var desc = task.description || task.instructions || task.additionalNotes || '';
+        var statusText = task.status === 'done' ? 'Completed' : task.status === 'progress' ? 'In progress' : 'To do';
+        return '<article class="card padc"><div class="f jb aic g2"><div class="grow minw"><p class="txm semi">' + nbxEscape(task.title) + '</p><p class="txs muted mt1">' + nbxEscape(task.type || 'Task') + ' · ' + nbxEscape(statusText) + '</p></div><button class="iconbtn" onclick="openTaskSheet(\'' + nbxEscape(task.id) + '\')">' + ic('edit',15) + '</button></div><p class="txs muted mt2">Due: ' + nbxEscape(task.dueDate || 'No date') + (task.dueTime ? ' · ' + nbxEscape(task.dueTime) : '') + ' · ' + nbxEscape((task.priority || 'medium').toUpperCase()) + '</p>' + (desc ? '<p class="txm mt2" style="white-space:pre-wrap">' + nbxEscape(desc) + '</p>' : '') + nbxTaskAttachmentMarkup(task) + '<button class="btn btn-secondary btn-sm mt3" onclick="cycleTask(\'' + nbxEscape(task.id) + '\')">Update status</button></article>';
+      }).join('') + '</div><button class="btn btn-secondary btn-block mt3" onclick="openTaskSheet(null,\'' + nbxEscape(subject.id) + '\')">' + ic('plus',16) + ' Add task</button>';
+    }
+    return nbxTaskSubjectTabBody(subject);
   };
   window.subjectTabBody = subjectTabBody;
 
@@ -6267,7 +6564,9 @@ async function deleteRoomAny(id){
   function nbxNormalizeExistingCategories(subject) {
     var changed = false;
     (subject.materials || []).forEach(function (item) {
-      if (item && !item.category) { item.category = nbxCategory(item); changed = true; }
+      if (!item) return;
+      var detectedCategory = nbxCategory(item);
+      if (item.category !== detectedCategory) { item.category = detectedCategory; changed = true; }
     });
     if (changed && typeof cacheWorkspaceSnapshot === 'function') nbxCache();
   }

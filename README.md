@@ -63,17 +63,24 @@ Long Materials names remain contained in their rows, with the full name availabl
 For live verification, upload a disposable PDF from a subject, confirm that it appears immediately, refresh, then sign into the same account on a second device and open that subject. Also verify previously uploaded Storage files appear without opening Manage Cloud Files.
 
 
-## Study Hub file preview and folder behavior
+## Study Hub Materials folders and video support
 
-The Study Hub Materials tab now organizes files by a category value stored in the existing `user_workspaces` JSON state. No new Storage bucket or SQL migration is required. Existing materials are categorized from their filename extension and stored MIME type when rendered, then cached as part of the next normal workspace save. The original Storage object paths are not renamed or moved.
+The Materials tab now opens to a folder overview only. It does not render individual uploaded file cards beneath the folder grid. Users open **All Files** or a category to see the file list. The supported logical folders are All Files, PDF Documents, Images, Word Documents, Video Files, Text Files, and Other Files.
 
-Supported in-app previews: PDF, PNG/JPG/JPEG/WEBP/GIF, TXT/Markdown, CSV, MP3/WAV/M4A/OGG. Word, PowerPoint, and Excel files display a message explaining that a compatible external application is needed; use the separate Download original action to open those files elsewhere.
+Video Files categorizes MP4, WebM, MOV, and M4V. Supported video files use a responsive HTML5 video player in the existing preview sheet. Existing audio files are preserved and classified under Other Files; no Storage objects are moved, renamed, or deleted. Existing presentation and spreadsheet materials are also retained in Other Files. CSV remains in Text Files for Study Hub materials. Folder metadata is derived from extension and MIME data and saved in the existing workspace state; no extra Storage bucket or SQL migration is required.
 
-Open uses a private Supabase signed URL without the download option. Download requests a signed URL with a download filename. Both operations require the signed-in user to have access to the existing private `user-study-files` bucket.
+The Materials overview has a single upload entry point. After uploading from the overview, the user is taken to All Files so the new material is visible. Uploads from an individual folder are checked against that folder's category. Private storage paths and the original cloud objects are unchanged.
 
-Materials are organized into logical folders per subject: All Files, PDF Documents, Images, Word Documents, Presentations, Spreadsheets, Text Files, Audio Files, and Other Files. Uploads from a category automatically select the detected category after upload. If the selected file does not match the folder currently open, it is placed in its detected category and a corresponding category selection is shown.
+## Task supporting-file attachments
 
+The Create/Edit Detailed Task form now includes **Attach supporting files (optional)** directly beneath Step-by-Step Instructions. Users may select multiple files and review file names, types, and sizes before saving. Allowed file types include PDF, DOC/DOCX, images, TXT/Markdown, and supported video formats. Spreadsheet, presentation, CSV, and audio file types are rejected by extension and MIME checks. Each file is limited to 20 MB, consistent with the existing private bucket limit.
+
+Task attachments are uploaded to the existing private `user-study-files` bucket under `<user-id>/tasks/<task-id>/...`. The task's `attachments` metadata is saved inside the existing `user_workspaces` JSON state, associated with task and owner IDs. No new table, bucket, or SQL migration is required. The existing Storage policy in `NEXBYTE_UPLOAD_STORAGE_FIX.sql` expects the first path segment to equal `auth.uid()`; task attachment paths follow that rule. Task cards provide separate Open and Download actions. Removing a saved attachment removes its workspace reference only after save, then attempts to remove the private Storage object. Deleting a task also attempts cleanup after the task deletion syncs.
+
+## Verification status for this update
+
+Static JavaScript syntax, HTML parsing, manifest and service-worker checks, and targeted logic tests were run on this package. A live Supabase account upload, cross-device sync, actual media playback, and Vercel deployment were not available in this environment. Complete the real-account tests listed in `TESTING_REPORT.md` after deployment.
 
 ### Deployment note
 
-Deploy the files in this project folder as the root of the existing Vercel project. Keep the existing `supabase-config.js`, project URL, and public anon/publishable key. The changes use the existing `user-study-files` private bucket and `user_workspaces` table; no SQL migration or new bucket is required. After deployment, open NEXTBYTE online once so the updated service worker (`nexbyte-pwa-v8-study-hub-preview-folders`) can install and activate.
+Deploy the files in this project folder as the root of the existing Vercel project. Keep the existing `supabase-config.js`, project URL, and public anon/publishable key. The service-worker cache namespace for this update is `nexbyte-pwa-v9-video-folders-task-attachments`; open NEXTBYTE online after deployment so the updated worker can install and activate.

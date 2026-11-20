@@ -41,5 +41,14 @@ KNOWN LIMITATIONS
 Latest Materials upload correction (November 20, 2026)
 - This build inserts the uploaded file into the current subject state and displays it immediately after Storage confirms the upload.
 - It no longer removes a successfully uploaded Storage object when the workspace metadata save is temporarily unavailable. It keeps the local attachment snapshot and reports pending cloud synchronization.
-- The PWA cache namespace is now nexbyte-pwa-v7-materials-upload-live-state. Deploy the complete project and reopen/reload the installed app online so the new service worker can activate.
+- The PWA cache namespace is now nexbyte-pwa-v9-video-folders-task-attachments. Deploy the complete project and reopen/reload the installed app online so the new service worker can activate.
 - No new SQL migration is required. Live test the upload with an authenticated account after deployment.
+
+
+STUDY HUB MATERIALS AND TASK ATTACHMENTS UPDATE (November 20, 2026)
+- Materials now opens to folder cards only. Open All Files or a category to view individual files. Categories: All Files, PDF Documents, Images, Word Documents, Video Files, Text Files, and Other Files.
+- Video Files supports MP4, WebM, MOV, and M4V previews through the in-app HTML5 video player. Existing audio files are retained and categorized under Other Files. Existing presentations and spreadsheets are retained under Other Files; CSV stays under Text Files. No files are moved or deleted.
+- Task creation/editing includes optional multi-file attachments below Step-by-Step Instructions. PDF, Word, image, text, and supported video files are accepted. Spreadsheet, presentation, CSV, and audio files are rejected. Max 20 MB per file.
+- Task attachment objects use the existing private user-study-files bucket at <user-id>/tasks/<task-id>/... and task attachment metadata is stored in the existing user_workspaces JSON state. The first storage path segment remains the authenticated user ID, matching the existing RLS policy. No SQL migration or new bucket is required.
+- Updated service worker cache namespace: nexbyte-pwa-v9-video-folders-task-attachments.
+- Static/simulated tests are included in TESTING_REPORT.md. Live Supabase upload, cross-device, media playback and Vercel deployment still need to be tested in the actual environment.
