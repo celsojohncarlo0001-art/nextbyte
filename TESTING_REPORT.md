@@ -106,3 +106,27 @@ The mocked Storage test verifies the recovery algorithm, not the user's live Sup
 - [ ] Verify upload, open, download, and delete operations in the browser console and Network panel.
 
 **Current status:** Static and mocked-recovery checks passed. Live upload, storage policy, cross-device, and visual browser tests have not been performed. This does not certify zero runtime errors.
+
+
+## Follow-up Study Hub attachment correction — November 20, 2026
+
+| Check | Result | Notes |
+|---|---|---|
+| Missing Materials Open icon | PASS (source check) | The `external` icon referenced by the middle Materials action is now defined. |
+| Recursive subject Storage scan | PASS (mocked) | A mocked account tree restored four files across nested Materials, Syllabus, attachment, and legacy root paths; a second pass restored zero duplicates. |
+| Manual/automatic recovery parity | PASS (source review) | Both entry recovery and Manage Cloud Files invoke the same account-wide idempotent reconciliation function. |
+| Mobile entry timing | PASS (source check) | Subject entry scan is delayed and uses up to three bounded retries; scans are coalesced and debounced. |
+| Syllabus long-name containment | PASS (CSS/markup check) | Syllabus header uses a `minmax(0, 1fr) auto` grid; title and original filename wrap anywhere within the card. |
+| PWA cache invalidation | PASS (source check) | Cache version updated to `nexbyte-pwa-v6-subject-attachment-sync`. |
+| JavaScript / HTML / CSS syntax | PASS | Five inline scripts, combined inline scripts, service worker, Supabase config, HTML, and inline CSS passed static parsing/syntax checks. |
+
+### Not verified in this environment
+
+- The app was not signed into the user's live Supabase project; actual Storage `SELECT` permissions and folder results could not be observed.
+- New and historical attachments were not live-uploaded, opened, downloaded, or tested across two devices.
+- Android/Vercel visual deployment was not run. The screenshots were used to identify the missing icon and overflowing Syllabus text, and the markup/CSS were repaired; the hosted display still needs confirmation after deployment.
+
+**Status:** Source-level repairs and static checks passed. Live cloud and deployed-device acceptance tests remain pending.
+
+
+A local Node.js mock harness executed the actual extracted `recoverExistingSubjectFiles` implementation against representative Storage results. It restored four records, saved the workspace once, ignored a file not belonging to a known subject, and returned zero new records on the second run. This is a logic simulation, not a live Supabase integration test.

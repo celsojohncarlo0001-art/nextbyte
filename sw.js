@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v5-offline-auth-repair';
+const CACHE_VERSION = 'nexbyte-pwa-v6-subject-attachment-sync';
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',

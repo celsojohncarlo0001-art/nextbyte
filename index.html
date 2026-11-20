@@ -764,25 +764,58 @@ input[type=range]{accent-color:var(--primary);width:100%;min-height:28px}
 }
 .nb-subject-syllabus-card {
   box-sizing: border-box;
+  display: block;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   overflow: hidden;
 }
+.nb-subject-syllabus-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
 .nb-subject-syllabus-info {
-  flex: 1 1 0;
+  display: block;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
 }
-.nb-subject-syllabus-name,
-.nb-subject-syllabus-filename {
+.nb-subject-syllabus-badge {
+  justify-self: end;
+  flex: 0 0 auto;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.nb-subject-syllabus-name {
   display: block;
+  width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+.nb-subject-syllabus-filename {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+}
+.nb-subject-syllabus-card .nb-record-actions {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 @media (max-width: 380px) {
   .nb-subject-material-row { gap: 6px; padding: 10px; }
@@ -845,6 +878,7 @@ var ICONS={
   idcard:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16a3 3 0 0 1 6 0M14 10h4M14 14h4"/>',
   userPlus:'<circle cx="10" cy="8" r="3.5"/><path d="M4 20a6 6 0 0 1 12 0"/><path d="M18 8v6M15 11h6"/>',
   download:'<path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/>',
+  external:'<path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   alert:'<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/>',
   music:'<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   award:'<circle cx="12" cy="9" r="6"/><path d="m8.5 14-1.5 7 5-3 5 3-1.5-7"/>',
@@ -3643,7 +3677,7 @@ async function deleteRoomAny(id){
       var completed = topics.filter(function (topic) { return topic.done; }).length;
       var pct = topics.length ? Math.round(completed / topics.length * 100) : 0;
       var syllabusCards = files.length ? files.map(function (file) {
-        return '<article class="card padc nb-subject-syllabus-card"><div class="f jb aic g2"><div class="grow minw nb-subject-syllabus-info"><p class="txm semi nb-subject-syllabus-name" title="' + esc(file.title || file.fileName || 'Syllabus') + '">' + esc(file.title || file.fileName || 'Syllabus') + '</p><p class="txs muted mt1 nb-subject-syllabus-filename" title="' + esc(file.fileName || '') + '">' + esc(file.fileName || '') + ' · ' + esc(nbFileSize(file.size || 0)) + '</p></div><span class="badge">Syllabus</span></div><div class="nb-record-actions"><button class="btn btn-secondary" onclick="nbOpenSignedFilePublic(\'user-study-files\',\'' + esc(file.path) + '\',\'' + esc(file.fileName || file.title) + '\',false)">Open</button><button class="btn btn-primary" onclick="nbOpenSignedFilePublic(\'user-study-files\',\'' + esc(file.path) + '\',\'' + esc(file.fileName || file.title) + '\',true)">Download</button><button class="btn btn-secondary" onclick="replaceSyllabusAttachment(\'' + subject.id + '\',\'' + file.id + '\')">Replace</button><button class="btn btn-danger" onclick="removeSyllabusAttachment(\'' + subject.id + '\',\'' + file.id + '\')">Remove</button></div></article>';
+        return '<article class="card padc nb-subject-syllabus-card"><div class="nb-subject-syllabus-head"><div class="nb-subject-syllabus-info"><p class="txm semi nb-subject-syllabus-name" title="' + esc(file.title || file.fileName || 'Syllabus') + '">' + esc(file.title || file.fileName || 'Syllabus') + '</p><p class="txs muted mt1 nb-subject-syllabus-filename" title="' + esc(file.fileName || '') + '">' + esc(file.fileName || '') + ' · ' + esc(nbFileSize(file.size || 0)) + '</p></div><span class="badge nb-subject-syllabus-badge">Syllabus</span></div><div class="nb-record-actions"><button class="btn btn-secondary" onclick="nbOpenSignedFilePublic(\'user-study-files\',\'' + esc(file.path) + '\',\'' + esc(file.fileName || file.title) + '\',false)">Open</button><button class="btn btn-primary" onclick="nbOpenSignedFilePublic(\'user-study-files\',\'' + esc(file.path) + '\',\'' + esc(file.fileName || file.title) + '\',true)">Download</button><button class="btn btn-secondary" onclick="replaceSyllabusAttachment(\'' + subject.id + '\',\'' + file.id + '\')">Replace</button><button class="btn btn-danger" onclick="removeSyllabusAttachment(\'' + subject.id + '\',\'' + file.id + '\')">Remove</button></div></article>';
       }).join('') : '<div class="empty" style="padding:20px"><p class="txm muted">No syllabus attachment yet. Add the official course outline or syllabus document.</p></div>';
       var topicHtml = topics.length ? '<div class="card padc"><div class="f jb aic mb2"><span class="txm semi">Syllabus topics</span><span class="txm semi" style="color:' + subject.color + '">' + pct + '%</span></div><div class="bar"><div style="width:' + pct + '%;background:' + subject.color + '"></div></div><div class="fc g2 mt3">' + topics.map(function (topic, index) { return '<button class="rowitem" onclick="toggleTopic(\'' + subject.id + '\',' + index + ')"><span class="checkbox' + (topic.done ? ' on' : '') + '">' + (topic.done ? ic('check',14) : '') + '</span><span class="txm">' + esc(topic.t) + '</span></button>'; }).join('') + '</div></div>' : '<div class="card padc"><p class="txm semi">Topics not added yet</p><p class="txs muted mt1">Add weekly topics or modules to track course progress.</p></div>';
       return '<div class="fc g3"><div class="card padc"><div class="f jb aic"><div><h3 class="txm semi">Course syllabus</h3><p class="txs muted mt1">Keep the official course document separate from ordinary materials.</p></div><button class="btn btn-primary btn-sm" onclick="uploadSyllabusAttachment(\'' + subject.id + '\')">' + ic('upload',15) + ' Attach file</button></div><p class="txs muted mt2">PDF, Word, PowerPoint, Excel, text, or images · 20 MB maximum per file.</p><div class="fc g2 mt3">' + syllabusCards + '</div></div>' + topicHtml + '<button class="btn btn-secondary btn-block" onclick="addTopic(\'' + subject.id + '\')">' + ic('plus',16) + ' Add syllabus topic</button></div>';
@@ -5253,74 +5287,63 @@ async function deleteRoomAny(id){
     return true;
   }
 
-  /* Reconcile one subject against its private Storage folders whenever the subject is opened.
-     This restores legacy uploads whose binary exists in Storage but whose workspace link is missing. */
-  async function recoverSubjectFilesFromStorage(user, subject) {
-    var userId = String(user && user.id || cloudUserId() || '');
-    if (!userId || !subject || subject.id === undefined || subject.id === null) return 0;
-
-    var changed = 0;
-    var root = userId + '/' + String(subject.id);
-    var rootEntries = await listStorageFolder('user-study-files', root);
-
-    for (var i = 0; i < rootEntries.length; i++) {
-      var item = rootEntries[i];
-
-      if (isStorageFolder(item)) {
-        if (item.name !== 'materials' && item.name !== 'syllabus') continue;
-
-        var folder = root + '/' + item.name;
-        var files = await listStorageFolder('user-study-files', folder);
-
-        for (var j = 0; j < files.length; j++) {
-          if (isStorageFolder(files[j])) continue;
-
-          var fileRecord = {
-            path: folder + '/' + files[j].name,
-            name: files[j].name,
-            size: Number(files[j].metadata && files[j].metadata.size) || 0,
-            mime: cloudMime(files[j].name, files[j].metadata),
-            createdAt: files[j].created_at || files[j].updated_at || null
-          };
-
-          if (item.name === 'syllabus') {
-            if (addRecoveredSyllabus(subject, fileRecord)) changed++;
-          } else if (addRecoveredMaterial(subject, fileRecord)) {
-            changed++;
-          }
-        }
-      } else {
-        // Legacy uploads were stored directly under <user>/<subject>/.
-        var directRecord = {
-          path: root + '/' + item.name,
-          name: item.name,
-          size: Number(item.metadata && item.metadata.size) || 0,
-          mime: cloudMime(item.name, item.metadata),
-          createdAt: item.created_at || item.updated_at || null
-        };
-        if (addRecoveredMaterial(subject, directRecord)) changed++;
-      }
-    }
-
-    return changed;
-  }
-
+  var NB_ACCOUNT_SUBJECT_RECOVERY_PROMISE = null;
   async function recoverExistingSubjectFiles(user) {
-    var changed = 0;
     if (!user || !user.id || !Array.isArray(S.subjects)) return 0;
+    if (NB_ACCOUNT_SUBJECT_RECOVERY_PROMISE) return NB_ACCOUNT_SUBJECT_RECOVERY_PROMISE;
 
-    for (var i = 0; i < S.subjects.length; i++) {
-      changed += await recoverSubjectFilesFromStorage(user, S.subjects[i]);
-    }
+    NB_ACCOUNT_SUBJECT_RECOVERY_PROMISE = (async function () {
+      var changed = 0;
+      // One recursive listing is reused for all current subjects, avoiding a race
+      // between the login recovery and the active-subject recovery.
+      var files = [];
+      await listStorageTree('user-study-files', String(user.id), 7, files);
+      var directoryIndex = Object.create(null);
+      (S.subjects || []).forEach(function (subject) {
+        if (subject && subject.id !== undefined && subject.id !== null) {
+          directoryIndex[String(subject.id)] = subject;
+        }
+      });
 
-    if (changed) {
-      var saved = await window.saveWorkspaceNow();
-      if (!saved || !saved.ok) {
-        if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
-        console.warn('Recovered file references are visible locally but cloud sync is pending:', saved && saved.error);
+      files.forEach(function (file) {
+        var parts = String(file.path || '').split('/').filter(Boolean);
+        if (parts.length < 3 || parts[0] !== String(user.id)) return;
+        var dirs = parts.slice(1, -1);
+        var subject = null, subjectIndex = -1;
+        for (var i = 0; i < dirs.length; i++) {
+          if (directoryIndex[dirs[i]]) { subject = directoryIndex[dirs[i]]; subjectIndex = i; break; }
+        }
+        if (!subject) return;
+        var folders = dirs.slice(subjectIndex + 1);
+        var isSyllabus = folders.some(function (part) {
+          return /syllab|course[-_ ]?outline|course[-_ ]?schedule/i.test(part);
+        }) || /syllabus/i.test(file.name || '');
+        var record = {
+          path: file.path,
+          name: file.name || parts[parts.length - 1],
+          size: Number(file.size) || 0,
+          mime: file.mime || cloudMime(file.name, file.metadata),
+          createdAt: file.createdAt || null
+        };
+        if (isSyllabus) {
+          if (addRecoveredSyllabus(subject, record)) changed++;
+        } else if (addRecoveredMaterial(subject, record)) {
+          changed++;
+        }
+      });
+
+      if (changed) {
+        var saved = await window.saveWorkspaceNow();
+        if (!saved || !saved.ok) {
+          if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
+          console.warn('Recovered file references are visible locally but cloud sync is pending:', saved && saved.error);
+        }
       }
-    }
-    return changed;
+      return changed;
+    })();
+
+    try { return await NB_ACCOUNT_SUBJECT_RECOVERY_PROMISE; }
+    finally { NB_ACCOUNT_SUBJECT_RECOVERY_PROMISE = null; }
   }
 
   /* Called on each subject entry, not just once at login, so existing files appear
@@ -5346,19 +5369,8 @@ async function deleteRoomAny(id){
       NB_SUBJECT_ATTACHMENT_SCANS[scanKey] = true;
       ownsScanLock = true;
 
-      var changed = await recoverSubjectFilesFromStorage(user, subject);
+      var changed = await recoverExistingSubjectFiles(user);
       if (changed) {
-        var saved = await window.saveWorkspaceNow();
-        if (!saved || !saved.ok) {
-          if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
-          console.warn('Subject files loaded locally; cloud reference sync is pending:', saved && saved.error);
-          if (typeof toast === 'function') {
-            toast('Loaded ' + changed + ' saved file(s). Cloud sync is pending; keep this device online.');
-          }
-        } else if (typeof toast === 'function') {
-          toast('Loaded ' + changed + ' saved attachment(s) for this subject.');
-        }
-
         var currentRoute = typeof resolve === 'function' ? resolve() : null;
         if (currentRoute && currentRoute.view === 'subject' &&
             String(currentRoute.id) === String(subjectId) &&
@@ -5368,14 +5380,9 @@ async function deleteRoomAny(id){
       }
       return changed;
     } catch (error) {
+      window.NB_SUBJECT_ATTACHMENT_LAST_ERROR = nb42StorageError(error);
       console.warn('Could not refresh this subject’s cloud attachments:', error);
-      var failedRoute = typeof resolve === 'function' ? resolve() : null;
-      if (failedRoute && failedRoute.view === 'subject' &&
-          String(failedRoute.id) === String(subjectId) &&
-          typeof toast === 'function' && typeof navigator !== 'undefined' && navigator.onLine !== false) {
-        toast('Could not load subject files: ' + nb42StorageError(error));
-      }
-      return 0;
+      return -1;
     } finally {
       // Allow a later subject visit to retry, including after an offline or policy failure.
       if (ownsScanLock && scanKey) delete NB_SUBJECT_ATTACHMENT_SCANS[scanKey];
@@ -5605,16 +5612,57 @@ async function deleteRoomAny(id){
     try { loadWorkspace = window.loadWorkspace; } catch (_) {}
   }
 
-  /* Refresh cloud attachments whenever a subject is entered. Navigation away and
-     back resets the entry key, while ordinary renders within the same subject do not
-     repeatedly list Storage. */
+  /* Refresh attachments whenever a subject is rendered. The first scan is delayed
+     until Supabase auth has settled, then retried briefly to tolerate mobile startup
+     timing. The same account-wide recovery routine is used by the manual manager. */
   var nbOriginalRenderForSubjectAttachments = window.render || render;
+  var NB_SUBJECT_SCAN_STATE = Object.create(null);
+  var NB_SUBJECT_SCAN_COOLDOWN_MS = 4500;
+
+  function nbScheduleSubjectAttachmentRefresh(subjectId, entryKey) {
+    var now = Date.now();
+    var state = NB_SUBJECT_SCAN_STATE[entryKey] || (NB_SUBJECT_SCAN_STATE[entryKey] = { lastStart: 0, running: false, lastErrorToast: 0 });
+    if (state.running || (now - state.lastStart) < NB_SUBJECT_SCAN_COOLDOWN_MS) return;
+    state.running = true;
+    state.lastStart = now;
+
+    setTimeout(async function () {
+      var recovered = 0;
+      var lastError = '';
+      try {
+        // Re-check more than once on first entry: on mobile, the app shell can render
+        // before the restored Supabase token is fully ready for Storage list requests.
+        for (var attempt = 0; attempt < 3; attempt++) {
+          var route = typeof resolve === 'function' ? resolve() : null;
+          if (!route || route.view !== 'subject' || String(route.id) !== String(subjectId)) break;
+          if (!S || !S.auth || !S.auth.isAuthenticated) break;
+          var result = await ensureSubjectAttachmentsLoaded(subjectId, entryKey);
+          if (result > 0) { recovered = result; break; }
+          if (result < 0) lastError = window.NB_SUBJECT_ATTACHMENT_LAST_ERROR || 'Storage listing failed.';
+          else lastError = '';
+          if (attempt < 2) await new Promise(function (resolveDelay) { setTimeout(resolveDelay, 750 * (attempt + 1)); });
+        }
+      } finally {
+        state.running = false;
+        if (lastError && !recovered && Date.now() - state.lastErrorToast > 30000 &&
+            typeof navigator !== 'undefined' && navigator.onLine !== false &&
+            typeof resolve === 'function' && resolve().view === 'subject' && String(resolve().id) === String(subjectId)) {
+          state.lastErrorToast = Date.now();
+          if (typeof toast === 'function') toast('Could not automatically load subject files: ' + lastError);
+        }
+      }
+    }, 250);
+  }
+
   window.render = function () {
     var output = nbOriginalRenderForSubjectAttachments.apply(this, arguments);
-
     try {
       var route = resolve();
       if (!route || route.view !== 'subject' || !S || !S.auth || !S.auth.isAuthenticated) {
+        if (NB_SUBJECT_ATTACHMENT_LAST_VIEW) {
+          var previous = NB_SUBJECT_SCAN_STATE[NB_SUBJECT_ATTACHMENT_LAST_VIEW];
+          if (previous) previous.lastStart = 0;
+        }
         NB_SUBJECT_ATTACHMENT_LAST_VIEW = '';
         return output;
       }
@@ -5622,24 +5670,34 @@ async function deleteRoomAny(id){
       var activeUserId = (typeof cloudUserId === 'function' && cloudUserId()) ||
         (S.auth.user && S.auth.user.id) || '';
       var entryKey = String(activeUserId) + ':' + String(route.id);
-
-      if (entryKey !== NB_SUBJECT_ATTACHMENT_LAST_VIEW) {
-        NB_SUBJECT_ATTACHMENT_LAST_VIEW = entryKey;
-        setTimeout(function () {
-          if (NB_SUBJECT_ATTACHMENT_LAST_VIEW !== entryKey) return;
-          ensureSubjectAttachmentsLoaded(route.id, entryKey);
-        }, 0);
-      }
+      NB_SUBJECT_ATTACHMENT_LAST_VIEW = entryKey;
+      nbScheduleSubjectAttachmentRefresh(route.id, entryKey);
     } catch (error) {
       console.warn('Could not schedule subject attachment refresh:', error);
     }
-
     return output;
   };
   try { render = window.render; } catch (_) {}
 
+  // Hash navigation is also observed directly, so a subject entered via browser
+  // back/forward receives the same automatic cloud reconciliation.
+  window.addEventListener('hashchange', function () {
+    setTimeout(function () {
+      try {
+        var route = resolve();
+        if (!route || route.view !== 'subject' || !S || !S.auth || !S.auth.isAuthenticated) return;
+        var userId = (S.auth.user && S.auth.user.id) || '';
+        if (!userId) return;
+        var key = String(userId) + ':' + String(route.id);
+        NB_SUBJECT_ATTACHMENT_LAST_VIEW = key;
+        nbScheduleSubjectAttachmentRefresh(route.id, key);
+      } catch (error) { console.warn('Subject attachment navigation refresh failed:', error); }
+    }, 100);
+  });
+
   // A non-blocking global indicator of the manager being available to signed-in users.
-  window.NEXBYTE_CLOUD_FILE_MANAGER_VERSION = '1.0';
+  window.NEXBYTE_CLOUD_FILE_MANAGER_VERSION = '1.1';
+  window.NEXBYTE_SUBJECT_ATTACHMENT_SYNC_VERSION = '2.0';
 })();
 
 </script>

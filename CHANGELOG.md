@@ -58,3 +58,22 @@
 - Source checks confirmed per-subject scanning, subject path construction, accessible full-name titles, filename ellipsis styling, and fixed-width file action buttons.
 
 Live Supabase uploads, RLS, real cross-device behavior, and deployed mobile layout still require validation against the user's hosted Supabase and Vercel environment.
+
+
+## Follow-up Study Hub attachment correction — November 20, 2026
+
+- Fixed the blank middle action icon in Study Hub → Materials by adding the missing `external` SVG glyph used by the Open File control.
+- Reworked automatic recovery to scan the authenticated user's `user-study-files` tree recursively and associate each Storage object with a subject by its actual subject-ID directory segment. It now supports legacy root-level uploads and nested `materials`, `syllabus`, `attachments`, and other historical folder names.
+- Made automatic recovery use the same account-wide reconciliation routine as the manual recovery action, preventing different behavior between opening a subject and using Manage Cloud Files.
+- Added a short, bounded retry sequence after subject navigation to tolerate mobile startup/authentication timing; repeated renders are debounced and concurrent scans are coalesced.
+- Rebuilt Syllabus attachment headings with a constrained two-column grid. Long labels and original filenames now wrap inside the card instead of extending beyond its frame; action buttons remain below and available.
+- Bumped the PWA cache namespace to `nexbyte-pwa-v6-subject-attachment-sync` so installed devices can fetch the latest HTML and styles.
+- No SQL migration or database schema change was required.
+
+## Verification for this follow-up
+
+- Five inline JavaScript blocks and their concatenation pass Node.js syntax checks.
+- `sw.js` and the existing `supabase-config.js` pass Node.js syntax checks; the existing Supabase URL/key configuration was preserved.
+- HTML parsing and inline CSS parsing pass.
+- Source checks confirm the Materials `external` icon is now defined, recursive user-prefix recovery is enabled, automatic scans retry after entry, and Syllabus headings use a minmax grid with wrap-safe filenames.
+- Live Supabase Storage listing, upload, cross-device sync, and deployed Android visual checks still require the actual hosted project and account. These are not represented as passed.

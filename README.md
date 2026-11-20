@@ -54,10 +54,10 @@ Do not describe any external integration as verified until the authenticated liv
 
 ## Study Hub subject attachments
 
-When a user enters a subject, NEXTBYTE now checks that account's matching private Storage folder (`user-study-files/<user-id>/<subject-id>/`) and reconnects any existing `materials/`, `syllabus/`, or legacy root-level files that are missing from the subject's workspace list. References are deduplicated by full Storage path. New uploads continue to attach directly to the open subject and save through the existing `user_workspaces` record.
+When a user enters or re-renders a subject, NEXTBYTE now recursively scans the authenticated account's private `user-study-files/<user-id>/` tree and reconnects objects to the matching subject by an exact subject-ID directory segment. This supports legacy root-level files and nested `materials/`, `syllabus/`, `attachments/`, and other folder layouts. References are deduplicated by full Storage path. The scan is delayed briefly and retried a limited number of times to tolerate mobile authentication startup timing. New uploads continue to attach directly to the open subject and save through the existing `user_workspaces` record.
 
 No additional database migration is required for this repair. The existing `user-study-files` bucket must remain private, and the signed-in user's Storage `SELECT` policy must permit listing their own prefix. Review `NEXBYTE_UPLOAD_STORAGE_FIX.sql` if the project has not already been configured with the private bucket and owner-folder policies.
 
-Long attachment names are displayed with ellipsis inside the Study Hub card; hovering or focusing the filename exposes the complete text through its title attribute. File action controls remain visible on narrow layouts.
+Long Materials names remain contained in their rows, with the full name available through the title attribute. Syllabus titles and original filenames wrap safely inside their card using a constrained grid layout, so they cannot cover the Syllabus badge or extend beyond the card. File action controls remain visible on narrow layouts. The missing external/open icon in the Materials row is now included.
 
 For live verification, upload a disposable PDF from a subject, confirm that it appears immediately, refresh, then sign into the same account on a second device and open that subject. Also verify previously uploaded Storage files appear without opening Manage Cloud Files.
