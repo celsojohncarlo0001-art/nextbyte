@@ -77,3 +77,22 @@ Live Supabase uploads, RLS, real cross-device behavior, and deployed mobile layo
 - HTML parsing and inline CSS parsing pass.
 - Source checks confirm the Materials `external` icon is now defined, recursive user-prefix recovery is enabled, automatic scans retry after entry, and Syllabus headings use a minmax grid with wrap-safe filenames.
 - Live Supabase Storage listing, upload, cross-device sync, and deployed Android visual checks still require the actual hosted project and account. These are not represented as passed.
+
+
+## Materials upload visibility correction — November 20, 2026
+
+- Fixed the Materials upload race by re-resolving the subject from the live workspace by stable subject ID after the asynchronous Storage upload completes. The upload handler no longer writes to a stale subject object captured before the upload started.
+- The uploaded file's metadata is now inserted into the current subject's `materials` list, deduplicated by its full Storage path, and written to the local workspace snapshot immediately.
+- The subject is re-rendered immediately after attachment insertion, before the cloud workspace save finishes, so the new file appears in the open Materials tab without visiting Manage Cloud Files.
+- A successful Storage upload is no longer deleted just because the workspace metadata save temporarily fails. The file remains visible locally, the snapshot is retained, and the UI reports that cloud workspace synchronization is pending instead of falsely reporting a full save.
+- If the workspace changes during upload, the code attempts the existing automatic Storage reconciliation rather than silently losing the cloud object.
+- Bumped the service-worker cache namespace to `nexbyte-pwa-v7-materials-upload-live-state` so installed PWA clients fetch the updated upload logic. No database schema or SQL migration was added.
+
+## Verification for this correction
+
+- All seven inline JavaScript blocks passed Node.js syntax checking.
+- `sw.js` and `supabase-config.js` passed Node.js syntax checking; the existing Supabase configuration was preserved.
+- The actual extracted Materials upload handler passed a Node.js mock test that replaces the workspace object while the cloud upload is in progress. The uploaded material was added to the new live subject object, rendered before the delayed workspace save completed, persisted with the actual Storage path, and deduplicated on a second attach attempt.
+- HTML and PWA manifest parsing and ZIP integrity checks passed.
+
+Live Supabase Storage, real account policies, cross-device synchronization, and deployed Android behavior still require testing against the user's hosted environment.

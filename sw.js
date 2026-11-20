@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v6-subject-attachment-sync';
+const CACHE_VERSION = 'nexbyte-pwa-v7-materials-upload-live-state';
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',

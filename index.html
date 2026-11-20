@@ -4601,9 +4601,33 @@ async function deleteRoomAny(id){
   }
   function nb42Unlock(key) { delete NB42_UPLOADS[key]; }
 
-  /* A. Study materials: selection starts the upload, with rollback if workspace metadata fails. */
+  /* Resolve the subject from the CURRENT workspace state after async work.
+     The object returned before an upload can become stale if loadWorkspace replaces S. */
+  function nb42FindLiveSubject(subjectId) {
+    if (!S || !Array.isArray(S.subjects)) return null;
+    var wanted = String(subjectId);
+    for (var i = 0; i < S.subjects.length; i++) {
+      if (S.subjects[i] && String(S.subjects[i].id) === wanted) return S.subjects[i];
+    }
+    return null;
+  }
+
+  function nb42AttachMaterialToLiveSubject(subjectId, record) {
+    var liveSubject = nb42FindLiveSubject(subjectId);
+    if (!liveSubject) throw new Error('The subject is no longer available in the current workspace. The uploaded cloud file has been kept so it can be recovered.');
+    if (!Array.isArray(liveSubject.materials)) liveSubject.materials = [];
+    var existing = liveSubject.materials.find(function (item) {
+      return item && String(item.path || '') === String(record.path || '');
+    });
+    if (!existing) liveSubject.materials.unshift(record);
+    return { subject: liveSubject, added: !existing, material: existing || record };
+  }
+
+  /* A. Study materials: upload first, attach to the live subject immediately,
+     cache locally, then sync the workspace. A workspace-sync failure must NOT
+     delete a successfully uploaded Storage object or hide it from this subject. */
   window.addMaterial = function (subjectId) {
-    var subject = typeof subjectById === 'function' ? subjectById(subjectId) : null;
+    var subject = nb42FindLiveSubject(subjectId);
     if (!subject) { toast('Subject not found. Refresh Study Hub and try again.'); return; }
     var panel = sheet(
       '<div class="f jb aic mb3"><h3 class="txl semi">Upload study material</h3><button class="iconbtn" data-cancel aria-label="Close">' + ic('x',18) + '</button></div>' +
@@ -4613,42 +4637,101 @@ async function deleteRoomAny(id){
     var input = panel.querySelector('#mtFile');
     var nameInput = panel.querySelector('#mtName');
     var button = panel.querySelector('[data-save]');
-    var busyKey = 'material:' + subjectId;
+    var busyKey = 'material:' + String(subjectId);
     var completed = false;
-    var previousMaterials = null;
     panel.querySelector('[data-cancel]').onclick = closeTop;
 
     async function uploadSelected() {
       if (completed || !nb42Lock(busyKey)) return;
       var file = input.files && input.files[0];
       var check = nb42Validate(file);
-      if (!check.ok) { nb42SetStatus(input, 'nb42MaterialStatus', check.message, true); toast(check.message); nb42Unlock(busyKey); return; }
-      button.disabled = true; button.textContent = 'Uploading…';
+      if (!check.ok) {
+        nb42SetStatus(input, 'nb42MaterialStatus', check.message, true);
+        toast(check.message);
+        nb42Unlock(busyKey);
+        return;
+      }
+
+      button.disabled = true;
+      button.textContent = 'Uploading…';
       nb42SetStatus(input, 'nb42MaterialStatus', 'Uploading ' + file.name + ' (' + nb42Size(file.size) + ')…', false);
-      var path = null, metadataAdded = false;
+      var path = null;
+      var uploaded = false;
       try {
         var user = await nb42User();
-        path = user.id + '/' + subjectId + '/materials/' + Date.now() + '_' + uid() + '_' + nb42SafeName(file.name);
+        if (!user || !user.id) throw new Error('Your sign-in session could not be verified. Please sign in again.');
+        if (S && S.auth && S.auth.user && String(S.auth.user.id) !== String(user.id)) {
+          throw new Error('Your account changed during upload. Reopen this subject and try again.');
+        }
+
+        path = String(user.id) + '/' + String(subjectId) + '/materials/' + Date.now() + '_' + uid() + '_' + nb42SafeName(file.name);
         await nb42Upload('user-study-files', path, file);
-        previousMaterials = Array.isArray(subject.materials) ? subject.materials.slice() : [];
-        subject.materials = previousMaterials.slice();
-        subject.materials.unshift({ id:'mat_' + uid(), n:(nameInput.value || '').trim() || file.name, t:nb42Ext(file.name).toUpperCase(), s:nb42Size(file.size), path:path, fileName:file.name, mime:nb42Mime(file), size:file.size, userId:user.id, addedAt:new Date().toISOString() });
-        metadataAdded = true;
-        var saved = await window.saveWorkspaceNow();
-        if (!saved || !saved.ok) throw (saved && saved.error) || new Error('The file uploaded, but its subject record could not be saved.');
+        uploaded = true;
+
+        var record = {
+          id: 'mat_' + uid(),
+          n: (nameInput.value || '').trim() || file.name,
+          t: nb42Ext(file.name).toUpperCase(),
+          s: nb42Size(file.size),
+          path: path,
+          fileName: file.name,
+          mime: nb42Mime(file),
+          size: file.size,
+          userId: String(user.id),
+          addedAt: new Date().toISOString()
+        };
+
+        /* Re-find by stable subject ID AFTER Storage upload. Never mutate the
+           stale object captured when the upload sheet was opened. */
+        nb42AttachMaterialToLiveSubject(subjectId, record);
+        if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
+
+        /* Show it immediately. Cloud workspace synchronization continues after
+           the new attachment has already been inserted into the visible state. */
         completed = true;
-        nb42SetStatus(input, 'nb42MaterialStatus', 'Upload complete. The file is now attached to this subject.', false);
         input.value = '';
-        closeTop(); render(); toast('Study material uploaded and saved.');
+        nb42SetStatus(input, 'nb42MaterialStatus', 'Uploaded. Adding the file to this subject…', false);
+        closeTop();
+        render();
+        toast('File uploaded. Showing it in this subject…');
+
+        var saved = await window.saveWorkspaceNow();
+        if (!saved || !saved.ok) {
+          if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
+          console.warn('Study material is visible locally; cloud workspace sync is pending:', saved && saved.error);
+          toast('Your file is uploaded and visible in this subject. Its cloud link is saved on this device and will sync when the connection is ready.');
+          return;
+        }
+
+        /* Re-render from the current state so the Materials tab uses the latest
+           subject object, including changes made while the save was in flight. */
+        render();
+        toast('Study material uploaded and added to this subject.');
       } catch (error) {
-        if (metadataAdded && previousMaterials) { subject.materials = previousMaterials; if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot(); }
-        if (path) { try { await nb42Remove('user-study-files', path); } catch (cleanupError) { console.warn('Material upload cleanup failed:', cleanupError); } }
         console.error('Study material upload failed:', error);
-        nb42SetStatus(input, 'nb42MaterialStatus', 'Upload failed: ' + nb42StorageError(error), true);
-        button.disabled = false; button.textContent = 'Retry upload';
-        toast('Material upload failed: ' + nb42StorageError(error));
-      } finally { nb42Unlock(busyKey); }
+        if (uploaded) {
+          /* Keep the object in Storage. It can be recovered by subject ID even if
+             the workspace changed while uploading or the metadata save failed. */
+          if (typeof cacheWorkspaceSnapshot === 'function') cacheWorkspaceSnapshot();
+          completed = true;
+          input.value = '';
+          closeTop();
+          try { await recoverExistingSubjectFiles(await nb42User()); } catch (recoveryError) {
+            console.warn('Automatic subject file recovery will retry later:', recoveryError);
+          }
+          render();
+          toast('The file reached cloud storage, but its subject link needs to sync. Reopen the subject while online to recover it.');
+        } else {
+          nb42SetStatus(input, 'nb42MaterialStatus', 'Upload failed: ' + nb42StorageError(error), true);
+          button.disabled = false;
+          button.textContent = 'Retry upload';
+          toast('Material upload failed: ' + nb42StorageError(error));
+        }
+      } finally {
+        nb42Unlock(busyKey);
+      }
     }
+
     input.addEventListener('change', function () {
       var file = input.files && input.files[0];
       if (!file) return;

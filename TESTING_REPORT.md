@@ -130,3 +130,28 @@ The mocked Storage test verifies the recovery algorithm, not the user's live Sup
 
 
 A local Node.js mock harness executed the actual extracted `recoverExistingSubjectFiles` implementation against representative Storage results. It restored four records, saved the workspace once, ignored a file not belonging to a known subject, and returned zero new records on the second run. This is a logic simulation, not a live Supabase integration test.
+
+
+## Materials upload live-state correction — November 20, 2026
+
+| Check | Result | Notes |
+|---|---|---|
+| Materials upload handler syntax | PASS | Updated handler is contained in valid inline JavaScript. |
+| Subject object replaced during upload | PASS (mocked) | A test replaced the global workspace while Storage upload was pending; the handler re-resolved the subject by ID and attached the new file to the current subject object. |
+| Immediate Materials rendering | PASS (mocked) | The handler rendered the updated Materials list before the delayed cloud workspace save resolved. |
+| Workspace metadata includes Storage path | PASS (mocked) | The workspace save mock received the uploaded attachment with its actual `user-id/subject-id/materials/...` path. |
+| Duplicate attachment prevention | PASS (mocked) | Re-attaching the same Storage path did not create a second material row. |
+| Preserve Storage object on workspace sync failure | PASS (source check) | The new path does not delete a successfully uploaded Storage object when the workspace upsert fails; it preserves the local snapshot and reports pending synchronization. |
+| Inline JavaScript syntax | PASS | All seven inline script blocks passed `node --check`. |
+| Service worker syntax / cache refresh | PASS | `sw.js` passed `node --check`; cache namespace is `nexbyte-pwa-v7-materials-upload-live-state`. |
+
+### Live checks still required
+
+- [ ] Deploy this build to Vercel and reopen the installed PWA so the v7 service worker activates.
+- [ ] Upload a PDF in a signed-in account and confirm the file appears in Materials immediately, without opening Manage Cloud Files.
+- [ ] Refresh and reopen the subject; confirm the file remains visible.
+- [ ] Check Supabase Storage and `user_workspaces` to confirm both the object and attachment metadata exist.
+- [ ] Test on a second device using the same account.
+- [ ] Test with the account's actual Storage `SELECT` and `INSERT` policies and inspect browser console/network logs.
+
+**Status:** Source-level and mocked upload-race tests passed. Live Storage, database RLS, cross-device, and deployed-device tests remain unverified. This does not certify zero runtime errors.

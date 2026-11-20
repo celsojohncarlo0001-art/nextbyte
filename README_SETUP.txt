@@ -36,3 +36,10 @@ KNOWN LIMITATIONS
 - Notification preferences save, but push/email notification delivery is not wired by this package.
 - Cloud files require network access; local offline file downloads are device-specific.
 - Review existing RLS policies before applying migrations; permissive policies OR together.
+
+
+Latest Materials upload correction (November 20, 2026)
+- This build inserts the uploaded file into the current subject state and displays it immediately after Storage confirms the upload.
+- It no longer removes a successfully uploaded Storage object when the workspace metadata save is temporarily unavailable. It keeps the local attachment snapshot and reports pending cloud synchronization.
+- The PWA cache namespace is now nexbyte-pwa-v7-materials-upload-live-state. Deploy the complete project and reopen/reload the installed app online so the new service worker can activate.
+- No new SQL migration is required. Live test the upload with an authenticated account after deployment.
