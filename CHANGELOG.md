@@ -96,3 +96,28 @@ Live Supabase uploads, RLS, real cross-device behavior, and deployed mobile layo
 - HTML and PWA manifest parsing and ZIP integrity checks passed.
 
 Live Supabase Storage, real account policies, cross-device synchronization, and deployed Android behavior still require testing against the user's hosted environment.
+
+
+## Study Hub syllabus, preview, and materials folders (November 20, 2026)
+
+- Reworked syllabus uploads to re-resolve the current subject after cloud upload, attach the record immediately, and retain the uploaded object if workspace synchronization is temporarily unavailable.
+- Added in-app previews for PDF, common image formats, TXT/Markdown, CSV, and supported audio formats using authenticated signed URLs.
+- Separated preview and download actions so Open does not request a download disposition.
+- Added per-subject logical folders for All Files, PDF Documents, Images, Word Documents, Presentations, Spreadsheets, Text Files, Audio Files, and Other Files.
+- Added category metadata to new materials and inferred categories for older records without changing their Storage paths or requiring new buckets.
+- Added distinct original-file download action and retained the existing device-offline save action.
+- Added MP3, WAV, M4A, OGG, and GIF support to the Materials upload workflow.
+- Bumped the PWA shell cache to `nexbyte-pwa-v8-study-hub-preview-folders`.
+
+
+## November 20, 2026 — Materials folders, Video Files, and Task attachments
+
+- Changed the Study Hub Materials default view to a folder-only overview. Individual files appear only after opening All Files or a category.
+- Categories are now All Files, PDF Documents, Images, Word Documents, Video Files, Text Files, and Other Files.
+- Removed the Audio Files folder without deleting any uploaded audio. Legacy audio, presentation, and spreadsheet objects remain accessible in All Files and are grouped under Other Files. CSV materials remain in Text Files.
+- Added validated MP4, WebM, MOV, and M4V categorization and responsive in-app video preview.
+- Added optional multi-file task attachments beneath Step-by-Step Instructions. Files are uploaded to the existing private `user-study-files` bucket and linked in the existing workspace task object.
+- Task attachments reject spreadsheet, presentation, CSV, and audio file extensions/MIME types; accepted types include PDF, Word, images, TXT/Markdown, and supported video.
+- Task cards now show attachment Open and Download actions. Edit flow supports removing saved attachments, and task deletion attempts cloud object cleanup only after workspace deletion has synchronized.
+- Updated the PWA cache namespace to `nexbyte-pwa-v9-video-folders-task-attachments`.
+- No new Supabase table, bucket, or SQL migration was added.

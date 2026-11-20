@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v8-study-hub-preview-folders';
+const CACHE_VERSION = 'nexbyte-pwa-v9-video-folders-task-attachments';
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',
