@@ -93,3 +93,10 @@ The subject Tasks tab now uses a delegated click handler for its Add task contro
 ### Add Task runtime-error fix
 
 This build also includes a fix for the `nbProfileName is not defined` error in Study Hub → Subject → Tasks. The enhanced task editor now uses a profile-name helper defined in its own JavaScript scope. No SQL or Supabase configuration change is required.
+
+
+## File preview and offline copies (November 2026)
+
+- Study Hub, Syllabus, and Task attachment previews now fetch private file bytes through a signed URL and create a local Blob URL for in-app rendering. This avoids opening a signed URL with an attachment disposition and prevents the preview action from intentionally downloading the file. PDFs use an embedded PDF frame; supported images, videos, audio, and text use their matching in-app viewers.
+- The **Download & save offline** action downloads the original filename and also stores a copy in this device's IndexedDB cache. When that file is previewed later, NEXTBYTE uses the local copy first, including when the device is offline.
+- Offline copies are device-specific. The user must download each file on each device where offline preview is needed. Browser storage limits and the user's device settings can affect whether a local copy can be kept; NEXTBYTE reports when the cache save fails.

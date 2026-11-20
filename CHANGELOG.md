@@ -151,3 +151,12 @@ Live Supabase Storage, real account policies, cross-device synchronization, and 
 - No file paths, stored objects, task records, Supabase buckets, or database schemas were changed.
 - Bumped the PWA cache namespace to `nexbyte-pwa-v12-task-attachment-preview-label` so installed clients fetch the changed task card label.
 - No SQL migration is required.
+
+
+## November 20, 2026 — reliable in-app preview and offline download
+
+- Preview no longer points the viewer directly at a Supabase signed URL. It fetches the private file bytes and previews a Blob URL, so `Content-Disposition: attachment` cannot force the preview action into a download.
+- PDFs are typed as `application/pdf` even when older metadata or storage responses report generic `application/octet-stream`, improving embedded PDF display in Android/PWA browsers.
+- Download now fetches the original file, stores a device-local IndexedDB copy under the existing `offline_material_<storage-path>` key, and downloads the original filename from a Blob URL. The cache write is best-effort: a quota failure does not block the normal download and is reported to the user.
+- Preview reuses the IndexedDB copy first and shows an **Available offline on this device** indicator when a local copy is present. The existing device-local offline cache and private Supabase bucket are reused; no database or Storage migration is required.
+- PWA cache version bumped so installed clients refresh the updated preview and download code.

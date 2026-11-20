@@ -6139,14 +6139,40 @@ async function deleteRoomAny(id){
     return table;
   }
   function nbxName(file) { return String(file.fileName || file.title || file.n || file.name || 'Study file'); }
+  function nbxEffectiveMime(fileName, declaredMime, responseMime) {
+    var ext = nbxExt(fileName);
+    var byExtension = {
+      pdf:'application/pdf', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', gif:'image/gif',
+      mp4:'video/mp4', m4v:'video/mp4', webm:'video/webm', mov:'video/quicktime',
+      mp3:'audio/mpeg', wav:'audio/wav', m4a:'audio/mp4', ogg:'audio/ogg',
+      txt:'text/plain', md:'text/markdown', csv:'text/csv'
+    };
+    var declared = String(declaredMime || '').toLowerCase().split(';')[0].trim();
+    var response = String(responseMime || '').toLowerCase().split(';')[0].trim();
+    // Some Android file pickers and Storage records use the generic binary MIME.
+    // Prefer the known extension mapping in that case so PDF bytes are presented
+    // to the browser as application/pdf instead of triggering an attachment flow.
+    if (ext && byExtension[ext] && (!declared || declared === 'application/octet-stream' || declared === 'binary/octet-stream')) return byExtension[ext];
+    if (declared && declared !== 'application/octet-stream' && declared !== 'binary/octet-stream') return declared;
+    if (response && response !== 'application/octet-stream' && response !== 'binary/octet-stream') return response;
+    return byExtension[ext] || declared || response || 'application/octet-stream';
+  }
   function nbxCreatePreviewPanel(name, type) {
     var panel = sheet(
       '<div class="f jb aic g2 mb3"><div class="grow minw"><h3 class="txl semi">File preview</h3><p class="txs muted nbx-preview-title" title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</p></div><button class="iconbtn" type="button" data-close-preview aria-label="Close preview">' + ic('x',18) + '</button></div>' +
       '<div class="nbx-preview-meta txs muted mb2">' + nbxEscape(type || 'File') + '</div><div id="nbxPreviewBody" class="nbx-preview-body"><p class="txm muted">Loading preview…</p></div>' +
-      '<div class="f g2 mt3"><button class="btn btn-primary grow" type="button" data-preview-download>' + ic('download',15) + ' Download original</button><button class="btn btn-secondary" type="button" data-close-preview-bottom>Close</button></div>'
+      '<div class="f g2 mt3"><button class="btn btn-primary grow" type="button" data-preview-download>' + ic('download',15) + ' Download &amp; save offline</button><button class="btn btn-secondary" type="button" data-close-preview-bottom>Close</button></div>'
     );
-    panel.querySelector('[data-close-preview]').onclick = closeTop;
-    panel.querySelector('[data-close-preview-bottom]').onclick = closeTop;
+    panel.__nbxPreviewObjectUrl = null;
+    function closePreview() {
+      if (panel.__nbxPreviewObjectUrl) {
+        try { URL.revokeObjectURL(panel.__nbxPreviewObjectUrl); } catch (_) {}
+        panel.__nbxPreviewObjectUrl = null;
+      }
+      closeTop();
+    }
+    panel.querySelector('[data-close-preview]').onclick = closePreview;
+    panel.querySelector('[data-close-preview-bottom]').onclick = closePreview;
     return panel;
   }
   async function nbxGetSignedUrl(path, downloadName) {
@@ -6158,27 +6184,70 @@ async function deleteRoomAny(id){
     if (!url) throw new Error('Supabase did not return a signed file URL.');
     return url;
   }
-  async function nbxDownloadPath(path, fileName) {
+  async function nbxDownloadPath(path, fileName, mime) {
+    var name = fileName || 'download';
+    var offlineKey = (typeof offlineMaterialKey === 'function') ? offlineMaterialKey(path) : ('offline_material_' + String(path));
+    var blob = null, savedOffline = false;
     try {
-      var url = await nbxGetSignedUrl(path, fileName || 'download');
+      // Reuse a device copy when one already exists. Otherwise fetch the private
+      // signed URL as a Blob, save it in IndexedDB, and download that same Blob.
+      if (typeof dbGet === 'function') {
+        try {
+          var existing = await dbGet(offlineKey);
+          if (existing && existing.blob && existing.blob.size) { blob = existing.blob; savedOffline = true; }
+        } catch (cacheReadError) { console.warn('Could not read existing offline file copy:', cacheReadError); }
+      }
+      if (!blob) {
+        var signedUrl = await nbxGetSignedUrl(path, null);
+        var response = await fetch(signedUrl, { method: 'GET', cache: 'no-store', credentials: 'omit' });
+        if (!response.ok) throw new Error('Download failed (' + response.status + ').');
+        blob = await response.blob();
+        if (!blob || !blob.size) throw new Error('The downloaded file is empty.');
+        var finalMime = nbxEffectiveMime(name, mime, blob.type);
+        if (typeof saveOfflineBlob === 'function') {
+          try {
+            await saveOfflineBlob(offlineKey, blob, name, finalMime, 'study-file');
+            savedOffline = true;
+          } catch (cacheWriteError) {
+            // A quota/private-mode failure must not prevent the normal download.
+            console.warn('The file downloaded but could not be cached for offline preview:', cacheWriteError);
+          }
+        }
+      }
+      var downloadMime = nbxEffectiveMime(name, mime, blob.type);
+      if (blob.type !== downloadMime) blob = new Blob([blob], { type: downloadMime });
+      var objectUrl = URL.createObjectURL(blob);
       var anchor = document.createElement('a');
-      anchor.href = url; anchor.target = '_blank'; anchor.rel = 'noopener';
-      anchor.download = fileName || 'download';
+      anchor.href = objectUrl;
+      anchor.download = name;
+      anchor.rel = 'noopener';
       document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      setTimeout(function () { try { URL.revokeObjectURL(objectUrl); } catch (_) {} }, 5 * 60 * 1000);
+      if (savedOffline) toast('Downloaded and saved for offline preview on this device.');
+      else toast('Download started. The file could not be saved for offline preview; check available device storage.');
     } catch (error) {
       console.error('Study file download failed:', error);
-      toast('Could not download this file: ' + (error.message || 'Check Storage permissions.'));
+      // Direct signed-download fallback supports browsers that block Blob downloads.
+      try {
+        var directUrl = await nbxGetSignedUrl(path, name);
+        var fallback = document.createElement('a'); fallback.href = directUrl; fallback.target = '_blank'; fallback.rel = 'noopener'; fallback.download = name;
+        document.body.appendChild(fallback); fallback.click(); fallback.remove();
+        toast('Download started, but an offline preview copy could not be saved.');
+      } catch (fallbackError) {
+        console.error('Direct study file download fallback failed:', fallbackError);
+        toast('Could not download this file: ' + ((fallbackError && fallbackError.message) || (error && error.message) || 'Check Storage permissions.'));
+      }
     }
   }
   window.nbDownloadStudyMaterial = function (subjectId, index) {
     var subject = nbxFindSubject(subjectId), file = subject && subject.materials && subject.materials[index];
     if (!file || !file.path) { toast('This material has no cloud file reference.'); return; }
-    nbxDownloadPath(file.path, nbxName(file));
+    nbxDownloadPath(file.path, nbxName(file), file.mime || file.fileType || '');
   };
   window.nbDownloadSyllabusFile = function (subjectId, index) {
     var subject = nbxFindSubject(subjectId), file = subject && subject.syllabusFiles && subject.syllabusFiles[index];
     if (!file || !file.path) { toast('This syllabus has no cloud file reference.'); return; }
-    nbxDownloadPath(file.path, nbxName(file));
+    nbxDownloadPath(file.path, nbxName(file), file.mime || file.fileType || '');
   };
 
   async function nbxPreviewPath(file, path, section) {
@@ -6187,30 +6256,51 @@ async function deleteRoomAny(id){
     var category = nbxCategory(file);
     var typeLabel = (NBX_CATEGORY_BY_KEY[category] || NBX_CATEGORY_BY_KEY.other).label;
     var panel = nbxCreatePreviewPanel(name, typeLabel);
-    panel.querySelector('[data-preview-download]').onclick = function () { nbxDownloadPath(path, name); };
+    panel.querySelector('[data-preview-download]').onclick = function () { nbxDownloadPath(path, name, mime); };
     var body = panel.querySelector('#nbxPreviewBody');
     try {
       var offlineCopy = null;
       if (typeof dbGet === 'function' && typeof offlineMaterialKey === 'function') {
         try { offlineCopy = await dbGet(offlineMaterialKey(path)); } catch (cacheError) { console.warn('Offline preview cache lookup failed:', cacheError); }
       }
-      var url = offlineCopy && offlineCopy.blob && typeof URL !== 'undefined' && URL.createObjectURL
-        ? URL.createObjectURL(offlineCopy.blob)
-        : await nbxGetSignedUrl(path, null);
-      if (url.indexOf('blob:') === 0) setTimeout(function () { try { URL.revokeObjectURL(url); } catch (_) {} }, 10 * 60 * 1000);
-      if (!document.body.contains(panel)) return;
+      var previewBlob = offlineCopy && offlineCopy.blob ? offlineCopy.blob : null;
+      if (!previewBlob) {
+        // Fetch the file bytes and preview a Blob URL. This deliberately avoids
+        // a signed URL with Content-Disposition: attachment, which can download
+        // instead of displaying the PDF in Android/PWA browsers.
+        var previewSignedUrl = await nbxGetSignedUrl(path, null);
+        var previewResponse = await fetch(previewSignedUrl, { method: 'GET', cache: 'no-store', credentials: 'omit' });
+        if (!previewResponse.ok) throw new Error('The file preview could not be loaded (' + previewResponse.status + ').');
+        previewBlob = await previewResponse.blob();
+        if (!previewBlob || !previewBlob.size) throw new Error('The file is empty or could not be read.');
+      }
+      var previewMime = nbxEffectiveMime(name, mime, previewBlob.type);
+      if (previewBlob.type !== previewMime) previewBlob = new Blob([previewBlob], { type: previewMime });
+      var url = URL.createObjectURL(previewBlob);
+      panel.__nbxPreviewObjectUrl = url;
+      // Safety cleanup if the sheet is dismissed by Android Back/navigation.
+      setTimeout(function () {
+        if (panel.__nbxPreviewObjectUrl === url) {
+          try { URL.revokeObjectURL(url); } catch (_) {}
+          panel.__nbxPreviewObjectUrl = null;
+        }
+      }, 30 * 60 * 1000);
+      if (!document.body.contains(panel)) { try { URL.revokeObjectURL(url); } catch (_) {} return; }
+      if (offlineCopy && offlineCopy.blob) {
+        var offlineBadge = document.createElement('span'); offlineBadge.className = 'badge'; offlineBadge.textContent = 'Available offline on this device';
+        var meta = panel.querySelector('.nbx-preview-meta'); if (meta) meta.appendChild(offlineBadge);
+      }
       if (ext === 'pdf' || mime === 'application/pdf') {
-        var frame = document.createElement('iframe'); frame.className = 'nbx-preview-frame'; frame.title = 'PDF preview: ' + name; frame.src = url + '#toolbar=1&navpanes=0'; body.replaceChildren(frame);
-      } else if (category === 'images') {
+        var frame = document.createElement('iframe'); frame.className = 'nbx-preview-frame'; frame.title = 'PDF preview: ' + name; frame.setAttribute('loading', 'eager'); frame.src = url + '#toolbar=1&navpanes=0&view=FitH';
+        frame.setAttribute('aria-label', 'PDF document preview'); body.replaceChildren(frame);
+      } else if (category === 'images' || mime.indexOf('image/') === 0) {
         var img = document.createElement('img'); img.className = 'nbx-preview-image'; img.alt = name; img.src = url; body.replaceChildren(img);
       } else if (['mp4','webm','mov','m4v'].indexOf(ext) >= 0 || mime.indexOf('video/') === 0) {
         var video = document.createElement('video'); video.className = 'nbx-preview-video'; video.controls = true; video.playsInline = true; video.preload = 'metadata'; video.src = url; body.replaceChildren(video);
       } else if (['mp3','wav','m4a','ogg'].indexOf(ext) >= 0 || mime.indexOf('audio/') === 0) {
         var audio = document.createElement('audio'); audio.className = 'nbx-preview-audio'; audio.controls = true; audio.preload = 'metadata'; audio.src = url; body.replaceChildren(audio);
       } else if (['txt','md','csv'].indexOf(ext) >= 0 || mime.indexOf('text/') === 0) {
-        var response = await fetch(url, {credentials:'omit'});
-        if (!response.ok) throw new Error('The file preview could not be loaded (' + response.status + ').');
-        var text = await response.text();
+        var text = await previewBlob.text();
         if (!document.body.contains(panel)) return;
         if (ext === 'csv' || mime === 'text/csv') {
           var rows = nbxCsvRows(text);
@@ -6286,7 +6376,7 @@ async function deleteRoomAny(id){
       var listHtml = selected === 'folders' ? '' : (filtered.length ? filtered.map(function (file) { return nbxMaterialCard(subject, file, materials.indexOf(file)); }).join('') : '<div class="empty"><p class="txm muted">' + (selected === 'all' ? 'No study materials uploaded yet.' : 'This folder is empty. Upload a file to add it here.') + '</p></div>');
       var uploadLabel = selected === 'folders' || selected === 'all' ? 'Upload study material' : 'Upload to ' + activeLabel;
       var uploadCategory = selected === 'folders' ? 'folders' : selected;
-      return '<div class="fc g3"><div class="card padc"><h3 class="txm semi">Study materials</h3><p class="txs muted mt1">Files are kept in your private account storage. Open a folder to browse files; audio and other legacy formats remain accessible in All Files and Other Files.</p></div><div class="fc g2">' + heading + folderView + listHtml + '</div><button class="btn btn-primary btn-block" type="button" onclick="addMaterial(\'' + nbxEscape(subject.id) + '\',\'' + uploadCategory + '\')">' + ic('upload',17) + ' ' + nbxEscape(uploadLabel) + '</button><p class="txs muted">Open previews supported documents and media. Download saves the original file; Offline keeps a device copy.</p></div>';
+      return '<div class="fc g3"><div class="card padc"><h3 class="txm semi">Study materials</h3><p class="txs muted mt1">Files are kept in your private account storage. Open a folder to browse files; audio and other legacy formats remain accessible in All Files and Other Files.</p></div><div class="fc g2">' + heading + folderView + listHtml + '</div><button class="btn btn-primary btn-block" type="button" onclick="addMaterial(\'' + nbxEscape(subject.id) + '\',\'' + uploadCategory + '\')">' + ic('upload',17) + ' ' + nbxEscape(uploadLabel) + '</button><p class="txs muted">Preview supported documents and media. Download saves the original and a device copy for offline preview.</p></div>';
     }
     return nbxPreviousSubjectTabBody(subject);
   };
@@ -6336,7 +6426,7 @@ async function deleteRoomAny(id){
     var task = (S.tasks || []).find(function (item) { return String(item.id) === String(taskId); });
     var file = task && task.attachments && task.attachments[index];
     if (!file || !file.path) { toast('Task attachment not found.'); return; }
-    nbxDownloadPath(file.path, nbxTaskFileName(file));
+    nbxDownloadPath(file.path, nbxTaskFileName(file), file.mime || file.type || '');
   };
   window.nbRemoveTaskAttachment = function (taskId, index) {
     var task = (S.tasks || []).find(function (item) { return String(item.id) === String(taskId); });

@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v12-task-attachment-preview-label';
+const CACHE_VERSION = 'nexbyte-pwa-v13-blob-preview-offline-download';
 const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',
