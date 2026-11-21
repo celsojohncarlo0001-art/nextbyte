@@ -6435,7 +6435,19 @@ async function deleteRoomAny(id){
     fitPage.textContent = 'Fit page';
     fitPage.setAttribute('aria-label', 'Fit the entire page in the preview');
 
-    toolbar.append(prev, pageLabel, next, zoomOut, zoomLabel, zoomIn, fitWidth, fitPage);
+    var landscapeButton = document.createElement('button');
+    landscapeButton.type = 'button';
+    landscapeButton.textContent = 'Landscape';
+    landscapeButton.setAttribute('aria-label', 'Enter landscape reading mode');
+    landscapeButton.title = 'Open a fullscreen reading view and rotate the device sideways';
+
+    toolbar.append(prev, pageLabel, next, zoomOut, zoomLabel, zoomIn, fitWidth, fitPage, landscapeButton);
+
+    var landscapeHint = document.createElement('div');
+    landscapeHint.className = 'nbx-pdf-landscape-hint';
+    landscapeHint.setAttribute('role', 'status');
+    landscapeHint.textContent = 'For a wider reading area, turn your device sideways. If it does not rotate, enable Auto-rotate in your device settings.';
+    landscapeHint.hidden = true;
 
     var canvasWrap = document.createElement('div');
     canvasWrap.className = 'nbx-pdf-canvas-wrap';
@@ -6453,7 +6465,7 @@ async function deleteRoomAny(id){
     loading.setAttribute('aria-live', 'polite');
     loading.textContent = 'Preparing PDF page…';
 
-    viewer.append(toolbar, canvasWrap, loading);
+    viewer.append(toolbar, landscapeHint, canvasWrap, loading);
     body.replaceChildren(viewer);
 
     var state = {
@@ -6469,7 +6481,10 @@ async function deleteRoomAny(id){
       resizeTimer: null,
       pinchTimer: null,
       observer: null,
-      pinchStart: null
+      pinchStart: null,
+      landscapeMode: false,
+      landscapeFallback: false,
+      orientationLocked: false
     };
     var context = canvas.getContext('2d', { alpha: false });
     if (!context) {
@@ -6603,6 +6618,93 @@ async function deleteRoomAny(id){
       renderPage().catch(showRenderError);
     };
 
+    function isLandscapeViewport() {
+      return !!(window.matchMedia && window.matchMedia('(orientation: landscape)').matches);
+    }
+
+    function updateLandscapeControl() {
+      var active = state.landscapeMode;
+      landscapeButton.textContent = active ? 'Exit landscape' : 'Landscape';
+      landscapeButton.setAttribute('aria-label', active ? 'Exit landscape reading mode' : 'Enter landscape reading mode');
+      landscapeButton.title = active ? 'Return to the normal file preview' : 'Open a fullscreen reading view and rotate the device sideways';
+      landscapeButton.classList.toggle('nbx-pdf-landscape-active', active);
+    }
+
+    function updateLandscapeHint() {
+      landscapeHint.hidden = !state.landscapeMode || state.orientationLocked || isLandscapeViewport();
+    }
+
+    async function exitLandscapeMode() {
+      state.landscapeMode = false;
+      state.orientationLocked = false;
+      state.landscapeFallback = false;
+      viewer.classList.remove('nbx-pdf-landscape-fallback');
+      if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+        try { screen.orientation.unlock(); } catch (_) {}
+      }
+      if (document.fullscreenElement === viewer && typeof document.exitFullscreen === 'function') {
+        try { await document.exitFullscreen(); } catch (_) {}
+      }
+      updateLandscapeControl();
+      updateLandscapeHint();
+      onResize();
+    }
+
+    async function enterLandscapeMode() {
+      state.landscapeMode = true;
+      updateLandscapeControl();
+      var fullscreenEntered = false;
+      if (typeof viewer.requestFullscreen === 'function') {
+        try {
+          await viewer.requestFullscreen({ navigationUI: 'hide' });
+          fullscreenEntered = document.fullscreenElement === viewer;
+        } catch (fullscreenError) {
+          console.info('Fullscreen reading mode is unavailable; using the in-app expanded viewer.', fullscreenError);
+        }
+      }
+
+      if (fullscreenEntered && screen.orientation && typeof screen.orientation.lock === 'function') {
+        try {
+          await screen.orientation.lock('landscape');
+          state.orientationLocked = true;
+        } catch (orientationError) {
+          // Some browsers require the user to enable Auto-rotate or rotate manually.
+          state.orientationLocked = false;
+        }
+      }
+
+      if (!fullscreenEntered) {
+        state.landscapeFallback = true;
+        viewer.classList.add('nbx-pdf-landscape-fallback');
+      }
+      updateLandscapeControl();
+      updateLandscapeHint();
+      onResize();
+    }
+
+    landscapeButton.addEventListener('click', function () {
+      if (state.landscapeMode) exitLandscapeMode();
+      else enterLandscapeMode();
+    });
+
+    function handleFullscreenChange() {
+      var isViewerFullscreen = document.fullscreenElement === viewer;
+      if (!isViewerFullscreen && state.landscapeMode && !state.landscapeFallback) {
+        state.landscapeMode = false;
+        state.orientationLocked = false;
+        if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+          try { screen.orientation.unlock(); } catch (_) {}
+        }
+      }
+      updateLandscapeControl();
+      updateLandscapeHint();
+      onResize();
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    if (screen.orientation && typeof screen.orientation.addEventListener === 'function') {
+      screen.orientation.addEventListener('change', onResize);
+    }
+
     function touchDistance(touches) {
       var dx = touches[0].clientX - touches[1].clientX;
       var dy = touches[0].clientY - touches[1].clientY;
@@ -6654,6 +6756,7 @@ async function deleteRoomAny(id){
 
     function onResize() {
       if (state.destroyed) return;
+      updateLandscapeHint();
       clearTimeout(state.resizeTimer);
       state.resizeTimer = setTimeout(function () {
         renderPage().catch(showRenderError);
@@ -6681,6 +6784,16 @@ async function deleteRoomAny(id){
       clearTimeout(state.resizeTimer);
       clearTimeout(state.pinchTimer);
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      if (screen.orientation && typeof screen.orientation.removeEventListener === 'function') {
+        screen.orientation.removeEventListener('change', onResize);
+      }
+      if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+        try { screen.orientation.unlock(); } catch (_) {}
+      }
+      if (document.fullscreenElement === viewer && typeof document.exitFullscreen === 'function') {
+        try { document.exitFullscreen(); } catch (_) {}
+      }
       if (state.observer) state.observer.disconnect();
       if (state.renderTask) {
         try { state.renderTask.cancel(); } catch (_) {}
@@ -7760,5 +7873,122 @@ async function deleteRoomAny(id){
   }
 }
 </style>
+
+<style id="nextbyte-pdf-landscape-reading-v1">
+/* Optional immersive reading view: fullscreen first, CSS-expanded fallback second. */
+.nbx-pdf-landscape-hint{
+  flex:0 0 auto;
+  margin:0 2px;
+  padding:7px 10px;
+  border:1px solid var(--border);
+  border-radius:9px;
+  background:var(--secondary);
+  color:var(--muted-fg);
+  font-size:11px;
+  line-height:1.35;
+  text-align:center;
+}
+.nbx-pdf-landscape-hint[hidden]{display:none!important}
+.nbx-pdf-toolbar button.nbx-pdf-landscape-active{
+  border-color:var(--primary);
+  background:var(--primary-soft);
+  color:var(--primary-text);
+}
+.nbx-pdf-viewer:fullscreen,
+.nbx-pdf-viewer.nbx-pdf-landscape-fallback{
+  position:fixed;
+  inset:0;
+  z-index:2147483000;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  width:100vw;
+  max-width:none;
+  height:100vh;
+  height:100dvh;
+  max-height:none;
+  min-height:0;
+  margin:0;
+  padding: max(6px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+  gap:5px;
+  overflow:hidden;
+  border:0;
+  border-radius:0;
+  background:var(--bg);
+}
+.nbx-pdf-viewer:fullscreen .nbx-pdf-toolbar,
+.nbx-pdf-viewer.nbx-pdf-landscape-fallback .nbx-pdf-toolbar{
+  flex:0 0 auto;
+  flex-wrap:wrap;
+  justify-content:center;
+  gap:5px;
+  padding:5px;
+}
+.nbx-pdf-viewer:fullscreen .nbx-pdf-toolbar button,
+.nbx-pdf-viewer.nbx-pdf-landscape-fallback .nbx-pdf-toolbar button{
+  min-height:34px;
+  padding:5px 9px;
+  font-size:12px;
+}
+.nbx-pdf-viewer:fullscreen .nbx-pdf-canvas-wrap,
+.nbx-pdf-viewer.nbx-pdf-landscape-fallback .nbx-pdf-canvas-wrap{
+  flex:1 1 0;
+  width:100%;
+  height:0;
+  min-height:0;
+  padding:3px 2px 8px;
+}
+.nbx-pdf-viewer:fullscreen .nbx-pdf-loading,
+.nbx-pdf-viewer.nbx-pdf-landscape-fallback .nbx-pdf-loading{
+  flex:0 0 auto;
+  padding:2px 4px;
+}
+@media (orientation:landscape) and (max-height:600px){
+  .nbx-file-preview-sheet{
+    width:100vw;
+    max-width:100vw;
+    height:100dvh;
+    max-height:100dvh;
+    min-height:0;
+    padding-top:8px;
+    padding-bottom:calc(6px + env(safe-area-inset-bottom, 0px));
+    border-radius:0;
+  }
+  .nbx-file-preview-sheet .nbx-preview-body{
+    min-height:0;
+    max-height:none;
+  }
+  .nbx-pdf-viewer{gap:4px;padding:4px}
+  .nbx-pdf-toolbar{
+    display:flex;
+    flex-wrap:nowrap;
+    justify-content:flex-start;
+    overflow-x:auto;
+    overflow-y:hidden;
+    scrollbar-width:thin;
+    gap:4px;
+    padding:4px;
+  }
+  .nbx-pdf-toolbar button{
+    flex:0 0 auto;
+    min-width:36px;
+    min-height:32px;
+    padding:4px 7px;
+    font-size:11px;
+  }
+  .nbx-pdf-page-label{flex:0 0 auto;min-width:58px;font-size:11px}
+  .nbx-pdf-zoom-label{flex:0 0 auto;min-width:36px}
+  .nbx-pdf-canvas-wrap{padding:2px 1px 5px}
+}
+@media (max-height:420px){
+  .nbx-pdf-viewer:fullscreen,
+  .nbx-pdf-viewer.nbx-pdf-landscape-fallback{gap:3px}
+  .nbx-pdf-viewer:fullscreen .nbx-pdf-toolbar,
+  .nbx-pdf-viewer.nbx-pdf-landscape-fallback .nbx-pdf-toolbar{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto}
+  .nbx-pdf-viewer:fullscreen .nbx-pdf-toolbar button,
+  .nbx-pdf-viewer.nbx-pdf-landscape-fallback .nbx-pdf-toolbar button{flex:0 0 auto;min-height:30px;padding:4px 7px}
+}
+</style>
+
 </body>
 </html>

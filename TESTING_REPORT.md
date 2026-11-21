@@ -15,20 +15,24 @@ Updated the uploaded NEXTBYTE project (`index.html` and `sw.js`) to improve the 
 - Added two-finger pinch-to-zoom for touch devices while preserving one-finger horizontal/vertical panning of zoomed pages.
 - Scaled each PDF page from its own width and height, so portrait, landscape, and mixed-orientation pages use the available viewing space without changing their aspect ratio.
 - Added stale-render protection, cancellation of superseded PDF.js render tasks, resize-observer checks for both width and height, and screen-rotation re-rendering.
+- Added a Landscape toolbar action that opens an immersive fullscreen reading view and requests a landscape orientation lock where supported.
+- Added an expanded in-app fallback when fullscreen is unavailable, plus an Auto-rotate hint when the browser cannot force landscape orientation.
+- Optimized the PDF toolbar and canvas viewport for short landscape mobile screens.
+- Added fullscreen/orientation event cleanup when the preview closes.
 - Kept PDF.js pinned to the existing `6.5.438` release and preserved the existing file retrieval, Supabase access, IndexedDB offline copy, and service-worker PDF.js caching pathways.
-- Bumped the app-shell cache version to `nexbyte-pwa-v19-pdf-preview-readable-r1`.
+- Bumped the app-shell cache version to `nexbyte-pwa-v20-pdf-landscape-reading-r1`.
 
 ## Static validation performed
 
 - All 6 non-empty inline JavaScript blocks in `index.html` passed `node --check`.
 - `sw.js` passed `node --check`.
-- Verified the PDF viewer function, Fit Width/Fit Page controls, responsive preview styles, and the scoped preview-sheet class are present in the updated source.
+- Verified the PDF viewer function, Fit Width/Fit Page/Landscape controls, fullscreen fallback styles, orientation handling, and the scoped preview-sheet class are present in the updated source.
 - Verified the project ZIP structure after packaging.
 
 ## Not verified in this environment
 
 - No live Vercel deployment or connected Supabase project was available for end-to-end testing.
-- The updated page was not executed in a real Android browser or installed PWA during this repair. Therefore pinch gestures, visual sizing on physical devices, PDF rendering on real files, and offline playback should be checked after deployment.
+- The updated page was not executed in a real Android browser or installed PWA during this repair. Therefore actual device orientation locking, browser fullscreen support, pinch gestures, visual sizing on physical devices, PDF rendering on real files, and offline playback should be checked after deployment. Some mobile browsers do not support orientation locking; in that case the viewer opens its expanded mode and asks the user to rotate the device manually or enable Auto-rotate.
 - No database schema or Supabase configuration changes are required for this UI/rendering update.
 
 ## Deployment

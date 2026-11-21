@@ -199,3 +199,13 @@ Live Supabase Storage, real account policies, cross-device synchronization, and 
 - Improved render-task cancellation, stale-render protection, resize/orientation handling, high-DPI canvas sizing, and memory-aware pixel-ratio selection.
 - Preserved the shared Study Hub, Syllabus, and Tasks preview pipeline, existing private Storage access, download/offline-save behavior, and the PDF.js version pin.
 - Bumped the PWA app-shell cache namespace so deployed clients request the updated preview code and styles.
+
+
+## PDF landscape reading mode (2026-11-21)
+
+- Added a Landscape reading control to the shared PDF.js preview toolbar.
+- The control requests fullscreen and, where supported, locks device orientation to landscape.
+- Added a full-screen in-app fallback and an on-screen Auto-rotate hint for browsers that cannot lock orientation.
+- Optimized the toolbar and PDF canvas area for short landscape mobile viewports.
+- Preserved Fit Width, Fit Page, zoom, page navigation, pinch zoom, download, and offline preview behavior.
+- Bumped the service-worker app-shell cache version so installed PWAs can fetch the updated viewer.
