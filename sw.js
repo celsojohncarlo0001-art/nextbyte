@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v18-unified-file-preview-r2';
+const CACHE_VERSION = 'nexbyte-pwa-v19-pdf-preview-readable-r1';
 const PDFJS_ASSET_CACHE = 'nexbyte-pdfjs-assets-6-5-438';
 const PDFJS_ASSET_PREFIX = '/npm/pdfjs-dist@6.5.438/';
 const APP_SHELL = [

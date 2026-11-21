@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <meta name="theme-color" content="#2563EB"/>
-<meta name="nexbyte-repair-layer" content="4.4"/>
+<meta name="nexbyte-repair-layer" content="4.5-pdf-readable"/>
 <meta name="description" content="NEXBYTE — your personal academic workspace, available online and offline."/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -831,6 +831,9 @@ input[type=range]{accent-color:var(--primary);width:100%;min-height:28px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./supabase-config.js"></script>
+
+
+
 </head>
 <body>
 <div id="app"></div>
@@ -6224,6 +6227,9 @@ async function deleteRoomAny(id){
       '<div class="f g2 mt3"><button class="btn btn-secondary grow" type="button" data-open-device>' + ic('upload',15) + ' Open from Device</button><button class="btn btn-primary grow" type="button" data-preview-download>' + ic('download',15) + ' Download &amp; save offline</button></div>' +
       '<div class="f mt2"><button class="btn btn-secondary btn-block" type="button" data-close-preview-bottom>Close</button></div>'
     );
+    panel.classList.add('nbx-file-preview-overlay');
+    var previewSheet = panel.querySelector('.ov-sheet');
+    if (previewSheet) previewSheet.classList.add('nbx-file-preview-sheet');
     NBX_ACTIVE_PREVIEW_PANEL = panel;
     panel.__nbxPreviewObjectUrl = null;
     function releasePreviewResources() {
@@ -6380,88 +6386,309 @@ async function deleteRoomAny(id){
     var pdf = await loadingTask.promise;
     if (!document.body.contains(panel)) { try { await pdf.destroy(); } catch (_) {} return; }
 
-    var viewer = document.createElement('div'); viewer.className = 'nbx-pdf-viewer';
-    var toolbar = document.createElement('div'); toolbar.className = 'nbx-pdf-toolbar';
-    var prev = document.createElement('button'); prev.type = 'button'; prev.textContent = '‹ Previous';
-    var pageLabel = document.createElement('span'); pageLabel.className = 'nbx-pdf-page-label';
-    var next = document.createElement('button'); next.type = 'button'; next.textContent = 'Next ›';
-    var zoomOut = document.createElement('button'); zoomOut.type = 'button'; zoomOut.textContent = '−'; zoomOut.setAttribute('aria-label','Zoom out');
-    var zoomIn = document.createElement('button'); zoomIn.type = 'button'; zoomIn.textContent = '+'; zoomIn.setAttribute('aria-label','Zoom in');
-    var fit = document.createElement('button'); fit.type = 'button'; fit.textContent = 'Fit width';
-    toolbar.append(prev, pageLabel, next, zoomOut, zoomIn, fit);
-    var canvasWrap = document.createElement('div'); canvasWrap.className = 'nbx-pdf-canvas-wrap';
-    var canvas = document.createElement('canvas'); canvas.className = 'nbx-pdf-canvas'; canvas.setAttribute('aria-label', 'Rendered PDF page');
-    canvasWrap.appendChild(canvas);
-    var loading = document.createElement('p'); loading.className = 'nbx-pdf-loading'; loading.textContent = 'Preparing PDF page…';
-    viewer.append(toolbar, canvasWrap, loading); body.replaceChildren(viewer);
+    body.classList.add('nbx-pdf-active');
+    var viewer = document.createElement('div');
+    viewer.className = 'nbx-pdf-viewer';
 
-    var state = { page:1, zoom:1, renderTask:null, destroyed:false, resizeTimer:null, observer:null };
-    var context = canvas.getContext('2d', { alpha:false });
-    if (!context) throw new Error('This browser cannot create a PDF canvas. Try an updated browser.');
+    var toolbar = document.createElement('div');
+    toolbar.className = 'nbx-pdf-toolbar';
+    toolbar.setAttribute('role', 'toolbar');
+    toolbar.setAttribute('aria-label', 'PDF viewing controls');
+
+    var prev = document.createElement('button');
+    prev.type = 'button';
+    prev.textContent = '‹ Previous';
+    prev.setAttribute('aria-label', 'Previous page');
+
+    var pageLabel = document.createElement('span');
+    pageLabel.className = 'nbx-pdf-page-label';
+    pageLabel.setAttribute('aria-live', 'polite');
+
+    var next = document.createElement('button');
+    next.type = 'button';
+    next.textContent = 'Next ›';
+    next.setAttribute('aria-label', 'Next page');
+
+    var zoomOut = document.createElement('button');
+    zoomOut.type = 'button';
+    zoomOut.textContent = '−';
+    zoomOut.setAttribute('aria-label', 'Zoom out');
+
+    var zoomLabel = document.createElement('span');
+    zoomLabel.className = 'nbx-pdf-zoom-label';
+    zoomLabel.textContent = '100%';
+    zoomLabel.setAttribute('aria-label', 'Zoom level');
+
+    var zoomIn = document.createElement('button');
+    zoomIn.type = 'button';
+    zoomIn.textContent = '+';
+    zoomIn.setAttribute('aria-label', 'Zoom in');
+
+    var fitWidth = document.createElement('button');
+    fitWidth.type = 'button';
+    fitWidth.textContent = 'Fit width';
+    fitWidth.setAttribute('aria-label', 'Fit page to preview width');
+    fitWidth.className = 'nbx-pdf-fit-active';
+
+    var fitPage = document.createElement('button');
+    fitPage.type = 'button';
+    fitPage.textContent = 'Fit page';
+    fitPage.setAttribute('aria-label', 'Fit the entire page in the preview');
+
+    toolbar.append(prev, pageLabel, next, zoomOut, zoomLabel, zoomIn, fitWidth, fitPage);
+
+    var canvasWrap = document.createElement('div');
+    canvasWrap.className = 'nbx-pdf-canvas-wrap';
+    canvasWrap.setAttribute('role', 'region');
+    canvasWrap.setAttribute('aria-label', 'PDF document page. Scroll to view zoomed content.');
+
+    var canvas = document.createElement('canvas');
+    canvas.className = 'nbx-pdf-canvas';
+    canvas.setAttribute('aria-label', 'Rendered PDF page');
+    canvasWrap.appendChild(canvas);
+
+    var loading = document.createElement('p');
+    loading.className = 'nbx-pdf-loading';
+    loading.setAttribute('role', 'status');
+    loading.setAttribute('aria-live', 'polite');
+    loading.textContent = 'Preparing PDF page…';
+
+    viewer.append(toolbar, canvasWrap, loading);
+    body.replaceChildren(viewer);
+
+    var state = {
+      page: 1,
+      mode: 'width',
+      zoom: 1,
+      lastScale: 1,
+      lastFitWidthScale: 1,
+      renderedZoom: 1,
+      renderTask: null,
+      renderToken: 0,
+      destroyed: false,
+      resizeTimer: null,
+      pinchTimer: null,
+      observer: null,
+      pinchStart: null
+    };
+    var context = canvas.getContext('2d', { alpha: false });
+    if (!context) {
+      try { await pdf.destroy(); } catch (_) {}
+      throw new Error('This browser cannot create a PDF canvas. Try an updated browser.');
+    }
+
+    function setActiveFitButton() {
+      fitWidth.classList.toggle('nbx-pdf-fit-active', state.mode === 'width');
+      fitPage.classList.toggle('nbx-pdf-fit-active', state.mode === 'page');
+    }
+
+    function updateZoomLabel(scale, fitScale) {
+      var relative = fitScale > 0 ? scale / fitScale : 1;
+      zoomLabel.textContent = Math.round(relative * 100) + '%';
+    }
+
     async function renderPage() {
       if (state.destroyed || !document.body.contains(panel)) return;
-      if (state.renderTask) { try { state.renderTask.cancel(); } catch (_) {} state.renderTask = null; }
+      var token = ++state.renderToken;
+      if (state.renderTask) {
+        try { state.renderTask.cancel(); } catch (_) {}
+        state.renderTask = null;
+      }
       loading.textContent = 'Rendering page ' + state.page + ' of ' + pdf.numPages + '…';
-      prev.disabled = state.page <= 1; next.disabled = state.page >= pdf.numPages;
+      prev.disabled = state.page <= 1;
+      next.disabled = state.page >= pdf.numPages;
       pageLabel.textContent = state.page + ' / ' + pdf.numPages;
+
       var page = await pdf.getPage(state.page);
-      if (state.destroyed) return;
-      var baseViewport = page.getViewport({ scale:1 });
-      var availableWidth = Math.max(220, canvasWrap.clientWidth - 18);
-      var fitScale = availableWidth / baseViewport.width;
-      var scale = Math.max(0.35, Math.min(4, fitScale * state.zoom));
-      var viewport = page.getViewport({ scale:scale });
-      var pixelRatio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      if (state.destroyed || token !== state.renderToken) return;
+
+      var baseViewport = page.getViewport({ scale: 1 });
+      var availableWidth = Math.max(1, canvasWrap.clientWidth - 10);
+      var availableHeight = Math.max(1, canvasWrap.clientHeight - 10);
+      var fitWidthScale = availableWidth / baseViewport.width;
+      var fitPageScale = Math.min(fitWidthScale, availableHeight / baseViewport.height);
+      var scale = state.mode === 'page'
+        ? fitPageScale
+        : fitWidthScale * (state.mode === 'custom' ? state.zoom : 1);
+
+      // Keep a sensible ceiling for unusually small-format source pages while
+      // letting oversized/large-format documents fit the actual preview width.
+      scale = Math.max(0.05, Math.min(5, scale));
+      state.lastFitWidthScale = fitWidthScale;
+      state.lastScale = scale;
+      state.renderedZoom = fitWidthScale > 0 ? scale / fitWidthScale : 1;
+      setActiveFitButton();
+      updateZoomLabel(scale, fitWidthScale);
+
+      var viewport = page.getViewport({ scale: scale });
+      var pixelRatio = Math.min(2, window.devicePixelRatio || 1);
+      var pixelBudgetRatio = Math.sqrt(16000000 / Math.max(1, viewport.width * viewport.height));
+      pixelRatio = Math.max(1, Math.min(pixelRatio, pixelBudgetRatio));
+
       canvas.width = Math.max(1, Math.floor(viewport.width * pixelRatio));
       canvas.height = Math.max(1, Math.floor(viewport.height * pixelRatio));
       canvas.style.width = Math.ceil(viewport.width) + 'px';
       canvas.style.height = Math.ceil(viewport.height) + 'px';
-      context.setTransform(1,0,0,1,0,0);
-      context.fillStyle = '#ffffff'; context.fillRect(0,0,canvas.width,canvas.height);
+      canvas.style.transform = 'none';
+      canvas.style.transformOrigin = 'top center';
+
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+
       var task = page.render({
-        canvasContext:context,
-        viewport:viewport,
-        transform:pixelRatio === 1 ? null : [pixelRatio,0,0,pixelRatio,0,0],
-        intent:'display'
+        canvasContext: context,
+        viewport: viewport,
+        transform: pixelRatio === 1 ? null : [pixelRatio, 0, 0, pixelRatio, 0, 0],
+        intent: 'display'
       });
       state.renderTask = task;
+
       try {
         await task.promise;
-        if (!state.destroyed) loading.textContent = 'Page ' + state.page + ' of ' + pdf.numPages + ' · ' + Math.round(scale * 100) + '%';
+        if (!state.destroyed && token === state.renderToken) {
+          loading.textContent = 'Page ' + state.page + ' of ' + pdf.numPages +
+            ' · ' + Math.round((scale / fitWidthScale) * 100) + '% of fit width';
+        }
       } catch (error) {
         if (error && (error.name === 'RenderingCancelledException' || /cancel/i.test(error.message || ''))) return;
         throw error;
-      } finally { if (state.renderTask === task) state.renderTask = null; }
+      } finally {
+        if (state.renderTask === task) state.renderTask = null;
+      }
     }
-    prev.onclick = function () { if (state.page > 1) { state.page--; renderPage().catch(showRenderError); } };
-    next.onclick = function () { if (state.page < pdf.numPages) { state.page++; renderPage().catch(showRenderError); } };
-    zoomOut.onclick = function () { state.zoom = Math.max(0.5, state.zoom / 1.2); renderPage().catch(showRenderError); };
-    zoomIn.onclick = function () { state.zoom = Math.min(3.5, state.zoom * 1.2); renderPage().catch(showRenderError); };
-    fit.onclick = function () { state.zoom = 1; renderPage().catch(showRenderError); canvasWrap.scrollTo({ top:0, left:0, behavior:'smooth' }); };
+
     function showRenderError(error) {
+      if (state.destroyed) return;
       console.error('PDF page rendering failed:', error);
       loading.textContent = 'This PDF page could not be rendered. The file may be damaged or use an unsupported feature.';
     }
+
+    function goToPage(nextPage) {
+      var target = Math.max(1, Math.min(pdf.numPages, nextPage));
+      if (target === state.page) return;
+      state.page = target;
+      canvasWrap.scrollTop = 0;
+      canvasWrap.scrollLeft = 0;
+      renderPage().catch(showRenderError);
+    }
+
+    prev.onclick = function () { goToPage(state.page - 1); };
+    next.onclick = function () { goToPage(state.page + 1); };
+
+    function zoomBy(factor) {
+      if (state.mode === 'page') {
+        state.zoom = state.lastFitWidthScale > 0 ? state.lastScale / state.lastFitWidthScale : 1;
+      } else if (state.mode === 'width') {
+        state.zoom = 1;
+      }
+      state.zoom = Math.max(0.1, Math.min(4, state.zoom * factor));
+      state.mode = 'custom';
+      setActiveFitButton();
+      renderPage().catch(showRenderError);
+    }
+    zoomOut.onclick = function () { zoomBy(1 / 1.2); };
+    zoomIn.onclick = function () { zoomBy(1.2); };
+
+    fitWidth.onclick = function () {
+      state.mode = 'width';
+      state.zoom = 1;
+      canvasWrap.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      renderPage().catch(showRenderError);
+    };
+    fitPage.onclick = function () {
+      state.mode = 'page';
+      state.zoom = 1;
+      canvasWrap.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+      renderPage().catch(showRenderError);
+    };
+
+    function touchDistance(touches) {
+      var dx = touches[0].clientX - touches[1].clientX;
+      var dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    canvasWrap.addEventListener('touchstart', function (event) {
+      if (event.touches.length !== 2) return;
+      event.preventDefault();
+      var startZoom = state.mode === 'page'
+        ? (state.lastFitWidthScale > 0 ? state.lastScale / state.lastFitWidthScale : 1)
+        : (state.mode === 'custom' ? state.zoom : 1);
+      state.pinchStart = {
+        distance: touchDistance(event.touches),
+        zoom: startZoom
+      };
+      state.mode = 'custom';
+      state.zoom = startZoom;
+      setActiveFitButton();
+    }, { passive: false });
+
+    canvasWrap.addEventListener('touchmove', function (event) {
+      if (!state.pinchStart || event.touches.length !== 2) return;
+      event.preventDefault();
+      var distance = touchDistance(event.touches);
+      var ratio = distance / Math.max(1, state.pinchStart.distance);
+      state.zoom = Math.max(0.1, Math.min(4, state.pinchStart.zoom * ratio));
+      var visualScale = state.renderedZoom > 0 ? state.zoom / state.renderedZoom : state.zoom;
+      canvas.style.transform = 'scale(' + visualScale + ')';
+      if (state.pinchTimer) clearTimeout(state.pinchTimer);
+      state.pinchTimer = setTimeout(function () {
+        state.pinchTimer = null;
+        renderPage().catch(showRenderError);
+      }, 110);
+      updateZoomLabel(state.lastFitWidthScale * state.zoom, state.lastFitWidthScale);
+    }, { passive: false });
+
+    function finishPinch() {
+      if (!state.pinchStart) return;
+      state.pinchStart = null;
+      if (state.pinchTimer) {
+        clearTimeout(state.pinchTimer);
+        state.pinchTimer = null;
+      }
+      renderPage().catch(showRenderError);
+    }
+    canvasWrap.addEventListener('touchend', finishPinch, { passive: true });
+    canvasWrap.addEventListener('touchcancel', finishPinch, { passive: true });
+
     function onResize() {
+      if (state.destroyed) return;
       clearTimeout(state.resizeTimer);
-      state.resizeTimer = setTimeout(function () { renderPage().catch(showRenderError); }, 180);
+      state.resizeTimer = setTimeout(function () {
+        renderPage().catch(showRenderError);
+      }, 150);
     }
     window.addEventListener('resize', onResize);
     if (typeof ResizeObserver === 'function') {
       var observedWidth = canvasWrap.clientWidth;
+      var observedHeight = canvasWrap.clientHeight;
       state.observer = new ResizeObserver(function () {
         var nextWidth = canvasWrap.clientWidth;
-        if (Math.abs(nextWidth - observedWidth) > 1) { observedWidth = nextWidth; onResize(); }
+        var nextHeight = canvasWrap.clientHeight;
+        if (Math.abs(nextWidth - observedWidth) > 1 || Math.abs(nextHeight - observedHeight) > 1) {
+          observedWidth = nextWidth;
+          observedHeight = nextHeight;
+          onResize();
+        }
       });
       state.observer.observe(canvasWrap);
     }
+
     panel.__nbxPdfCleanup = function () {
-      state.destroyed = true; clearTimeout(state.resizeTimer);
+      state.destroyed = true;
+      state.renderToken += 1;
+      clearTimeout(state.resizeTimer);
+      clearTimeout(state.pinchTimer);
       window.removeEventListener('resize', onResize);
       if (state.observer) state.observer.disconnect();
-      if (state.renderTask) { try { state.renderTask.cancel(); } catch (_) {} }
+      if (state.renderTask) {
+        try { state.renderTask.cancel(); } catch (_) {}
+        state.renderTask = null;
+      }
       try { pdf.destroy(); } catch (_) {}
     };
+
     await renderPage();
   }
 
@@ -7355,5 +7582,183 @@ async function deleteRoomAny(id){
 })();
 
 </script>
+<style id="nextbyte-pdf-preview-readability-v1">
+/* NEXTBYTE file preview: expand the sheet and give the PDF canvas the space. */
+.nbx-file-preview-sheet{
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  width:min(100%, 1040px);
+  max-width:min(1040px, calc(100vw - 24px));
+  height:min(92vh, 920px);
+  height:min(92dvh, 920px);
+  max-height:94vh;
+  max-height:94dvh;
+  min-height:420px;
+  overflow:hidden;
+  padding:18px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+}
+.nbx-file-preview-sheet .nbx-preview-body{
+  box-sizing:border-box;
+  flex:1 1 auto;
+  min-height:220px;
+  max-height:none;
+  overflow:auto;
+}
+.nbx-file-preview-sheet .nbx-preview-body.nbx-pdf-active{
+  display:flex;
+  flex:1 1 0;
+  flex-direction:column;
+  min-height:0;
+  max-height:none;
+  overflow:hidden;
+  padding:0;
+}
+.nbx-pdf-viewer{
+  box-sizing:border-box;
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+  gap:6px;
+  width:100%;
+  height:100%;
+  min-width:0;
+  min-height:0;
+  padding:7px;
+}
+.nbx-pdf-toolbar{
+  box-sizing:border-box;
+  display:flex;
+  flex:0 0 auto;
+  align-items:center;
+  justify-content:center;
+  flex-wrap:wrap;
+  gap:6px;
+  position:relative;
+  top:auto;
+  width:100%;
+  padding:6px;
+}
+.nbx-pdf-toolbar button{
+  box-sizing:border-box;
+  min-width:40px;
+  min-height:38px;
+  padding:7px 10px;
+  font-size:12px;
+  line-height:1.15;
+  touch-action:manipulation;
+}
+.nbx-pdf-toolbar button.nbx-pdf-fit-active{
+  border-color:var(--primary);
+  background:var(--primary-soft);
+  color:var(--primary-text);
+}
+.nbx-pdf-page-label{
+  min-width:76px;
+  font-size:12px;
+  font-weight:700;
+}
+.nbx-pdf-zoom-label{
+  min-width:43px;
+  text-align:center;
+  color:var(--muted-fg);
+  font-size:11px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.nbx-pdf-canvas-wrap{
+  box-sizing:border-box;
+  display:block;
+  flex:1 1 0;
+  width:100%;
+  height:0;
+  min-width:0;
+  min-height:0;
+  overflow:auto;
+  padding:4px 3px 10px;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-x pan-y;
+  scrollbar-gutter:stable;
+}
+.nbx-pdf-canvas{
+  display:block;
+  max-width:none;
+  margin:0 auto;
+  background:#fff;
+  transform-origin:top center;
+}
+.nbx-pdf-loading{
+  flex:0 0 auto;
+  margin:0;
+  padding:3px 6px;
+  text-align:center;
+  font-size:11px;
+  line-height:1.3;
+}
+@media (max-width: 600px){
+  .nbx-file-preview-sheet{
+    width:100%;
+    max-width:100%;
+    height:94vh;
+    height:94dvh;
+    max-height:94vh;
+    max-height:94dvh;
+    min-height:320px;
+    padding:15px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-radius:22px 22px 0 0;
+  }
+  .nbx-file-preview-sheet .nbx-preview-body{
+    min-height:180px;
+  }
+  .nbx-pdf-viewer{
+    gap:5px;
+    padding:5px;
+  }
+  .nbx-pdf-toolbar{
+    display:grid;
+    grid-template-columns:repeat(4, minmax(0, 1fr));
+    gap:5px;
+    padding:5px;
+  }
+  .nbx-pdf-toolbar button{
+    width:100%;
+    min-width:0;
+    min-height:38px;
+    padding:7px 4px;
+    font-size:11px;
+    white-space:nowrap;
+  }
+  .nbx-pdf-page-label{
+    min-width:0;
+    align-self:center;
+    font-size:12px;
+  }
+  .nbx-pdf-zoom-label{
+    min-width:0;
+    align-self:center;
+    font-size:11px;
+  }
+  .nbx-pdf-canvas-wrap{
+    padding:3px 1px 8px;
+  }
+}
+@media (max-height: 520px){
+  .nbx-file-preview-sheet{
+    height:96vh;
+    height:96dvh;
+    max-height:96vh;
+    max-height:96dvh;
+    min-height:0;
+    padding-top:10px;
+  }
+  .nbx-file-preview-sheet .nbx-preview-body{
+    min-height:120px;
+  }
+  .nbx-pdf-toolbar button{
+    min-height:32px;
+  }
+}
+</style>
 </body>
 </html>
