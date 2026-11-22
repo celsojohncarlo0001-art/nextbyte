@@ -95,11 +95,10 @@ The subject Tasks tab now uses a delegated click handler for its Add task contro
 This build also includes a fix for the `nbProfileName is not defined` error in Study Hub → Subject → Tasks. The enhanced task editor now uses a profile-name helper defined in its own JavaScript scope. No SQL or Supabase configuration change is required.
 
 
-## File preview and offline copies (November 21, 2026)
+## File preview and offline copies (November 20, 2026)
 
 - Study Hub Materials, syllabus files, and task attachments share one private-file preview pipeline. Legacy `openMaterial()` calls route to the in-app viewer; preview does not use the old direct signed-URL/download handler.
-- PDFs render with the pinned PDF.js engine into an HTML canvas. The viewer opens in Fit Width mode and provides Fit Page, zoom, page navigation, a zoom percentage, and mobile pinch-to-zoom. The preview sheet expands to use more of the available screen width and height, especially on phones. Portrait, landscape, and mixed-orientation pages are scaled using each page's own dimensions without stretching or cropping.
-- The renderer recalculates its scale when the preview area changes size or the device rotates, cancels obsolete render tasks, and caps canvas pixel density to reduce excessive memory use. Images, text/Markdown, CSV, audio, video, DOCX, and XLS/XLSX use format-specific previews. PPT/PPTX are preserved and show a compatibility message in this build.
+- PDFs render with PDF.js into an HTML canvas, with page navigation, zoom, and fit-to-width controls. Images, text/Markdown, CSV, audio, video, DOCX, and XLS/XLSX use format-specific previews. PPT/PPTX are preserved and show a compatibility message in this build.
 - **Open from Device** uses the browser file picker to read a file locally without uploading it. **Download & save offline** downloads the original filename and saves a separate account-tagged copy in this device's existing IndexedDB cache.
 - The pinned PDF.js main/worker assets and the DOCX/XLSX preview libraries load online on first use and are cached on that device. PDF offline-ready status is not shown until the PWA service worker controls the page and the PDF preparation pass completes. The compiled PDF.js distribution is not physically bundled under `vendor/pdfjs`; see that folder's README.
 - Offline copies are device-specific and account-scoped. Each device must download the file and prepare its preview engine independently. Browser storage quota and media codec support can affect offline preview or playback.

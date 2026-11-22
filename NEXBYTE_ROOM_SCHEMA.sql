@@ -13,8 +13,10 @@ create table if not exists public.study_rooms (
   emoji text not null default '📘',
   color text not null default '#2563EB',
   owner_id uuid not null references auth.users(id) on delete cascade,
-  invite_code text not null unique default upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
-  max_capacity integer not null default 8 check (max_capacity between 2 and 100),
+  room_type text not null default 'public' check (room_type in ('public', 'private')),
+  is_discoverable boolean not null default false,
+  invite_code text unique default upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
+  max_capacity integer not null default 8 check ((room_type = 'private' and max_capacity = 1) or (room_type = 'public' and max_capacity between 2 and 100)),
   created_at timestamptz not null default now()
 );
 
@@ -87,7 +89,7 @@ grant select, insert, update, delete on table public.study_rooms to authenticate
 grant select, insert, update, delete on table public.study_room_members to authenticated;
 grant select, insert, update, delete on table public.study_room_messages to authenticated;
 
--- Join by invite code. The room row is locked while checking capacity so two
+-- Join by invite code for public rooms only. The room row is locked while checking capacity so two
 -- simultaneous requests cannot both claim the final available seat.
 create or replace function public.join_study_room_by_code(p_invite_code text)
 returns uuid

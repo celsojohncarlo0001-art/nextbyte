@@ -188,24 +188,9 @@ Live Supabase Storage, real account policies, cross-device synchronization, and 
 - The ZIP's `vendor/pdfjs/` directory contains a README only, not bundled PDF.js code. The loader now deliberately obtains both PDF.js main and worker modules from the same pinned CDN release so a stale or mismatched vendor file cannot break rendering.
 - Static HTML/JavaScript/manifest/ZIP checks passed for this build. Live Supabase, Vercel, CDN, and Android runtime tests still require the user's deployed environment.
 
-
-## PDF preview readability and responsive viewer update — November 21, 2026
-
-- Expanded the file-preview sheet on desktop and mobile so the PDF viewer receives substantially more usable width and height.
-- Reworked the PDF preview content area as a flexible viewport so the page is no longer constrained by the previous fixed preview-body height.
-- Kept Fit Width as the default mode and added a dedicated Fit Page mode for displaying the complete page inside the available viewing area.
-- Added a visible zoom percentage, more touch-friendly toolbar controls, and mobile pinch-to-zoom while retaining one-finger page panning.
-- Recalculated Fit Width and Fit Page using each page's actual dimensions, supporting portrait, landscape, and mixed-orientation PDFs without stretching or cropping.
-- Improved render-task cancellation, stale-render protection, resize/orientation handling, high-DPI canvas sizing, and memory-aware pixel-ratio selection.
-- Preserved the shared Study Hub, Syllabus, and Tasks preview pipeline, existing private Storage access, download/offline-save behavior, and the PDF.js version pin.
-- Bumped the PWA app-shell cache namespace so deployed clients request the updated preview code and styles.
-
-
-## PDF landscape reading mode (2026-11-21)
-
-- Added a Landscape reading control to the shared PDF.js preview toolbar.
-- The control requests fullscreen and, where supported, locks device orientation to landscape.
-- Added a full-screen in-app fallback and an on-screen Auto-rotate hint for browsers that cannot lock orientation.
-- Optimized the toolbar and PDF canvas area for short landscape mobile viewports.
-- Preserved Fit Width, Fit Page, zoom, page navigation, pinch zoom, download, and offline preview behavior.
-- Bumped the service-worker app-shell cache version so installed PWAs can fetch the updated viewer.
+## Study Room Public / Private Access Upgrade
+- Added public room discovery and join workflow.
+- Added owner-only personal private rooms without invite codes or chat.
+- Added room visibility and owner metadata in the Study Room directory.
+- Added Supabase RLS migration and public-room join RPC.
+- Bumped the service-worker cache namespace to v19 for the updated app shell.

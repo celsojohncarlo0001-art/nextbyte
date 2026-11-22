@@ -15,7 +15,7 @@ WHAT WAS FIXED
 - The preview uses authenticated private Supabase Storage access and keeps the existing user-study-files bucket and existing paths.
 - Original filenames are preferred over UUID-like storage object names.
 - Download & Save Offline stores a separate IndexedDB Blob with filename, MIME type, file/path identifiers, and account ownership. Open from Device previews files selected through the device file picker without uploading them.
-- Service worker cache version is v18. It checks the network for a fresh app shell and removes older NEXTBYTE app-shell caches while leaving IndexedDB user files alone.
+- Service worker cache version is v19 for the updated Study Room application shell. It checks the network for a fresh app shell and removes older NEXTBYTE app-shell caches while leaving IndexedDB user files alone.
 - A one-time reload on service-worker controller change helps avoid showing an old preview panel after deployment.
 
 PDF.JS / VENDOR FOLDER
@@ -34,3 +34,11 @@ OFFLINE PREVIEW
 
 VALIDATION LIMITS
 Static code checks are included in TESTING_REPORT.md. Live Supabase retrieval, actual PDF rendering on an Android phone, offline use after deployment, and Vercel deployment have not been tested from this local environment.
+
+NEXTBYTE STUDY ROOM PUBLIC / PRIVATE VISIBILITY UPGRADE
+1. Open Supabase Dashboard > SQL Editor.
+2. Run NEXTBYTE_STUDY_ROOM_VISIBILITY.sql AFTER NEXBYTE_ROOM_SCHEMA.sql and NEXBYTE_ENHANCEMENTS.sql have already been applied.
+3. Existing collaborative rooms remain invite-only and hidden from public discovery, while their memberships and invite codes continue to work. This avoids unexpectedly exposing old room metadata.
+4. New Public Rooms appear in the signed-in public directory and can be joined there or with a public room invite code.
+5. New Private Rooms have no invite code, a capacity of one, owner-only database access, and no chat/messaging interface.
+6. Upload the updated index.html and SQL file to the GitHub repository. No service-role key is required or added to the frontend.
