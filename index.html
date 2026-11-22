@@ -8209,5 +8209,394 @@ async function deleteRoomAny(id){
 })();
 
 </script>
+<script>
+/* NEXTBYTE room restoration + secure link preview integration v1.0
+   Uses the existing hash router, Supabase room membership, message table and chat renderer. */
+(function () {
+  'use strict';
+  if (window.__NB_ROOM_RESTORE_PREVIEW_V1__) return;
+  window.__NB_ROOM_RESTORE_PREVIEW_V1__ = true;
+
+  var restoreStates = Object.create(null);
+  var restoreJobs = Object.create(null);
+  var lastResumeAt = 0;
+  var previewCache = new Map();
+  var pendingShareKey = 'nb_pending_room_share_v1';
+  var savedScrollKey = 'nb_room_scroll_v1';
+  var priorRoomRenderer = window.vRoom || vRoom;
+  var priorMessageRenderer = window.roomMessageHtml || roomMessageHtml;
+  var priorAfterRender = window.afterRender || afterRender;
+  var priorRender = window.render || render;
+
+  function currentRoute() { return typeof resolve === 'function' ? resolve() : { view: '', id: null }; }
+  function safeUrl(value) {
+    try {
+      var u = new URL(String(value || '').trim());
+      if ((u.protocol !== 'https:' && u.protocol !== 'http:') || u.username || u.password) return null;
+      return u;
+    } catch (_) { return null; }
+  }
+  function isCloudRoomId(value) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '')); }
+  function roomById(id) { return (S.rooms || []).filter(function (r) { return String(r.id) === String(id); })[0] || null; }
+  function escapeHtml(value) { return typeof esc === 'function' ? esc(value == null ? '' : String(value)) : String(value || ''); }
+  function youtubeId(url) {
+    var u = safeUrl(url); if (!u) return null;
+    var host = u.hostname.toLowerCase().replace(/^www\./, '');
+    var id = null;
+    if (host === 'youtu.be') id = u.pathname.split('/').filter(Boolean)[0] || null;
+    else if (['youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtube-nocookie.com'].indexOf(host) >= 0) {
+      id = u.searchParams.get('v');
+      if (!id) id = (u.pathname.match(/^\/(?:shorts|embed|live)\/([A-Za-z0-9_-]{6,20})/) || [])[1] || null;
+    }
+    return id && /^[A-Za-z0-9_-]{6,20}$/.test(id) ? id : null;
+  }
+  function fileDetails(url, suppliedName) {
+    var u = safeUrl(url); if (!u) return { name: suppliedName || 'Shared file', ext: '', mime: '' };
+    var leaf = decodeURIComponent((u.pathname.split('/').pop() || '').split('?')[0]);
+    var name = suppliedName || leaf || 'Shared file';
+    var ext = (String(name).match(/\.([a-z0-9]{1,8})$/i) || String(leaf).match(/\.([a-z0-9]{1,8})$/i) || [])[1] || '';
+    ext = ext.toLowerCase();
+    var mimeMap = { pdf:'application/pdf', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', gif:'image/gif', mp4:'video/mp4', mp3:'audio/mpeg', wav:'audio/wav', doc:'application/msword', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ppt:'application/vnd.ms-powerpoint', pptx:'application/vnd.openxmlformats-officedocument.presentationml.presentation', xls:'application/vnd.ms-excel', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', txt:'text/plain', md:'text/markdown', csv:'text/csv' };
+    return { name: name, ext: ext, mime: mimeMap[ext] || '' };
+  }
+  function previewFallback(url, kind, name) {
+    var u = safeUrl(url); var videoId = youtubeId(url); var details = fileDetails(url, name);
+    return {
+      title: kind === 'file' ? details.name : (videoId ? 'YouTube video' : (u ? u.hostname : 'Shared link')),
+      description: kind === 'file' ? (details.ext ? details.ext.toUpperCase() + ' file' : 'External file link') : (videoId ? 'YouTube video · Open to watch' : 'Open this resource to view its content.'),
+      image: videoId ? 'https://i.ytimg.com/vi/' + videoId + '/hqdefault.jpg' : null,
+      siteName: videoId ? 'YouTube' : (u ? u.hostname : ''),
+      domain: u ? u.hostname : '', type: videoId ? 'youtube' : (kind === 'file' ? 'file' : 'website'), videoId: videoId,
+      fileName: details.name, fileExt: details.ext, fileType: details.mime
+    };
+  }
+  async function getPreview(url, kind, name) {
+    var parsed = safeUrl(url); if (!parsed) return previewFallback('', kind, name);
+    var key = parsed.href;
+    if (previewCache.has(key)) return previewCache.get(key);
+    var job = (async function () {
+      var fallback = previewFallback(key, kind, name);
+      try {
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeout = controller ? setTimeout(function () { controller.abort(); }, 6000) : null;
+        try {
+          var response = await fetch('/api/link-preview?url=' + encodeURIComponent(key), { method: 'GET', credentials: 'same-origin', headers: { 'Accept': 'application/json' }, signal: controller ? controller.signal : undefined });
+          if (response.ok) {
+            var data = await response.json();
+            var image = safeUrl(data.image || '');
+            return Object.assign({}, fallback, data, { image: image ? image.href : fallback.image });
+          }
+        } finally { if (timeout) clearTimeout(timeout); }
+      } catch (error) { console.info('NEXTBYTE link metadata is unavailable; using a safe fallback card.', error && error.message); }
+      return fallback;
+    })();
+    previewCache.set(key, job);
+    var result = await job; previewCache.set(key, Promise.resolve(result)); return result;
+  }
+  function titleForMessage(message) {
+    var p = message.preview || previewFallback(message.url, message.kind, message.fileName);
+    return message.kind === 'file' ? (message.fileName || p.fileName || message.title || 'Shared file') : ((message.preview && p.title) || message.title || message.text || p.title || p.domain || 'Shared link');
+  }
+
+  /* Build safe link/file preview cards. All remote metadata is escaped and images
+     are accepted only as validated HTTP(S) URLs. */
+  window.roomMessageHtml = function (message) {
+    if (!message || (message.kind !== 'link' && message.kind !== 'file')) return priorMessageRenderer(message);
+    var url = safeUrl(message.url || '');
+    if (!url) return '<article class="nb-chat-link-card"><p class="txs muted">This shared link is invalid or uses an unsupported address.</p></article>';
+    var preview = message.preview || previewFallback(url.href, message.kind, message.fileName);
+    var videoId = preview.videoId || youtubeId(url.href);
+    var isFile = message.kind === 'file';
+    var details = fileDetails(url.href, message.fileName || preview.fileName);
+    var title = titleForMessage(message);
+    var domain = preview.domain || url.hostname;
+    var description = preview.description || (isFile ? (details.ext ? details.ext.toUpperCase() + ' file' : 'External file link') : 'Open this resource to view its content.');
+    var image = safeUrl(preview.image || (videoId ? 'https://i.ytimg.com/vi/' + videoId + '/hqdefault.jpg' : ''));
+    var typeLabel = isFile ? (details.ext ? details.ext.toUpperCase() + ' FILE' : 'EXTERNAL FILE LINK') : (videoId ? 'YOUTUBE VIDEO' : 'WEBSITE / RESOURCE');
+    var imageHtml = image ? '<img class="nb-link-preview-image" data-nb-preview-image src="' + escapeHtml(image.href) + '" alt="' + escapeHtml(title + ' preview') + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.hidden=true" />' : '<div class="nb-link-preview-fallback">' + (videoId ? '▶' : (isFile ? '📄' : '🔗')) + '</div>';
+    var buttonLabel = videoId ? 'Open video' : (isFile ? 'Open file' : 'Open link');
+    return '<article class="nb-chat-link-card nb-chat-rich-preview" data-nb-preview-url="' + escapeHtml(url.href) + '" data-nb-preview-kind="' + (isFile ? 'file' : 'link') + '"' + (message.preview ? ' data-nb-preview-hydrated="1"' : '') + '>' +
+      imageHtml + '<div class="nb-link-preview-copy"><p class="nb-link-preview-type" data-nb-preview-type>' + escapeHtml(typeLabel) + '</p>' +
+      '<p class="nb-link-preview-title" data-nb-preview-title>' + escapeHtml(title) + '</p>' +
+      '<p class="nb-link-preview-description" data-nb-preview-description>' + escapeHtml(description) + '</p>' +
+      (isFile ? '<p class="nb-link-preview-domain" data-nb-preview-domain>' + escapeHtml((details.ext ? details.ext.toUpperCase() + ' · ' : '') + (details.mime || 'External file') + (message.fileSize ? ' · ' + fmtSize(message.fileSize) : '')) + '</p>' : '<p class="nb-link-preview-domain" data-nb-preview-domain>' + escapeHtml(preview.siteName || domain) + ' · ' + escapeHtml(domain) + '</p>') +
+      '<a class="btn btn-secondary btn-sm nb-link-preview-open" href="' + escapeHtml(url.href) + '" target="_blank" rel="noopener noreferrer">' + buttonLabel + '</a>' +
+      (isFile ? '<a class="btn btn-primary btn-sm nb-link-preview-open" href="' + escapeHtml(url.href) + '" target="_blank" rel="noopener noreferrer">Download / open</a>' : '') +
+      '<p class="nb-link-preview-url" title="' + escapeHtml(url.href) + '">' + escapeHtml(url.hostname + url.pathname) + '</p></div></article>';
+  };
+  try { roomMessageHtml = window.roomMessageHtml; } catch (_) {}
+
+  function hydrateLinkCards(root) {
+    var host = root || document;
+    var cards = host.querySelectorAll ? host.querySelectorAll('.nb-chat-rich-preview[data-nb-preview-url]') : [];
+    Array.prototype.forEach.call(cards, function (card) {
+      if (card.dataset.nbPreviewHydrated === '1' || card.dataset.nbPreviewLoading === '1') return;
+      card.dataset.nbPreviewLoading = '1';
+      var url = card.getAttribute('data-nb-preview-url'); var kind = card.getAttribute('data-nb-preview-kind');
+      getPreview(url, kind, null).then(function (preview) {
+        if (!card.isConnected) return;
+        var title = card.querySelector('[data-nb-preview-title]');
+        var description = card.querySelector('[data-nb-preview-description]');
+        var domain = card.querySelector('[data-nb-preview-domain]');
+        var type = card.querySelector('[data-nb-preview-type]');
+        if (title && (!title.textContent || title.textContent === new URL(url).hostname || title.textContent === 'YouTube video')) title.textContent = preview.title || title.textContent;
+        if (description && preview.description) description.textContent = preview.description;
+        if (domain && kind !== 'file') domain.textContent = (preview.siteName || preview.domain || new URL(url).hostname) + ' · ' + (preview.domain || new URL(url).hostname);
+        if (type && preview.type === 'youtube') type.textContent = 'YOUTUBE VIDEO';
+        var imageUrl = safeUrl(preview.image || '');
+        if (imageUrl && !card.querySelector('[data-nb-preview-image]')) {
+          var image = document.createElement('img'); image.className = 'nb-link-preview-image'; image.loading = 'lazy'; image.referrerPolicy = 'no-referrer'; image.alt = (preview.title || 'Shared link') + ' preview'; image.src = imageUrl.href;
+          image.onerror = function () { image.hidden = true; };
+          var fallback = card.querySelector('.nb-link-preview-fallback'); if (fallback) fallback.replaceWith(image); else card.insertBefore(image, card.firstChild);
+        }
+        card.dataset.nbPreviewHydrated = '1';
+      }).catch(function () { card.dataset.nbPreviewHydrated = '1'; }).finally(function () { card.dataset.nbPreviewLoading = '0'; });
+    });
+  }
+  var previewObserver = null;
+  if (typeof MutationObserver !== 'undefined') {
+    previewObserver = new MutationObserver(function (records) {
+      records.forEach(function (record) { Array.prototype.forEach.call(record.addedNodes || [], function (node) { if (node.nodeType === 1) hydrateLinkCards(node); }); });
+    });
+    previewObserver.observe(document.getElementById('app') || document.body, { childList: true, subtree: true });
+  }
+
+  /* Modern share form stores preview metadata with the existing message record. */
+  function launchShare(roomId, mode, initialUrl, initialTitle) {
+    var room = roomById(roomId);
+    if (!room) { toast('The selected room is not ready. Reopen the room and try again.'); return; }
+    if (room.isShared && room.roomType !== 'public') { toast('Link sharing is available only in Public Study Rooms.'); return; }
+    var isFile = mode === 'file';
+    var html = '<div class="f jb aic mb3"><h3 class="txl semi">' + (isFile ? 'Share a file link' : 'Share a link') + '</h3><button type="button" class="iconbtn" data-nb-close>' + ic('x', 18) + '</button></div>' +
+      '<form id="nbPreviewShareForm" class="fc g3"><label class="field-label" for="nbPreviewShareUrl">' + (isFile ? 'Direct file URL' : 'Website, YouTube, or learning-resource URL') + '</label>' +
+      '<input id="nbPreviewShareUrl" class="input" type="url" inputmode="url" placeholder="https://example.com/resource" value="' + escapeHtml(initialUrl || '') + '" required />' +
+      '<label class="field-label" for="nbPreviewShareTitle">' + (isFile ? 'File name (optional)' : 'Title override (optional)') + '</label><input id="nbPreviewShareTitle" class="input" maxlength="160" placeholder="Leave blank to identify automatically" value="' + escapeHtml(initialTitle || '') + '" />' +
+      '<p class="txs muted">' + (isFile ? 'Share a direct HTTP/HTTPS file URL. For private files uploaded to NEXTBYTE, use the Files tab so room-member permissions remain enforced.' : 'NEXTBYTE identifies YouTube videos and supported website metadata when available. The original link remains available if a preview cannot be retrieved.') + '</p>' +
+      '<div id="nbPreviewShareStatus" class="txs muted" aria-live="polite"></div><p id="nbPreviewShareError" class="txs" role="alert" style="color:var(--danger)"></p>' +
+      '<div class="f g2"><button type="button" class="btn btn-secondary grow" data-nb-close>Cancel</button><button type="submit" id="nbPreviewShareButton" class="btn btn-primary grow">Share</button></div></form>';
+    var el = sheet(html); el.querySelectorAll('[data-nb-close]').forEach(function (button) { button.onclick = closeTop; });
+    var input = el.querySelector('#nbPreviewShareUrl'); if (input && !initialUrl) setTimeout(function () { input.focus(); }, 50);
+    el.querySelector('#nbPreviewShareForm').onsubmit = async function (event) {
+      event.preventDefault();
+      var parsed = safeUrl(input.value); var error = el.querySelector('#nbPreviewShareError'); var status = el.querySelector('#nbPreviewShareStatus');
+      if (!parsed) { error.textContent = 'Enter a valid HTTP or HTTPS URL. Unsafe URL schemes are not supported.'; input.focus(); return; }
+      var titleInput = el.querySelector('#nbPreviewShareTitle'); var titleOverride = (titleInput.value || '').trim();
+      var button = el.querySelector('#nbPreviewShareButton'); button.disabled = true; button.textContent = 'Preparing preview…'; error.textContent = '';
+      try {
+        status.textContent = 'Checking available link information…';
+        var preview = await getPreview(parsed.href, mode, titleOverride || null);
+        if (titleOverride) preview.title = titleOverride;
+        var fileInfo = isFile ? fileDetails(parsed.href, titleOverride || preview.fileName) : null;
+        var payload = isFile
+          ? { url: parsed.href, fileName: fileInfo.name, fileType: fileInfo.mime || preview.fileType || '', fileExt: fileInfo.ext, title: titleOverride || fileInfo.name, text: 'Shared external file link', preview: preview }
+          : { url: parsed.href, title: titleOverride || preview.title || parsed.hostname, text: titleOverride || preview.title || parsed.hostname, preview: preview };
+        if (room.isShared) {
+          var user = await nbRequireSupabaseUser();
+          var membership = await dbClient.from('study_room_members').select('room_id').eq('room_id', room.id).eq('user_id', user.id).maybeSingle();
+          if (membership.error) throw membership.error;
+          if (!membership.data) throw new Error('Your account is no longer a member of this Public Study Room.');
+          var inserted = await dbClient.from('study_room_messages').insert({ room_id: room.id, user_id: user.id, body: nbSharedPayload(isFile ? 'file' : 'link', Object.assign({ id: uid() }, payload)) }).select('id').single();
+          if (inserted.error) throw inserted.error;
+          await window.nbLoadMessages(room, true);
+        } else {
+          await (window.pushRoomMessage || pushRoomMessage)(room.id, Object.assign({ kind: isFile ? 'file' : 'link' }, payload));
+        }
+        closeTop(); render(); var scroll = document.getElementById('scrollArea'); if (scroll) scroll.scrollTop = scroll.scrollHeight;
+        toast(isFile ? 'File link shared with the room.' : 'Link shared with the room.');
+      } catch (shareError) { console.error('Link sharing failed:', shareError); button.disabled = false; button.textContent = 'Share'; status.textContent = ''; error.textContent = nbErr(shareError, 'Could not share this link.'); }
+    };
+  }
+  window.shareRoomLink = function (roomId) { launchShare(roomId, 'link'); };
+  window.shareRoomFileLink = function (roomId) { launchShare(roomId, 'file'); };
+  try { shareRoomLink = window.shareRoomLink; shareRoomFileLink = window.shareRoomFileLink; } catch (_) {}
+
+  /* Room restore: a transient empty S.rooms list is a loading state, not proof
+     that a UUID-backed Supabase room was deleted. Verify the existing membership
+     and room row before deciding whether it is unavailable or genuinely missing. */
+  function roomStateMessage(id) {
+    var state = restoreStates[String(id)];
+    if (!state || state.status === 'loading') return '<div class="main nb-room-restore-state"><div class="pad pt center"><div class="loader" aria-hidden="true"></div><p class="txm semi mt3">Restoring your study room…</p><p class="txs muted mt1">Verifying your session and room access.</p></div></div>';
+    if (state.status === 'unauthorized') return '<div class="main nb-room-restore-state"><div class="pad pt center"><p class="txm semi">You no longer have access to this room.</p><p class="txs muted mt2">Join the Public Study Room again, or ask the room owner for access.</p><button class="mt3 med" style="color:#2563EB" onclick="go(\'/rooms\')">Back to rooms</button></div></div>';
+    if (state.status === 'not_found') return '<div class="main nb-room-restore-state"><div class="pad pt center"><p class="txm semi">Room not found.</p><p class="txs muted mt2">Supabase confirmed that this room record is unavailable.</p><button class="mt3 med" style="color:#2563EB" onclick="go(\'/rooms\')">Back to rooms</button></div></div>';
+    return '<div class="main nb-room-restore-state"><div class="pad pt center"><p class="txm semi">Could not restore this room right now.</p><p class="txs muted mt2">Check your connection and retry. Your room link has been kept.</p><button class="btn btn-primary mt3" onclick="nbRestoreCurrentRoom(\'retry\')">Retry</button><button class="mt3 med" style="color:#2563EB" onclick="go(\'/rooms\')">Back to rooms</button></div></div>';
+  }
+  var oldVRoom = window.vRoom || vRoom;
+  window.vRoom = function (id) {
+    var cached = roomById(id);
+    if (cached) return oldVRoom(id);
+    if (isCloudRoomId(id)) {
+      if (!restoreStates[String(id)]) scheduleRestore(id, 'render');
+      return roomStateMessage(id);
+    }
+    return oldVRoom(id);
+  };
+  try { vRoom = window.vRoom; } catch (_) {}
+
+  async function restoreRoom(id, reason) {
+    id = String(id || '');
+    if (!isCloudRoomId(id) || !dbClient) return;
+    var route = currentRoute(); if (route.view !== 'room' || String(route.id) !== id) return;
+    var cached = roomById(id);
+    restoreStates[id] = { status: 'loading', reason: reason || 'resume' };
+    if (!cached) { try { priorRender(); } catch (_) {} }
+    try {
+      var user = await nbRequireSupabaseUser();
+      var membership = await dbClient.from('study_room_members').select('room_id,user_id,role,joined_at')
+        .eq('room_id', id).eq('user_id', user.id).maybeSingle();
+      if (membership.error) throw membership.error;
+      if (!membership.data) { S.rooms = (S.rooms || []).filter(function (item) { return String(item.id) !== id; }); restoreStates[id] = { status: 'unauthorized' }; if (currentRoute().view === 'room' && String(currentRoute().id) === id) priorRender(); return; }
+      var roomResult = await dbClient.from('study_rooms')
+        .select('id,name,subject_tag,description,emoji,color,owner_id,room_type,is_discoverable,invite_code,max_capacity,created_at')
+        .eq('id', id).maybeSingle();
+      if (roomResult.error) throw roomResult.error;
+      if (!roomResult.data) { S.rooms = (S.rooms || []).filter(function (item) { return String(item.id) !== id; }); restoreStates[id] = { status: 'not_found' }; if (currentRoute().view === 'room' && String(currentRoute().id) === id) priorRender(); return; }
+      if (roomResult.data.room_type === 'private' && String(roomResult.data.owner_id) !== String(user.id)) {
+        restoreStates[id] = { status: 'unauthorized' }; if (currentRoute().view === 'room' && String(currentRoute().id) === id) priorRender(); return;
+      }
+      var rosterResult = await dbClient.from('study_room_members').select('room_id,user_id,role').eq('room_id', id);
+      if (rosterResult.error) throw rosterResult.error;
+      var verifiedRoster = rosterResult.data || [];
+      if (!verifiedRoster.some(function (member) { return String(member.user_id) === String(user.id); })) verifiedRoster.push(membership.data);
+      var room = window.nbRoomFromRow(roomResult.data, verifiedRoster);
+      room.isJoined = true;
+      if (cached && Array.isArray(cached.messages)) room.messages = cached.messages;
+      var rooms = S.rooms || []; S.rooms = rooms.filter(function (item) { return String(item.id) !== id; }); S.rooms.push(room);
+      if (currentRoute().view !== 'room' || String(currentRoute().id) !== id) return;
+      await window.nbLoadMessages(room, true);
+      if (typeof window.nbSubscribeRoom === 'function' && room.roomType === 'public') window.nbSubscribeRoom(room);
+      restoreStates[id] = { status: 'ready', lastVerified: Date.now() };
+      priorRender();
+      var saved = null; try { saved = sessionStorage.getItem(savedScrollKey + ':' + id); } catch (_) {}
+      if (saved != null) requestAnimationFrame(function () { var node = document.getElementById('scrollArea'); var value = Number(saved); if (node && Number.isFinite(value)) node.scrollTop = value; });
+    } catch (error) {
+      console.error('NEXTBYTE room restoration failed:', error);
+      restoreStates[id] = { status: 'unavailable', message: error && error.message || 'Room refresh failed.' };
+      if (currentRoute().view === 'room' && String(currentRoute().id) === id) priorRender();
+    }
+  }
+  function scheduleRestore(id, reason) {
+    id = String(id || ''); if (!isCloudRoomId(id) || restoreJobs[id]) return restoreJobs[id] || Promise.resolve();
+    restoreStates[id] = restoreStates[id] || { status: 'loading' };
+    var job = restoreRoom(id, reason).finally(function () { delete restoreJobs[id]; });
+    restoreJobs[id] = job; return job;
+  }
+  window.nbRestoreCurrentRoom = function (reason) {
+    var route = currentRoute(); if (route.view !== 'room' || !isCloudRoomId(route.id)) return Promise.resolve();
+    var id = String(route.id);
+    if (restoreJobs[id]) return restoreJobs[id];
+    if (roomById(id)) {
+      if (reason === 'resume') return scheduleRestore(id, reason);
+      return Promise.resolve();
+    }
+    return scheduleRestore(id, reason || 'manual');
+  };
+  try { nbRestoreCurrentRoom = window.nbRestoreCurrentRoom; } catch (_) {}
+
+  /* Keep the router hash as the canonical room ID. Save only transient chat scroll
+     position in sessionStorage; never copy credentials or Supabase tokens there. */
+  function rememberRoomScroll() {
+    var route = currentRoute(); if (route.view !== 'room' || !route.id) return;
+    var sc = document.getElementById('scrollArea');
+    if (sc) { try { sessionStorage.setItem(savedScrollKey + ':' + route.id, String(sc.scrollTop)); } catch (_) {} }
+  }
+  window.addEventListener('pagehide', rememberRoomScroll);
+  window.addEventListener('beforeunload', rememberRoomScroll);
+  function resumeRoom(reason) {
+    var now = Date.now(); if (now - lastResumeAt < 1200) return; lastResumeAt = now;
+    var route = currentRoute(); if (route.view === 'room' && isCloudRoomId(route.id)) scheduleRestore(route.id, reason || 'resume');
+    if (typeof hydrateLinkCards === 'function') hydrateLinkCards(document);
+    processPendingShare();
+  }
+  window.addEventListener('pageshow', function () { resumeRoom('pageshow'); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) rememberRoomScroll(); else resumeRoom('visible'); });
+  window.addEventListener('focus', function () { resumeRoom('focus'); });
+  window.addEventListener('hashchange', function () { setTimeout(function () { var r = currentRoute(); if (r.view === 'room' && isCloudRoomId(r.id) && !roomById(r.id)) scheduleRestore(r.id, 'route'); processPendingShare(); }, 80); });
+
+  /* Render wrapper ensures resume logic and preview hydration run after every app
+     redraw without replacing the existing renderer or navigation architecture. */
+  window.render = function () {
+    var result = priorRender.apply(this, arguments);
+    var route = currentRoute();
+    if (route.view === 'room' && isCloudRoomId(route.id) && !roomById(route.id)) scheduleRestore(route.id, 'render');
+    setTimeout(function () { hydrateLinkCards(document); processPendingShare(); }, 0);
+    return result;
+  };
+  try { render = window.render; } catch (_) {}
+
+  /* Android Chrome PWA share target: Chrome passes title/text/url via the manifest.
+     Pending content is stored as a short-lived non-sensitive share payload only. */
+  function parseIncomingShare() {
+    try {
+      var query = new URLSearchParams(location.search || '');
+      if (query.get('share-target') !== '1') return;
+      var url = query.get('url') || '';
+      var text = query.get('text') || '';
+      var title = query.get('title') || '';
+      var candidate = safeUrl(url) ? url : '';
+      if (!candidate && text) {
+        var match = text.match(/https?:\/\/[^\s<>()]+/i); if (match && safeUrl(match[0])) candidate = match[0];
+      }
+      if (candidate) {
+        var payload = { url: safeUrl(candidate).href, title: title.slice(0, 160), text: text.slice(0, 500), receivedAt: Date.now() };
+        sessionStorage.setItem(pendingShareKey, JSON.stringify(payload));
+      } else {
+        toast('The shared item did not contain a valid HTTP or HTTPS link.');
+      }
+      history.replaceState(history.state, '', location.pathname + (location.hash || ''));
+    } catch (error) { console.warn('Could not read an incoming shared link:', error); }
+  }
+  var pendingShareOpen = false;
+  var pendingSharePickerShown = false;
+  var pendingShareNoRoomsNotice = false;
+  function processPendingShare() {
+    if (pendingShareOpen || pendingSharePickerShown || !S || !S.auth || !S.auth.isAuthenticated) return;
+    var pending; try { pending = JSON.parse(sessionStorage.getItem(pendingShareKey) || 'null'); } catch (_) { pending = null; }
+    if (!pending || !safeUrl(pending.url)) return;
+    pendingShareOpen = true;
+    (async function () {
+      try {
+        if (typeof window.nbLoadSharedRooms === 'function') await window.nbLoadSharedRooms(true);
+        if (currentRoute().view !== 'rooms') { go('/rooms'); await new Promise(function (resolve) { setTimeout(resolve, 150); }); }
+        var rooms = (S.rooms || []).filter(function (room) { return room.isShared && room.roomType === 'public' && room.isJoined; });
+        if (!rooms.length) { if (!pendingShareNoRoomsNotice) { toast('Link received. Join a Public Study Room first, then share it from the room chat.'); pendingShareNoRoomsNotice = true; } return; }
+        var html = '<div class="f jb aic mb3"><h3 class="txl semi">Choose a Public Study Room</h3><button class="iconbtn" data-pending-close>' + ic('x',18) + '</button></div><p class="txs muted mb2">NEXTBYTE received this link from Chrome. Choose where to share it.</p><div class="fc g2">' + rooms.map(function (room, index) { return '<button type="button" class="btn btn-secondary" data-pending-room="' + index + '" style="text-align:left;justify-content:flex-start">' + escapeHtml(room.emoji || '📘') + ' ' + escapeHtml(room.name) + '</button>'; }).join('') + '</div>';
+        var el = sheet(html); pendingSharePickerShown = true; el.querySelector('[data-pending-close]').onclick = function () { closeTop(); pendingSharePickerShown = false; try { sessionStorage.removeItem(pendingShareKey); } catch (_) {} }; var pickerBackdrop = el.querySelector('.ov-bg'); if (pickerBackdrop) pickerBackdrop.addEventListener('click', function () { pendingSharePickerShown = false; try { sessionStorage.removeItem(pendingShareKey); } catch (_) {} });
+        el.querySelectorAll('[data-pending-room]').forEach(function (button) {
+          button.onclick = function () { var room = rooms[Number(button.getAttribute('data-pending-room'))]; if (!room) return; closeTop(); pendingSharePickerShown = false; sessionStorage.removeItem(pendingShareKey); go('/room/' + room.id); setTimeout(function () { launchShare(room.id, 'link', pending.url, pending.title); }, 220); };
+        });
+        // Keep the chooser open only once; the pending data is cleared on choose/cancel.
+      } catch (error) { console.warn('Incoming link could not be routed to a room:', error); toast('The shared link was received, but NEXTBYTE could not load your rooms.'); }
+      finally { pendingShareOpen = false; }
+    })();
+  }
+  parseIncomingShare();
+
+  /* Styling for rich cards and explicit room restore states. */
+  var style = document.createElement('style'); style.id = 'nb-room-restore-preview-style';
+  style.textContent = `
+.nb-chat-rich-preview{display:flex;flex-direction:column;gap:0;max-width:min(100%,380px);padding:0;overflow:hidden}
+.nb-link-preview-image{width:100%;max-height:190px;min-height:120px;object-fit:cover;background:var(--secondary);display:block}
+.nb-link-preview-fallback{width:100%;height:104px;display:flex;align-items:center;justify-content:center;background:var(--primary-soft);font-size:34px;color:var(--primary-text)}
+.nb-link-preview-copy{padding:12px;min-width:0}
+.nb-link-preview-type{font-size:10px;letter-spacing:.06em;font-weight:700;color:var(--primary-text);margin-bottom:5px}
+.nb-link-preview-title{font-size:14px;font-weight:700;line-height:1.4;overflow-wrap:anywhere}
+.nb-link-preview-description{font-size:12px;color:var(--muted-fg);line-height:1.45;margin-top:5px;overflow-wrap:anywhere}
+.nb-link-preview-domain{font-size:11px;color:var(--muted-fg);margin-top:7px;overflow-wrap:anywhere}
+.nb-link-preview-open{display:inline-flex;margin-top:10px;margin-right:6px;align-items:center;justify-content:center;text-decoration:none}
+.nb-link-preview-url{font-size:10px;color:var(--muted-fg);margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.nb-room-restore-state{min-height:60vh;display:flex;align-items:flex-start;justify-content:center}
+.nb-room-restore-state .loader{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;margin:8px auto;animation:nbRoomSpin .8s linear infinite}
+@keyframes nbRoomSpin{to{transform:rotate(360deg)}}
+`;
+  if (!document.getElementById(style.id)) document.head.appendChild(style);
+
+  // Kick the restoration once auth bootstrap has had a chance to settle on cold PWA starts.
+  setTimeout(function () { resumeRoom('startup'); }, 250);
+  setTimeout(function () { resumeRoom('startup-retry'); }, 1400);
+  window.NEXBYTE_ROOM_RESTORATION_VERSION = '1.0-resume-auth-room-route';
+  window.NEXBYTE_LINK_PREVIEW_VERSION = '1.0-secure-metadata-preview';
+})();
+</script>
+
 </body>
 </html>

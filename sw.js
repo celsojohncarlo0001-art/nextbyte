@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v21-public-room-chat-repair-inapp-files';
+const CACHE_VERSION = 'nexbyte-pwa-v22-room-resume-link-previews';
 const PDFJS_ASSET_CACHE = 'nexbyte-pdfjs-assets-6-5-438';
 const PDFJS_ASSET_PREFIX = '/npm/pdfjs-dist@6.5.438/';
 const APP_SHELL = [
@@ -72,7 +72,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Never intercept Supabase API traffic or unrelated cross-origin requests.
-  if (requestUrl.origin !== self.location.origin || isSupabaseApiPath(requestUrl.pathname)) return;
+  if (requestUrl.origin !== self.location.origin || isSupabaseApiPath(requestUrl.pathname) || requestUrl.pathname.startsWith('/api/')) return;
 
   if (request.mode === 'navigate') {
     event.respondWith(
