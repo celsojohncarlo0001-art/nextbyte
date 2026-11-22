@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v24-landscape-file-preview';
+const CACHE_VERSION = 'nexbyte-pwa-v25-pdf-pinch-fitpage';
 const PDFJS_ASSET_CACHE = 'nexbyte-pdfjs-assets-6-5-438';
 const PDFJS_ASSET_PREFIX = '/npm/pdfjs-dist@6.5.438/';
 const APP_SHELL = [

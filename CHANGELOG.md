@@ -1,3 +1,12 @@
+
+## 2026-11-22 — PDF reader pinch zoom and fit-page repair
+
+- Repaired the shared PDF.js viewer sizing so Fit Page uses both the available reading width and height.
+- Added two-finger pinch-to-zoom, enlarged-page panning, Fit Page, Fit Width, and Reset controls.
+- Improved portrait/landscape flex sizing, orientation/viewport resize handling, render cancellation, canvas memory budgeting, and cleanup.
+- Bumped the PWA app-shell cache version to `nexbyte-pwa-v25-pdf-pinch-fitpage`.
+- Android physical-device and live Supabase PDF verification remain required.
+
 # NEXTBYTE Landscape File Preview Accessibility Enhancement — November 22, 2026
 
 ## Improvements applied
