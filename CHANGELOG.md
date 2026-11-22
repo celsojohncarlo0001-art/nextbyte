@@ -1,3 +1,31 @@
+# NEXTBYTE Study Hub File Preview Repair — November 22, 2026
+
+## Repairs applied
+
+- Fixed the shared preview-panel initialization error: `deviceButton` and `deviceInput` are now retrieved from the created preview panel before event handlers are registered. Previously, the undefined references threw a `ReferenceError` after the modal appeared, preventing the file loader from starting and leaving the preview at `Loading preview...`.
+- Added bounded waits for authentication, signed-URL creation, remote file retrieval, PDF.js asset retrieval, PDF document parsing, and page rendering so failures surface as actionable errors instead of an indefinite loading state.
+- Added a Retry preview action that reuses the current preview panel and secure file-loading path.
+- Bumped the service-worker app-shell cache namespace to `nexbyte-pwa-v23-study-file-preview-fix` to publish the repaired shell to installed PWA clients.
+- Added `TESTING_REPORT_STUDY_HUB_PREVIEW_FIX.md` with the root cause, changes, local checks, and live-test limitations.
+
+## Preserved
+
+- Existing NEXTBYTE theme, layout, branding, authentication, and PWA configuration.
+- Existing Supabase Storage bucket (`user-study-files`), signed-URL access flow, ownership checks, and private-file protections.
+- Existing shared preview handlers for Syllabus Materials, Syllabus attachments, and Tasks attachments.
+- Existing PDF.js renderer, supported file-type preview logic, download/offline logic, and current data model.
+- No Supabase SQL changes, storage-policy changes, file migrations, or deletion of user files were made.
+
+## Verification
+
+- All 9 inline JavaScript blocks passed Node.js syntax checks.
+- `sw.js` and `api/link-preview.js` passed Node.js syntax checks.
+- `manifest.webmanifest` parsed as valid JSON.
+- Static checks confirmed corrected preview control bindings and shared preview wiring for Syllabus Materials, Syllabus attachments, and Tasks.
+- Live Supabase retrieval and Android/PWA visual testing remain deployment-dependent; see the testing report.
+
+---
+
 # NEXTBYTE Repair Build — November 19, 2026
 
 ## Repairs applied

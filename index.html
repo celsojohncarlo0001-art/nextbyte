@@ -6226,6 +6226,12 @@ async function deleteRoomAny(id){
     );
     NBX_ACTIVE_PREVIEW_PANEL = panel;
     panel.__nbxPreviewObjectUrl = null;
+    // Resolve the controls from this panel before registering handlers.
+    // The previous build referenced deviceButton/deviceInput without declaring
+    // them, throwing a ReferenceError here and leaving the modal on its initial
+    // "Loading preview..." message before the file renderer could even start.
+    var deviceButton = panel.querySelector('[data-open-device]');
+    var deviceInput = panel.querySelector('[data-open-device-input]');
     function releasePreviewResources() {
       if (NBX_ACTIVE_PREVIEW_PANEL === panel) NBX_ACTIVE_PREVIEW_PANEL = null;
       if (panel.__nbxPdfCleanup) {
@@ -6239,6 +6245,11 @@ async function deleteRoomAny(id){
       if (panel.__nbxRemovalObserver) { panel.__nbxRemovalObserver.disconnect(); panel.__nbxRemovalObserver = null; }
     }
     panel.__nbxReleasePreviewResources = releasePreviewResources;
+    if (!deviceButton || !deviceInput) {
+      releasePreviewResources();
+      closeTop();
+      throw new Error('The file-preview controls could not be initialized. Please refresh NEXTBYTE and try again.');
+    }
     if (typeof MutationObserver === 'function') {
       panel.__nbxRemovalObserver = new MutationObserver(function () {
         if (!panel.isConnected) releasePreviewResources();
@@ -6256,10 +6267,39 @@ async function deleteRoomAny(id){
     });
     return panel;
   }
+  function nbxWithTimeout(promise, timeoutMs, message) {
+    var timer = null;
+    var timeout = new Promise(function (_, reject) {
+      timer = setTimeout(function () { reject(new Error(message)); }, timeoutMs);
+    });
+    return Promise.race([Promise.resolve(promise), timeout]).finally(function () {
+      if (timer) clearTimeout(timer);
+    });
+  }
+  async function nbxFetchWithTimeout(url, options, timeoutMs, message) {
+    var controller = (typeof AbortController === 'function') ? new AbortController() : null;
+    var timedOut = false;
+    var requestOptions = Object.assign({}, options || {});
+    if (controller && !requestOptions.signal) requestOptions.signal = controller.signal;
+    var timer = setTimeout(function () {
+      timedOut = true;
+      if (controller) { try { controller.abort(); } catch (_) {} }
+    }, timeoutMs);
+    try {
+      return await nbxWithTimeout(fetch(url, requestOptions), timeoutMs + 1000, message);
+    } catch (error) {
+      if (timedOut || (error && error.name === 'AbortError')) throw new Error(message);
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   async function nbxGetSignedUrl(path, downloadName) {
-    await nbxUser();
+    await nbxWithTimeout(nbxUser(), 20000, 'Your sign-in check timed out. Refresh NEXTBYTE and sign in again.');
+    if (!dbClient || !dbClient.storage) throw new Error('Cloud file storage is not available. Check your connection and sign-in.');
     var storage = dbClient.storage.from(NBX_BUCKET);
-    var result = downloadName ? await storage.createSignedUrl(path, 3600, {download:downloadName}) : await storage.createSignedUrl(path, 3600);
+    var signingRequest = downloadName ? storage.createSignedUrl(path, 3600, {download:downloadName}) : storage.createSignedUrl(path, 3600);
+    var result = await nbxWithTimeout(signingRequest, 20000, 'Secure file access timed out. Check your connection and retry.');
     if (result.error) throw result.error;
     var url = result.data && result.data.signedUrl;
     if (!url) throw new Error('Supabase did not return a signed file URL.');
@@ -6309,9 +6349,9 @@ async function deleteRoomAny(id){
     // Always retrieve the main module and worker from the same pinned CDN
     // release. Mixing a local vendor file with a CDN worker can cause a
     // PDF.js API/worker version mismatch that prevents rendering entirely.
-    var response = await fetch(url, { method:'GET', mode:'cors', credentials:'omit', cache:'force-cache' });
+    var response = await nbxFetchWithTimeout(url, { method:'GET', mode:'cors', credentials:'omit', cache:'force-cache' }, 30000, 'The PDF viewer could not be downloaded in time. Check your connection and retry.');
     if (!response.ok) throw new Error('Could not download the PDF viewer component (' + response.status + ').');
-    var blob = await response.blob();
+    var blob = await nbxWithTimeout(response.blob(), 30000, 'The PDF viewer download did not finish in time. Check your connection and retry.');
     var prefix = (await blob.slice(0,240).text()).trim().toLowerCase();
     if (!blob || blob.size < 10000 || prefix.indexOf('<!doctype html') === 0 || prefix.indexOf('<html') === 0) throw new Error('The PDF viewer component download was incomplete or returned an HTML error page.');
     if (typeof saveOfflineBlob === 'function') {
@@ -6375,7 +6415,13 @@ async function deleteRoomAny(id){
       useWasm: true,
       verbosity: 0
     });
-    var pdf = await loadingTask.promise;
+    var pdf;
+    try {
+      pdf = await nbxWithTimeout(loadingTask.promise, 60000, 'The PDF could not be opened within 60 seconds. Retry, or download the original file.');
+    } catch (pdfLoadError) {
+      try { await loadingTask.destroy(); } catch (_) {}
+      throw pdfLoadError;
+    }
     if (!document.body.contains(panel)) { try { await pdf.destroy(); } catch (_) {} return; }
 
     var viewer = document.createElement('div'); viewer.className = 'nbx-pdf-viewer';
@@ -6424,7 +6470,7 @@ async function deleteRoomAny(id){
       });
       state.renderTask = task;
       try {
-        await task.promise;
+        await nbxWithTimeout(task.promise, 45000, 'This PDF page took too long to render. Try a smaller zoom level or download the original.');
         if (!state.destroyed) loading.textContent = 'Page ' + state.page + ' of ' + pdf.numPages + ' · ' + Math.round(scale * 100) + '%';
       } catch (error) {
         if (error && (error.name === 'RenderingCancelledException' || /cancel/i.test(error.message || ''))) return;
@@ -6762,7 +6808,7 @@ async function deleteRoomAny(id){
     var offlineCopy = suppliedOfflineCopy || null;
     var previewBlob = suppliedBlob || null;
     if (!previewBlob && path) {
-      var currentUser = await nbxUser();
+      var currentUser = await nbxWithTimeout(nbxUser(), 20000, 'Your sign-in check timed out. Refresh NEXTBYTE and sign in again.');
       if (file && file.userId && String(file.userId) !== String(currentUser.id)) throw new Error('This file does not belong to the currently signed-in account.');
       if (typeof dbGet === 'function' && typeof offlineMaterialKey === 'function') {
         try { offlineCopy = await dbGet(offlineMaterialKey(path)); } catch (cacheError) { console.warn('Offline preview cache lookup failed:', cacheError); }
@@ -6774,9 +6820,9 @@ async function deleteRoomAny(id){
       if (!previewBlob) {
         if (!navigator.onLine) throw new Error('This file is not saved for offline use on this device. Reconnect and select Download & save offline first.');
         var previewSignedUrl = await nbxGetSignedUrl(path, null);
-        var previewResponse = await fetch(previewSignedUrl, {method:'GET',cache:'no-store',credentials:'omit'});
+        var previewResponse = await nbxFetchWithTimeout(previewSignedUrl, {method:'GET',cache:'no-store',credentials:'omit'}, 35000, 'The uploaded file did not finish downloading. Check your connection and retry.');
         if (!previewResponse.ok) throw new Error('The file preview could not be loaded (' + previewResponse.status + ').');
-        previewBlob = await previewResponse.blob();
+        previewBlob = await nbxWithTimeout(previewResponse.blob(), 35000, 'The uploaded file download did not finish in time. Check your connection and retry.');
       }
     }
     if (!previewBlob || !previewBlob.size) throw new Error('The selected file is empty or could not be read.');
@@ -6912,7 +6958,16 @@ async function deleteRoomAny(id){
         var message = document.createElement('div'); message.className = 'card padc';
         var heading = document.createElement('p'); heading.className = 'txm semi'; heading.textContent = 'Could not render this file';
         var detail = document.createElement('p'); detail.className = 'txs muted mt1'; detail.textContent = (error && error.message) || 'Check your sign-in and Storage permissions, then try again.';
-        message.append(heading, detail); body.replaceChildren(message);
+        var retry = document.createElement('button'); retry.type = 'button'; retry.className = 'btn btn-primary btn-sm mt3'; retry.textContent = 'Retry preview';
+        retry.onclick = async function () {
+          retry.disabled = true; retry.textContent = 'Retrying…';
+          try { await nbxRenderBlobPreview(file, path, section, panel, null, null); }
+          catch (retryError) {
+            detail.textContent = (retryError && retryError.message) || 'The file could not be loaded. Check your connection and try again.';
+            retry.disabled = false; retry.textContent = 'Retry preview';
+          }
+        };
+        message.append(heading, detail, retry); body.replaceChildren(message);
       }
     }
   }
