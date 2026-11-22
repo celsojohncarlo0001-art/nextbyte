@@ -2102,10 +2102,10 @@ function roomMessageHtml(m){
   if(m.kind==='poll'){var opts=m.options||[];return '<div class="poll-card"><p class="semi">📊 '+esc(m.question||'Poll')+'</p>'+opts.map(function(o,i){var n=(m.votes&&m.votes[i])||0;return '<button class="rowitem mt1" onclick="voteRoomPoll(\''+m.id+'\','+i+')"><span class="grow">'+esc(o)+'</span><span class="badge">'+n+'</span></button>';}).join('')+'</div>';}
   return esc(m.text||'');
 }
-function shareRoomLink(id){var url=prompt('Paste the link to share:');if(!url)return;try{var u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw 0;}catch(e){toast('Please enter a valid http/https link.');return;}pushRoomMessage(id,{kind:'link',text:'Shared link',url:url});}
-function shareRoomFileLink(id){var url=prompt('Paste a share link for your file:');if(!url)return;try{var u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw 0;}catch(e){toast('Please enter a valid http/https file link.');return;}pushRoomMessage(id,{kind:'file',text:'📎 Shared file',url:url});}
+function shareRoomLink(id){if(window.shareRoomLink&&window.shareRoomLink!==shareRoomLink)return window.shareRoomLink(id);toast('The room sharing form is not ready.');}
+function shareRoomFileLink(id){if(window.shareRoomFileLink&&window.shareRoomFileLink!==shareRoomFileLink)return window.shareRoomFileLink(id);toast('The file-link sharing form is not ready.');}
 function pickRoomSticker(id){var choices=['😀','😂','🥹','🔥','💯','🎉','💪','📚','❤️','👏','👍','🤔','✨','😭','☕','🧠'];var choice=prompt('Choose a sticker by number:\n'+choices.map(function(x,i){return (i+1)+'. '+x;}).join('   '));var n=parseInt(choice,10);if(n>0&&n<=choices.length)pushRoomMessage(id,{kind:'sticker',text:choices[n-1]});}
-function createRoomPoll(id){var question=prompt('Poll question:');if(!question)return;var raw=prompt('Enter 2–6 options separated by commas:');if(!raw)return;var options=raw.split(',').map(function(x){return x.trim();}).filter(Boolean).slice(0,6);if(options.length<2){toast('A poll needs at least two options.');return;}pushRoomMessage(id,{kind:'poll',question:question,options:options,votes:options.map(function(){return 0;})});}
+function createRoomPoll(id){if(window.createRoomPoll&&window.createRoomPoll!==createRoomPoll)return window.createRoomPoll(id);toast('The poll form is not ready.');}
 function voteRoomPoll(messageId,index){var R=resolve();if(R.view!=='room'||!R.id)return;var r=S.rooms.filter(function(x){return x.id===R.id;})[0];if(!r)return;var m=r.messages.filter(function(x){return x.id===messageId;})[0];if(!m||m.kind!=='poll'||index<0||index>=m.options.length)return;m.votes=m.votes||m.options.map(function(){return 0;});m.votes[index]=(m.votes[index]||0)+1;save();render();}
 async function pushRoomMessage(id,extra){
  var r=S.rooms.filter(function(x){return x.id===id;})[0];if(!r)return;
@@ -2726,7 +2726,7 @@ async function deleteRoomAny(id){
     return !!(room && room.ownerId && nbCurrentUserId() && String(room.ownerId) === String(nbCurrentUserId()));
   }
   function canDelete(room, item) {
-    return !!(item && (item.me || isRoomAdmin(room)));
+    return !!(item && item.me);
   }
   function showErr(label, error) {
     console.error(label, error);
@@ -3852,7 +3852,7 @@ async function deleteRoomAny(id){
       var responses = (room.messages || []).filter(function (item) { return item.kind === 'shared-task-response' && String(item.taskId) === String(task.id); });
       var mine = responses.filter(function (item) { return String(item.userId) === String(nbUserId()); })[0];
       var people = responses.map(function (item) { return '<div class="rowitem"><span class="grow txs">' + esc(item.from || 'Member') + '</span><span class="badge">' + esc(item.status || 'todo') + '</span>' + (item.response ? '<p class="txs muted" style="white-space:pre-wrap;max-width:100%">' + esc(item.response) + '</p>' : '') + '</div>'; }).join('');
-      return '<article class="card padc"><div class="f jb aic g2"><div class="grow minw"><p class="txm semi">' + esc(task.title || 'Room task') + '</p><p class="txs muted mt1">Created by ' + esc(task.from || 'Member') + (task.due ? ' · Due ' + esc(task.due) : '') + '</p></div>' + (typeof nbDeleteSharedRecord === 'function' && (task.me || room.ownerId === nbUserId()) ? '<button class="iconbtn" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + task.dbId + '\')">' + ic('trash',15) + '</button>' : '') + '</div>' + (task.details ? '<p class="txm mt2" style="white-space:pre-wrap">' + esc(task.details) + '</p>' : '') + '<div class="card padc mt3"><p class="txs semi">Your individual response</p><textarea id="nbTaskResponse_' + task.id + '" class="input mt2" rows="3" placeholder="Describe your work or progress">' + esc(mine ? mine.response || '' : '') + '</textarea><div class="f g2 aic mt2"><select id="nbTaskStatus_' + task.id + '" class="input"><option value="todo" ' + (!mine || mine.status === 'todo' ? 'selected' : '') + '>To do</option><option value="progress" ' + (mine && mine.status === 'progress' ? 'selected' : '') + '>In progress</option><option value="done" ' + (mine && mine.status === 'done' ? 'selected' : '') + '>Completed</option></select><button class="btn btn-primary" onclick="nbSubmitRoomTaskResponse(\'' + room.id + '\',\'' + task.id + '\')">Save my progress</button></div></div><p class="txs muted mt2">' + responses.length + ' member response(s) / ' + (room.members || []).length + ' members</p>' + (people ? '<details class="mt2"><summary class="txs semi">View member progress</summary><div class="fc g1 mt2">' + people + '</div></details>' : '') + '</article>';
+      return '<article class="card padc"><div class="f jb aic g2"><div class="grow minw"><p class="txm semi">' + esc(task.title || 'Room task') + '</p><p class="txs muted mt1">Created by ' + esc(task.from || 'Member') + (task.due ? ' · Due ' + esc(task.due) : '') + '</p></div>' + (typeof nbDeleteSharedRecord === 'function' && task.me ? '<button class="iconbtn" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + task.dbId + '\')">' + ic('trash',15) + '</button>' : '') + '</div>' + (task.details ? '<p class="txm mt2" style="white-space:pre-wrap">' + esc(task.details) + '</p>' : '') + '<div class="card padc mt3"><p class="txs semi">Your individual response</p><textarea id="nbTaskResponse_' + task.id + '" class="input mt2" rows="3" placeholder="Describe your work or progress">' + esc(mine ? mine.response || '' : '') + '</textarea><div class="f g2 aic mt2"><select id="nbTaskStatus_' + task.id + '" class="input"><option value="todo" ' + (!mine || mine.status === 'todo' ? 'selected' : '') + '>To do</option><option value="progress" ' + (mine && mine.status === 'progress' ? 'selected' : '') + '>In progress</option><option value="done" ' + (mine && mine.status === 'done' ? 'selected' : '') + '>Completed</option></select><button class="btn btn-primary" onclick="nbSubmitRoomTaskResponse(\'' + room.id + '\',\'' + task.id + '\')">Save my progress</button></div></div><p class="txs muted mt2">' + responses.length + ' member response(s) / ' + (room.members || []).length + ' members</p>' + (people ? '<details class="mt2"><summary class="txs semi">View member progress</summary><div class="fc g1 mt2">' + people + '</div></details>' : '') + '</article>';
     }).join('') : '<div class="empty"><p class="txm muted">No room tasks yet. Create one below; each member can submit their own progress.</p></div>';
     return '<div class="nb-room-list">' + html + '</div><div class="pad fc g2"><h3 class="txm semi">Create a room task</h3><p class="txs muted">This task is visible to members. Each member’s response and status are saved separately.</p><input id="sharedTaskTitle" class="input" placeholder="Task title"/><input id="sharedTaskDue" class="input" type="date"/><textarea id="sharedTaskDetails" class="input" rows="3" placeholder="Detailed instructions and expected result"></textarea><button class="btn btn-primary" onclick="nbCreateRoomTask(\'' + room.id + '\')">Publish task to room</button></div>';
   }
@@ -3914,7 +3914,7 @@ async function deleteRoomAny(id){
         return '<div class="card padc mt2"><p class="txs muted">Item ' + (index + 1) + ' · ' + esc(type.replace('_',' ')) + ' · ' + Number(question.points || 1) + ' pt(s)</p><p class="txm semi mt1">' + esc(question.question || '') + '</p>' + control + (mine && question.explanation ? '<p class="txs muted mt2">' + esc(question.explanation) + '</p>' : '') + '</div>';
       }).join('');
       var result = mine ? '<div class="nb-quiz-feedback"><p class="txm semi">Submission saved</p><p class="txs muted mt1">Score: ' + Number(mine.score || 0) + ' / ' + Number(mine.maxScore || 0) + (mine.reviewRequired ? ' · Some short answers need review' : '') + '</p></div>' : '<button class="btn btn-primary btn-block mt3" onclick="nbSubmitRoomQuiz(\'' + room.id + '\',\'' + quiz.id + '\')">Submit my answers</button>';
-      var deleteButton = (quiz.me || String(room.ownerId) === String(nbUserId())) ? '<button class="iconbtn" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + quiz.dbId + '\')">' + ic('trash',15) + '</button>' : '';
+      var deleteButton = quiz.me ? '<button class="iconbtn" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + quiz.dbId + '\')">' + ic('trash',15) + '</button>' : '';
       return '<article class="card padc"><div class="f jb aic"><div><span class="badge">ROOM QUIZ</span><p class="txs muted mt1">' + esc(quiz.from || 'Member') + ' · ' + submissions.length + ' submission(s)</p></div>' + deleteButton + '</div><h3 class="txl semi mt2">' + esc(quiz.title || 'Study quiz') + '</h3><p class="txs muted">' + questions.length + ' item(s)</p>' + qhtml + result + '</article>';
     }).join('');
     return '<div class="nb-room-list">' + (html || '<div class="empty"><p class="txm muted">No quizzes yet. Create a multi-item quiz for room members.</p></div>') + '<button class="btn btn-secondary btn-block" onclick="NB_QUIZ_DRAFT=[{type:\'multiple_choice\',question:\'\',options:\'\',correctAnswer:\'\',points:1,explanation:\'\'}];UI.nbShowQuizComposer=true;render()">' + ic('plus',16) + ' Create another quiz</button>' + (UI.nbShowQuizComposer ? nbQuizBuilder(room.id) : '') + '</div>';
@@ -4200,12 +4200,12 @@ async function deleteRoomAny(id){
     if (UI.roomTab === 'board') return nbRenderBoard(room);
     if (UI.roomTab === 'notes') {
       var notes = (room.messages || []).filter(function (item) { return item.kind === 'shared-note'; });
-      var cards = notes.map(function (note) { var edit = (note.me || String(room.ownerId) === String(nbUserId())) ? '<button class="btn btn-secondary" onclick="nbEditRoomNote(\'' + room.id + '\',\'' + note.dbId + '\')">Edit note</button>' : ''; var file = note.filePath ? '<div class="nb-record-actions"><button class="btn btn-secondary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(note.filePath) + '\',false)">Open file</button><button class="btn btn-primary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(note.filePath) + '\',true)">Download</button></div>' : ''; var remove = (note.me || String(room.ownerId) === String(nbUserId())) ? '<button class="btn btn-danger" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + note.dbId + '\')">Delete</button>' : ''; return '<article class="card padc"><div class="f jb aic"><strong>' + esc(note.title || 'Shared note') + '</strong><span class="txs muted">' + esc(note.from || 'Member') + '</span>' + edit + '</div><p class="txm mt2" style="white-space:pre-wrap">' + esc(note.text || '') + '</p>' + file + remove + '</article>'; }).join('');
+      var cards = notes.map(function (note) { var edit = note.me ? '<button class="btn btn-secondary" onclick="nbEditRoomNote(\'' + room.id + '\',\'' + note.dbId + '\')">Edit note</button>' : ''; var file = note.filePath ? '<div class="nb-record-actions"><button class="btn btn-secondary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(note.filePath) + '\',false)">Open file</button><button class="btn btn-primary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(note.filePath) + '\',true)">Download</button></div>' : ''; var remove = note.me ? '<button class="btn btn-danger" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + note.dbId + '\')">Delete</button>' : ''; return '<article class="card padc"><div class="f jb aic"><strong>' + esc(note.title || 'Shared note') + '</strong><span class="txs muted">' + esc(note.from || 'Member') + '</span>' + edit + '</div><p class="txm mt2" style="white-space:pre-wrap">' + esc(note.text || '') + '</p>' + file + remove + '</article>'; }).join('');
       return '<div class="nb-room-list">' + (cards || '<div class="empty"><p class="txm muted">No shared notes yet.</p></div>') + '</div><div class="pad fc g2"><div class="card padc"><p class="txs semi">What belongs here?</p><p class="txs muted mt1">Use written notes for explanations and summaries. Attach PDF, Word, PowerPoint, Excel, text, Markdown, CSV, or image files. Maximum 20 MB per attachment. Attachments are private to this room’s members.</p></div><input id="sharedNoteTitle" class="input" placeholder="Note or document title"/><textarea id="sharedNoteText" class="input" rows="4" placeholder="Write your shared note (optional when attaching a file)"></textarea><label class="field-label">Optional academic attachment · 20 MB max</label><input id="sharedNoteFile" type="file" class="input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"/><button class="btn btn-primary" onclick="nbPublishRoomNote(\'' + room.id + '\')">Share note or file</button></div>';
     }
     if (UI.roomTab === 'files') {
       var files = (room.messages || []).filter(function (item) { return item.kind === 'shared-file'; });
-      var list = files.map(function (file) { var remove = (file.me || String(room.ownerId) === String(nbUserId())) ? '<button class="btn btn-danger" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + file.dbId + '\')">Delete</button>' : ''; return '<article class="card padc"><p class="txm semi">' + esc(file.fileName || 'Shared file') + '</p><p class="txs muted mt1">' + esc(file.from || 'Member') + ' · ' + nbFileSize(file.fileSize || 0) + '</p><div class="nb-record-actions"><button class="btn btn-secondary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(file.filePath || '') + '\',false)">Open</button><button class="btn btn-primary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(file.filePath || '') + '\',true)">Download</button>' + remove + '</div></article>'; }).join('');
+      var list = files.map(function (file) { var remove = file.me ? '<button class="btn btn-danger" onclick="nbDeleteSharedRecord(\'' + room.id + '\',\'' + file.dbId + '\')">Delete</button>' : ''; return '<article class="card padc"><p class="txm semi">' + esc(file.fileName || 'Shared file') + '</p><p class="txs muted mt1">' + esc(file.from || 'Member') + ' · ' + nbFileSize(file.fileSize || 0) + '</p><div class="nb-record-actions"><button class="btn btn-secondary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(file.filePath || '') + '\',false)">Open</button><button class="btn btn-primary" onclick="nbOpenRoomFile(\'' + room.id + '\',\'' + esc(file.filePath || '') + '\',true)">Download</button>' + remove + '</div></article>'; }).join('');
       return '<div class="nb-room-list">' + (list || '<div class="empty"><p class="txm muted">No files shared yet.</p></div>') + '</div><div class="pad fc g2"><p class="txs muted">Share academic files and reference images (PDF, Office documents, TXT/MD/CSV, PNG/JPG/WEBP). Maximum 20 MB per file. All items are visible to room members.</p><input id="roomFileInput" type="file" class="input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"/><button class="btn btn-primary" onclick="nbUploadRoomFile(\'' + room.id + '\')">Upload and share</button></div>';
     }
     return nbOriginalRoomTabBody(room);
@@ -6248,8 +6248,6 @@ async function deleteRoomAny(id){
     function closePreview() { releasePreviewResources(); closeTop(); }
     panel.querySelector('[data-close-preview]').onclick = closePreview;
     panel.querySelector('[data-close-preview-bottom]').onclick = closePreview;
-    var deviceButton = panel.querySelector('[data-open-device]');
-    var deviceInput = panel.querySelector('[data-open-device-input]');
     deviceButton.onclick = function () { deviceInput.click(); };
     deviceInput.addEventListener('change', function () {
       var selected = deviceInput.files && deviceInput.files[0];
@@ -6959,6 +6957,58 @@ async function deleteRoomAny(id){
       return nbxPreviewPath(record, path, 'Study file');
     }
     return nbOpenSignedFile(bucket, path, fileName, !!download);
+  };
+  // Reuse NEXTBYTE's in-app preview engine for private Study Room files.
+  // The short-lived signed URL is created only after Storage has authorized the member.
+  window.nbPreviewRoomStorageFile = async function (roomId, path, fileName, fileType, downloadOnly) {
+    var user = await nbRequireSupabaseUser();
+    var parts = String(path || '').split('/');
+    if (!path || String(parts[0] || '') !== String(roomId) || parts.length < 3) throw new Error('Invalid room-file reference.');
+    var signed = await dbClient.storage.from('study-room-files').createSignedUrl(path, 600);
+    if (signed.error) throw signed.error;
+    var response = await fetch(signed.data.signedUrl, { method: 'GET', cache: 'no-store', credentials: 'omit' });
+    if (!response.ok) throw new Error('The room file could not be loaded (' + response.status + ').');
+    var blob = await response.blob();
+    if (!blob || !blob.size) throw new Error('The selected room file is empty or unavailable.');
+    var name = String(fileName || parts[parts.length - 1] || 'Shared file').replace(/^\d{10,}_/, '');
+    var mime = String(fileType || blob.type || 'application/octet-stream');
+    if (downloadOnly) {
+      var downloadUrl = URL.createObjectURL(blob);
+      var downloadLink = document.createElement('a');
+      downloadLink.href = downloadUrl; downloadLink.download = name; downloadLink.style.display = 'none';
+      document.body.appendChild(downloadLink); downloadLink.click(); downloadLink.remove();
+      setTimeout(function () { URL.revokeObjectURL(downloadUrl); }, 60000);
+      return;
+    }
+    var panel = nbxCreatePreviewPanel(name, mime);
+    var downloadButton = panel.querySelector('[data-preview-download]');
+    panel.__nbxOnDeviceFile = async function (localFile) {
+      try {
+        if (panel.__nbxPdfCleanup) { try { panel.__nbxPdfCleanup(); } catch (_) {} panel.__nbxPdfCleanup = null; }
+        if (panel.__nbxPreviewObjectUrl) { try { URL.revokeObjectURL(panel.__nbxPreviewObjectUrl); } catch (_) {} panel.__nbxPreviewObjectUrl = null; }
+        downloadButton.hidden = true; downloadButton.disabled = true;
+        await nbxRenderBlobPreview(localFile, null, 'Open from Device', panel, localFile, null);
+      } catch (deviceError) {
+        var deviceBody = panel.querySelector('#nbxPreviewBody');
+        if (deviceBody) deviceBody.textContent = deviceError.message || 'Could not preview this device file.';
+      }
+    };
+    downloadButton.textContent = 'Download file';
+    downloadButton.onclick = function () {
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a'); link.href = url; link.download = name; link.style.display = 'none';
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    };
+    try {
+      await nbxRenderBlobPreview({ fileName: name, fileType: mime, mime: mime }, null, 'Public Study Room', panel, blob, null);
+      var status = panel.querySelector('[data-preview-status]');
+      if (status) status.textContent = 'Private room file · authorized for this room member';
+    } catch (error) {
+      var body = panel.querySelector('#nbxPreviewBody');
+      if (body) body.textContent = error.message || 'Could not preview this room file.';
+      throw error;
+    }
   };
   // Keep legacy callers working, but make Open a real preview and keep Download separate.
   window.openMaterial = window.nbPreviewStudyMaterial;
@@ -7715,5 +7765,449 @@ async function deleteRoomAny(id){
 })();
 </script>
 
+<script>
+/* NEXTBYTE Public Study Room chat repair v1.0
+   Author-only message deletion, room-filtered realtime updates, safer link/file
+   sharing sheets, and durable database-backed poll voting.
+*/
+(function () {
+  'use strict';
+  if (window.__NEXTBYTE_PUBLIC_ROOM_CHAT_REPAIR_V1__) return;
+  window.__NEXTBYTE_PUBLIC_ROOM_CHAT_REPAIR_V1__ = true;
+
+  var NB_CHAT_CHANNEL_ROOM = null;
+  var NB_CHAT_REFRESH_TIMER = null;
+  var NB_CHAT_LOAD_SERIAL = Object.create(null);
+  var nbOriginalRoomTabBody = window.roomTabBody || roomTabBody;
+  var nbOriginalRoomMessageHtml = window.roomMessageHtml || roomMessageHtml;
+  var nbOriginalPushRoomMessage = window.pushRoomMessage || pushRoomMessage;
+  var nbOriginalLocalVoteRoomPoll = window.voteRoomPoll || voteRoomPoll;
+
+  function currentUid() { return String((typeof nbCurrentUserId === 'function' && nbCurrentUserId()) || ''); }
+  function activeRoom(roomId) {
+    return (S.rooms || []).filter(function (room) { return String(room.id) === String(roomId); })[0] || null;
+  }
+  function safeHttpUrl(value) {
+    var parsed;
+    try { parsed = new URL(String(value || '').trim()); } catch (_) { return null; }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    if (parsed.username || parsed.password) return null;
+    return parsed;
+  }
+  function chatError(label, error) {
+    console.error(label, error);
+    toast(label + ': ' + nbErr(error, 'Please check your room access and connection.'));
+  }
+  function safeInline(value) { return esc(String(value == null ? '' : value)); }
+  function ownMessage(message) {
+    return !!(message && currentUid() && String(message.userId || '') === currentUid());
+  }
+  function roomAuthor(message) {
+    return message && (message.from || 'Room member');
+  }
+  function updateLocalRoom(room, messages) {
+    room.messages = messages;
+    if (typeof render === 'function') {
+      var route = resolve();
+      if (route.view === 'room' && String(route.id) === String(room.id)) render();
+    }
+  }
+
+  /* Keep a single authoritative fetch path. Votes now live in their own table;
+     legacy vote-message rows are still understood so older polls remain readable. */
+  window.nbLoadMessages = async function (room, quiet) {
+    if (!room || !room.isShared || !dbClient) return;
+    var roomKey = String(room.id);
+    var serial = (NB_CHAT_LOAD_SERIAL[roomKey] || 0) + 1;
+    NB_CHAT_LOAD_SERIAL[roomKey] = serial;
+    try {
+      var result = await dbClient.from('study_room_messages')
+        .select('id,room_id,user_id,body,created_at')
+        .eq('room_id', room.id).order('created_at', { ascending: true }).limit(500);
+      if (result.error) throw result.error;
+      if (NB_CHAT_LOAD_SERIAL[roomKey] !== serial) return;
+      var userId = currentUid();
+      var members = room.members || [];
+      var messages = (result.data || []).map(function (row) {
+        var isMine = String(row.user_id) === userId;
+        var member = members.filter(function (item) { return String(item.userId || item.user_id) === String(row.user_id); })[0];
+        var parsed = nbParseSharedBody(row.body);
+        return Object.assign({
+          from: isMine ? ((S.auth.user && S.auth.user.name) || 'You') : (member ? member.name : 'Member ' + String(row.user_id || '').slice(0, 8)),
+          initials: isMine ? ((S.auth.user && S.auth.user.initials) || 'ME') : (member ? member.initials : 'M'),
+          color: isMine ? ((S.auth.user && S.auth.user.color) || '#2563EB') : (member ? member.color : '#64748B')
+        }, parsed, {
+          dbId: row.id,
+          userId: row.user_id,
+          time: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          createdAt: row.created_at,
+          me: isMine
+        });
+      });
+      var polls = messages.filter(function (message) { return message.kind === 'poll'; });
+      var votes = [];
+      if (polls.length) {
+        try {
+          var voteResult = await dbClient.from('study_room_poll_votes')
+            .select('poll_message_id,room_id,user_id,option_index')
+            .eq('room_id', room.id);
+          if (voteResult.error) throw voteResult.error;
+          votes = voteResult.data || [];
+        } catch (voteError) {
+          /* Old room polls are retained; they can still display prior legacy votes. */
+          console.warn('Dedicated poll vote table is not available yet. Run NEXTBYTE_PUBLIC_ROOM_CHAT_REPAIR.sql.', voteError);
+        }
+      }
+      polls.forEach(function (poll) {
+        var pollVotes = votes.filter(function (vote) { return String(vote.poll_message_id) === String(poll.dbId); });
+        var legacyVotes = messages.filter(function (message) {
+          return message.kind === 'shared-poll-vote' && String(message.pollId) === String(poll.id);
+        });
+        var modernVoters = Object.create(null);
+        pollVotes.forEach(function (vote) { modernVoters[String(vote.user_id)] = true; });
+        poll.votes = (poll.options || []).map(function (_, index) {
+          var modernCount = pollVotes.filter(function (vote) { return Number(vote.option_index) === index; }).length;
+          var legacyCount = legacyVotes.filter(function (vote) { return !modernVoters[String(vote.userId)] && Number(vote.choice) === index; }).length;
+          return modernCount + legacyCount;
+        });
+        var mine = pollVotes.filter(function (vote) { return String(vote.user_id) === userId; })[0];
+        if (!mine && legacyVotes.length) mine = legacyVotes.filter(function (vote) { return String(vote.userId) === userId; })[0];
+        poll.myVote = mine ? Number(mine.option_index != null ? mine.option_index : mine.choice) : null;
+        if (!poll.status) poll.status = 'open';
+      });
+      if (NB_CHAT_LOAD_SERIAL[roomKey] !== serial) return;
+      room.messages = messages;
+      if (!quiet) render();
+    } catch (error) {
+      console.error('Shared room message refresh failed:', error);
+      if (!quiet) toast('Could not refresh room messages: ' + nbErr(error));
+    }
+  };
+  try { nbLoadMessages = window.nbLoadMessages; } catch (_) {}
+
+  async function insertRoomPayload(roomId, kind, payload) {
+    var room = activeRoom(roomId);
+    if (!room || !room.isShared || room.roomType === 'private') throw new Error('Sharing is available only in a public study room.');
+    var user = await nbRequireSupabaseUser();
+    var body = nbSharedPayload(kind, Object.assign({ id: uid() }, payload || {}));
+    var inserted = await dbClient.from('study_room_messages')
+      .insert({ room_id: room.id, user_id: user.id, body: body })
+      .select('id,room_id,user_id,body,created_at').single();
+    if (inserted.error) throw inserted.error;
+    await window.nbLoadMessages(room, true);
+    return room;
+  }
+
+  /* Modern link/file-link sheets replace browser prompt() dialogs. */
+  function openShareSheet(roomId, mode) {
+    var room = activeRoom(roomId);
+    if (!room || (room.isShared && room.roomType === 'private')) { toast('Link sharing is not available in private rooms.'); return; }
+    var fileMode = mode === 'file';
+    var heading = fileMode ? 'Share a file link' : 'Share a link';
+    var fieldLabel = fileMode ? 'Direct file URL' : 'Website or learning-resource URL';
+    var help = fileMode
+      ? 'Use a direct HTTP or HTTPS link to an online file. For private room uploads, use the Files tab: it supports PDF, Word, Excel, PowerPoint, TXT/MD/CSV, and PNG/JPG/WEBP files up to 20 MB. Private uploads stay behind room-member Storage permissions; do not paste expiring signed URLs.'
+      : 'Supported: standard HTTP/HTTPS website pages, educational resources, and video or learning-resource pages. The destination must allow room members to access it.';
+    var html = '<div class="f jb aic mb3"><h3 class="txl semi">' + heading + '</h3><button type="button" class="iconbtn" data-close aria-label="Close">' + ic('x', 18) + '</button></div>' +
+      '<form id="nbRoomShareForm" class="fc g3">' +
+      '<label class="field-label" for="nbRoomShareUrl">' + fieldLabel + '</label>' +
+      '<input id="nbRoomShareUrl" class="input" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com/resource" required />' +
+      (fileMode ? '<label class="field-label" for="nbRoomShareTitle">File name (optional)</label><input id="nbRoomShareTitle" class="input" maxlength="120" placeholder="e.g. Biology-review.pdf" />' : '<label class="field-label" for="nbRoomShareTitle">Link title (optional)</label><input id="nbRoomShareTitle" class="input" maxlength="120" placeholder="e.g. Biology review guide" />') +
+      '<p class="txs muted" style="line-height:1.5">' + help + '</p><p id="nbRoomShareError" class="txs" role="alert" style="color:var(--danger)"></p>' +
+      '<div class="f g2"><button type="button" class="btn btn-secondary grow" data-close>Cancel</button><button type="submit" class="btn btn-primary grow" id="nbRoomShareSubmit">Share</button></div></form>';
+    var el = sheet(html);
+    el.querySelectorAll('[data-close]').forEach(function (button) { button.onclick = closeTop; });
+    var input = el.querySelector('#nbRoomShareUrl');
+    if (input) setTimeout(function () { input.focus(); }, 60);
+    el.querySelector('#nbRoomShareForm').onsubmit = async function (event) {
+      event.preventDefault();
+      var parsed = safeHttpUrl(input.value);
+      var error = el.querySelector('#nbRoomShareError');
+      if (!parsed) { error.textContent = 'Enter a valid HTTP or HTTPS link. Other link types are not supported.'; input.focus(); return; }
+      var title = (el.querySelector('#nbRoomShareTitle').value || '').trim();
+      var button = el.querySelector('#nbRoomShareSubmit');
+      button.disabled = true; button.textContent = 'Sharing…'; error.textContent = '';
+      try {
+        var payload = fileMode
+          ? { url: parsed.href, fileName: title || parsed.pathname.split('/').pop() || 'Shared file', text: 'Shared file', title: title || 'Shared file' }
+          : { url: parsed.href, text: title || 'Shared website', title: title || 'Shared website' };
+        if (room.isShared) await insertRoomPayload(roomId, fileMode ? 'file' : 'link', payload);
+        else await nbOriginalPushRoomMessage(roomId, Object.assign({ kind: fileMode ? 'file' : 'link', text: payload.title }, payload));
+        closeTop();
+        render();
+        var sc = document.getElementById('scrollArea'); if (sc) sc.scrollTop = sc.scrollHeight;
+        toast(fileMode ? 'File link shared with the room.' : 'Link shared with the room.');
+      } catch (shareError) {
+        button.disabled = false; button.textContent = 'Share';
+        error.textContent = nbErr(shareError, 'Could not share this link. Check the room permissions.');
+      }
+    };
+  }
+  window.shareRoomLink = function (roomId) { openShareSheet(roomId, 'link'); };
+  window.shareRoomFileLink = function (roomId) { openShareSheet(roomId, 'file'); };
+  try { shareRoomLink = window.shareRoomLink; shareRoomFileLink = window.shareRoomFileLink; } catch (_) {}
+
+  /* Poll creator form with explicit option rows and validation. */
+  window.createRoomPoll = function (roomId) {
+    var room = activeRoom(roomId);
+    if (!room || (room.isShared && room.roomType === 'private')) { toast('Polls are not available in private rooms.'); return; }
+    var html = '<div class="f jb aic mb3"><h3 class="txl semi">Create a poll</h3><button type="button" class="iconbtn" data-close>' + ic('x',18) + '</button></div>' +
+      '<form id="nbRoomPollForm" class="fc g3"><label class="field-label" for="nbPollQuestion">Poll question</label><textarea id="nbPollQuestion" class="input" rows="2" maxlength="240" placeholder="What should we review next?" required></textarea>' +
+      '<div class="f jb aic"><span class="field-label">Answer options</span><button type="button" class="btn btn-secondary btn-sm" id="nbPollAddOption">+ Add option</button></div>' +
+      '<div id="nbPollOptions" class="fc g2"><input class="input" data-poll-option maxlength="120" placeholder="Option 1" required /><input class="input" data-poll-option maxlength="120" placeholder="Option 2" required /></div>' +
+      '<p class="txs muted">Add 2–6 options. Each participant can vote once and change their selection while the poll is open.</p><p id="nbPollError" class="txs" role="alert" style="color:var(--danger)"></p>' +
+      '<div class="f g2"><button type="button" class="btn btn-secondary grow" data-close>Cancel</button><button type="submit" id="nbPollSubmit" class="btn btn-primary grow">Create poll</button></div></form>';
+    var el = sheet(html);
+    el.querySelectorAll('[data-close]').forEach(function (button) { button.onclick = closeTop; });
+    el.querySelector('#nbPollAddOption').onclick = function () {
+      var host = el.querySelector('#nbPollOptions');
+      var count = host.querySelectorAll('[data-poll-option]').length;
+      if (count >= 6) { toast('A poll can have at most six options.'); return; }
+      var wrap = document.createElement('div'); wrap.className = 'nb-poll-option-row';
+      var field = document.createElement('input'); field.className = 'input'; field.maxLength = 120; field.placeholder = 'Option ' + (count + 1); field.setAttribute('data-poll-option', '');
+      var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn btn-secondary btn-sm'; remove.textContent = 'Remove'; remove.setAttribute('aria-label', 'Remove option');
+      remove.onclick = function () { wrap.remove(); Array.prototype.forEach.call(host.querySelectorAll('[data-poll-option]'), function (item, index) { item.placeholder = 'Option ' + (index + 1); }); };
+      wrap.appendChild(field); wrap.appendChild(remove); host.appendChild(wrap); field.focus();
+    };
+    el.querySelector('#nbRoomPollForm').onsubmit = async function (event) {
+      event.preventDefault();
+      var question = el.querySelector('#nbPollQuestion').value.trim();
+      var options = Array.prototype.map.call(el.querySelectorAll('[data-poll-option]'), function (field) { return field.value.trim(); }).filter(Boolean);
+      var normalized = options.map(function (option) { return option.toLocaleLowerCase(); });
+      var error = el.querySelector('#nbPollError');
+      if (!question) { error.textContent = 'Enter a question.'; return; }
+      if (options.length < 2 || options.length > 6) { error.textContent = 'Provide between two and six non-empty options.'; return; }
+      if (new Set(normalized).size !== normalized.length) { error.textContent = 'Remove duplicate answer options.'; return; }
+      var button = el.querySelector('#nbPollSubmit'); button.disabled = true; button.textContent = 'Creating…';
+      try {
+        var pollPayload = { question: question.slice(0, 240), options: options.map(function (option) { return option.slice(0, 120); }), status: 'open', votes: options.map(function () { return 0; }), createdAt: new Date().toISOString() };
+        if (room.isShared) await insertRoomPayload(roomId, 'poll', pollPayload);
+        else await nbOriginalPushRoomMessage(roomId, Object.assign({ kind: 'poll' }, pollPayload));
+        closeTop(); render(); toast('Poll created.');
+      } catch (pollError) {
+        button.disabled = false; button.textContent = 'Create poll'; error.textContent = nbErr(pollError, 'Could not create the poll.');
+      }
+    };
+  };
+  try { createRoomPoll = window.createRoomPoll; } catch (_) {}
+
+  window.voteRoomPoll = async function (messageId, index) {
+    var route = resolve();
+    var room = route.view === 'room' ? activeRoom(route.id) : null;
+    if (!room || (room.isShared && room.roomType === 'private')) return;
+    if (!room.isShared) return nbOriginalLocalVoteRoomPoll(messageId, index);
+    var poll = (room.messages || []).filter(function (message) { return message.kind === 'poll' && String(message.dbId) === String(messageId); })[0];
+    if (!poll) { toast('This poll is no longer available.'); return; }
+    if (poll.status === 'closed') { toast('This poll is closed.'); return; }
+    if (!Number.isInteger(Number(index)) || Number(index) < 0 || Number(index) >= (poll.options || []).length) return;
+    try {
+      var user = await nbRequireSupabaseUser();
+      var saved = await dbClient.from('study_room_poll_votes').upsert({
+        poll_message_id: poll.dbId,
+        room_id: room.id,
+        user_id: user.id,
+        option_index: Number(index),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'poll_message_id,user_id' }).select('poll_message_id').maybeSingle();
+      if (saved.error) throw saved.error;
+      if (!saved.data) throw new Error('Your vote was not saved. Run the poll migration and check room permissions.');
+      await window.nbLoadMessages(room, true);
+      if (resolve().view === 'room' && String(resolve().id) === String(room.id)) render();
+    } catch (error) { chatError('Could not save your vote', error); }
+  };
+  try { voteRoomPoll = window.voteRoomPoll; } catch (_) {}
+
+  window.nbCloseRoomPoll = async function (roomId, dbId) {
+    var room = activeRoom(roomId);
+    var poll = room && (room.messages || []).filter(function (item) { return String(item.dbId) === String(dbId) && item.kind === 'poll'; })[0];
+    if (!room || !poll || !ownMessage(poll)) { toast('Only the poll creator can close this poll.'); return; }
+    if (poll.status === 'closed') return;
+    confirmSheet({ title: 'Close this poll?', message: 'Participants will no longer be able to vote. Existing results will remain visible.', confirmLabel: 'Close poll', onConfirm: async function () {
+      try {
+        var user = await nbRequireSupabaseUser();
+        var payload = { id: poll.id, kind: 'poll', question: poll.question, options: poll.options || [], status: 'closed', createdAt: poll.createdAt || new Date().toISOString() };
+        var result = await dbClient.from('study_room_messages').update({ body: nbSharedPayload('poll', payload) })
+          .eq('id', poll.dbId).eq('room_id', room.id).eq('user_id', user.id).select('id').maybeSingle();
+        if (result.error) throw result.error;
+        if (!result.data) throw new Error('Poll was not closed. Only its creator can close it.');
+        await window.nbLoadMessages(room, true); render(); toast('Poll closed.');
+      } catch (error) { chatError('Could not close poll', error); }
+    }});
+  };
+
+  /* Structured link/file cards. URLs are re-parsed before they enter href attributes. */
+  window.roomMessageHtml = function (message) {
+    if (message && (message.kind === 'link' || message.kind === 'file')) {
+      var parsed = safeHttpUrl(message.url || '');
+      if (!parsed) return '<div class="card padc"><p class="txs muted">This shared link is invalid or no longer supported.</p></div>';
+      var title = message.kind === 'file'
+        ? (message.fileName || message.title || message.text || 'Shared file')
+        : (message.title || message.text || 'Shared website');
+      var fileExt = message.kind === 'file' ? String((parsed.pathname.split('/').pop() || title).split('.').pop() || 'file').toUpperCase() : '';
+      var label = message.kind === 'file' ? 'FILE LINK · ' + safeInline(message.fileType || fileExt) : 'SHARED LINK';
+      return '<article class="nb-chat-link-card"><div class="f aic g2"><span class="nb-chat-link-icon">' + (message.kind === 'file' ? '📎' : '🔗') + '</span><div class="grow minw"><p class="txs muted">' + label + '</p><p class="txm semi" style="overflow-wrap:anywhere">' + safeInline(title) + '</p></div></div><div class="f g2 mt2"><a class="btn btn-secondary btn-sm" href="' + safeInline(parsed.href) + '" target="_blank" rel="noopener noreferrer">' + (message.kind === 'file' ? 'Open file' : 'Open link') + '</a>' + (message.kind === 'file' ? '<a class="btn btn-primary btn-sm" href="' + safeInline(parsed.href) + '" download>Download</a>' : '') + '</div></article>';
+    }
+    if (message && message.kind === 'poll') {
+      var options = message.options || [];
+      var total = (message.votes || []).reduce(function (sum, count) { return sum + Number(count || 0); }, 0);
+      var closed = message.status === 'closed';
+      var rows = options.map(function (option, index) {
+        var count = Number((message.votes || [])[index] || 0);
+        var percent = total ? Math.round(count * 100 / total) : 0;
+        var selected = message.myVote !== null && message.myVote !== undefined && Number(message.myVote) === index;
+        return '<button type="button" class="nb-poll-vote' + (selected ? ' selected' : '') + '" onclick="voteRoomPoll(\'' + safeInline(message.dbId || message.id) + '\',' + index + ')" ' + (closed ? 'disabled' : '') + ' aria-pressed="' + selected + '"><span class="grow minw" style="text-align:left">' + safeInline(option) + '</span><span class="nb-poll-result"><span>' + count + '</span><small>' + percent + '%</small></span></button>';
+      }).join('');
+      var close = !closed && message.dbId && ownMessage(message) ? '<button type="button" class="btn btn-secondary btn-sm mt2" onclick="nbCloseRoomPoll(\'' + safeInline(resolve().id) + '\',\'' + safeInline(message.dbId) + '\')">Close poll</button>' : '';
+      return '<article class="nb-chat-poll"><div class="f jb aic g2"><p class="txs semi muted">📊 POLL · ' + (closed ? 'CLOSED' : 'OPEN') + '</p><span class="txs muted">' + total + ' vote(s)</span></div><p class="txm semi mt2">' + safeInline(message.question || 'Poll') + '</p><div class="fc g2 mt2">' + rows + '</div><p class="txs muted mt2">' + (closed ? 'Voting is closed. Results remain available.' : (message.myVote != null ? 'Your vote is saved. Select another option to change it.' : 'Choose an option to vote. You can change your vote while the poll is open.')) + '</p>' + close + '</article>';
+    }
+    return nbOriginalRoomMessageHtml(message);
+  };
+  try { roomMessageHtml = window.roomMessageHtml; } catch (_) {}
+
+  /* Replace shared public-room chat markup so delete controls are author-only. */
+  window.roomTabBody = function (room) {
+    if (room && room.isShared && room.roomType !== 'private' && UI.roomTab === 'files') {
+      var roomFiles = (room.messages || []).filter(function (item) { return item.kind === 'shared-file' && item.filePath; });
+      var fileCards = roomFiles.map(function (file) {
+        var ext = String(file.fileName || '').split('.').pop().toUpperCase();
+        var kind = String(ext || file.fileType || 'FILE').split('/').pop().toUpperCase();
+        var removeFile = ownMessage(file) ? '<button class="btn btn-danger btn-sm" onclick="nbDeleteSharedRecord(\'' + safeInline(room.id) + '\',\'' + safeInline(file.dbId) + '\')">Delete</button>' : '';
+        return '<article class="card padc"><div class="f aic g2"><span class="nb-chat-link-icon">📎</span><div class="grow minw"><p class="txm semi" style="overflow-wrap:anywhere">' + safeInline(file.fileName || 'Shared file') + '</p><p class="txs muted mt1">' + safeInline(kind) + ' · ' + safeInline(nbFileSize(file.fileSize || 0)) + ' · ' + safeInline(file.from || 'Room member') + '</p></div></div><div class="f g2 mt3"><button class="btn btn-secondary btn-sm grow" onclick="nbOpenRoomFile(\'' + safeInline(room.id) + '\',\'' + safeInline(file.filePath) + '\',false)">Preview</button><button class="btn btn-primary btn-sm grow" onclick="nbOpenRoomFile(\'' + safeInline(room.id) + '\',\'' + safeInline(file.filePath) + '\',true)">Download</button>' + removeFile + '</div></article>';
+      }).join('');
+      return '<div class="nb-room-list">' + (fileCards || '<div class="empty"><p class="txm muted">No files shared yet.</p></div>') + '</div><div class="pad fc g2"><div class="card padc"><p class="txs semi">Supported files</p><p class="txs muted mt1">PDF, Word, Excel, PowerPoint, TXT, Markdown, CSV, PNG, JPG, and WEBP · 20 MB maximum. Files are stored privately and are available only to room members.</p></div><input id="roomFileInput" type="file" class="input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"/><button class="btn btn-primary" onclick="nbUploadRoomFile(\'' + safeInline(room.id) + '\')">Upload and share</button></div>';
+    }
+    if (!room || !room.isShared || room.roomType === 'private' || UI.roomTab !== 'chat') return nbOriginalRoomTabBody(room);
+    if (!room.isJoined) return '<div class="grow fc aic jc pad"><p class="txm muted">Join this public room to view its chat.</p></div>';
+    var items = (room.messages || []).filter(function (message) {
+      return ['text', 'link', 'file', 'sticker', 'poll'].indexOf(message.kind) >= 0 || !message.kind;
+    });
+    var html = items.length ? items.map(function (message, index) {
+      var previous = items[index - 1];
+      var sameAuthor = previous && String(previous.userId) === String(message.userId);
+      var remove = ownMessage(message) ? '<button type="button" class="nb-chat-delete" onclick="nbDeleteSharedRecord(\'' + safeInline(room.id) + '\',\'' + safeInline(message.dbId) + '\')" aria-label="Delete your message">Delete</button>' : '';
+      return '<div class="msg ' + (ownMessage(message) ? 'me' : 'them') + '">' +
+        (sameAuthor ? '<span style="width:30px;flex-shrink:0"></span>' : avatar(message.initials || 'M', message.color || '#64748B', 30)) +
+        '<div class="msg-content">' + (!ownMessage(message) && !sameAuthor ? '<p class="msg-author">' + safeInline(roomAuthor(message)) + '</p>' : '') +
+        '<div class="bubble">' + window.roomMessageHtml(message) + '</div><p class="msg-time">' + safeInline(message.time || '') + '</p>' + remove + '</div></div>';
+    }).join('') : '<div class="grow fc aic jc txm muted" style="padding:60px 0">No messages yet. Say hi! 👋</div>';
+    return '<div id="scrollArea" class="nb-room-chat-scroll"><div class="msgs nb-room-chat-messages">' + html + '</div></div>' +
+      '<div class="composer nb-room-chat-composer"><input id="roomMsg" placeholder="Message your study group…" autocomplete="off" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();sendRoomMsg(\'' + safeInline(room.id) + '\') }"/><button class="iconbtn blue" style="height:44px;width:44px;flex-shrink:0" onclick="sendRoomMsg(\'' + safeInline(room.id) + '\')" aria-label="Send message">' + ic('send',18) + '</button></div>' +
+      '<div class="room-tools nb-room-chat-tools"><button class="chip" onclick="shareRoomLink(\'' + safeInline(room.id) + '\')">🔗 Link</button><button class="chip" onclick="shareRoomFileLink(\'' + safeInline(room.id) + '\')">📎 File link</button><button class="chip" onclick="createRoomPoll(\'' + safeInline(room.id) + '\')">📊 Poll</button><button class="chip" onclick="pickRoomSticker(\'' + safeInline(room.id) + '\')">😊 Sticker</button></div>';
+  };
+  try { roomTabBody = window.roomTabBody; } catch (_) {}
+
+  var nbOriginalOpenRoomFile = window.nbOpenRoomFile || nbOpenRoomFile;
+  window.nbOpenRoomFile = function (roomId, path, download) {
+    if (typeof window.nbPreviewRoomStorageFile === 'function') {
+      return window.nbPreviewRoomStorageFile(roomId, path, null, null, !!download).catch(function (error) {
+        chatError(download ? 'Could not download shared file' : 'Could not preview shared file', error);
+      });
+    }
+    return nbOriginalOpenRoomFile(roomId, path, download);
+  };
+  try { nbOpenRoomFile = window.nbOpenRoomFile; } catch (_) {}
+
+  /* Author-only delete at both UI and request layers. Remove locally after Supabase
+     confirms the row was deleted. The Realtime DELETE event refreshes other members. */
+  window.nbDeleteSharedRecord = function (roomId, dbId) {
+    var room = activeRoom(roomId);
+    var item = room && (room.messages || []).filter(function (message) { return String(message.dbId) === String(dbId); })[0];
+    if (!room || !item || !ownMessage(item)) { toast('You can delete only your own messages.'); return; }
+    confirmSheet({ title: 'Delete your message?', message: 'This message will be removed for everyone in the room. You will stay in the room.', confirmLabel: 'Delete', danger: true, onConfirm: async function () {
+      try {
+        var user = await nbRequireSupabaseUser();
+        var deleted = await dbClient.from('study_room_messages').delete()
+          .eq('id', item.dbId).eq('room_id', room.id).eq('user_id', user.id).select('id').maybeSingle();
+        if (deleted.error) throw deleted.error;
+        if (!deleted.data) throw new Error('The message was not deleted. Check the author-only DELETE policy in Supabase.');
+        room.messages = (room.messages || []).filter(function (message) { return String(message.dbId) !== String(dbId); });
+        if (item.filePath) {
+          var cleanup = await dbClient.storage.from('study-room-files').remove([item.filePath]);
+          if (cleanup.error) console.warn('The message was deleted but its attachment cleanup did not complete:', cleanup.error);
+        }
+        if (resolve().view === 'room' && String(resolve().id) === String(room.id)) render();
+        toast('Your message was deleted.');
+      } catch (error) { chatError('Could not delete your message', error); }
+    }});
+  };
+  try { nbDeleteSharedRecord = window.nbDeleteSharedRecord; } catch (_) {}
+
+  /* Single subscription per active room. FULL replica identity in the migration
+     enables room-filtered DELETE events with the old room_id available. */
+  window.nbSubscribeRoom = function (room) {
+    if (!dbClient || !room || !room.isShared || room.roomType === 'private') return;
+    if (NB_CHAT_CHANNEL_ROOM === String(room.id) && NB_SHARED_CHANNEL) return;
+    if (NB_SHARED_CHANNEL) { try { dbClient.removeChannel(NB_SHARED_CHANNEL); } catch (_) {} NB_SHARED_CHANNEL = null; }
+    NB_CHAT_CHANNEL_ROOM = String(room.id);
+    var channel = dbClient.channel('nb-room-chat-' + room.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'study_room_messages', filter: 'room_id=eq.' + room.id }, function (payload) {
+        if (payload && payload.eventType === 'DELETE' && payload.old && payload.old.id) {
+          var local = activeRoom(room.id);
+          if (local) local.messages = (local.messages || []).filter(function (message) { return String(message.dbId) !== String(payload.old.id); });
+        }
+        clearTimeout(NB_CHAT_REFRESH_TIMER);
+        NB_CHAT_REFRESH_TIMER = setTimeout(function () {
+          var local = activeRoom(room.id);
+          if (!local) return;
+          window.nbLoadMessages(local, true).then(function () {
+            var route = resolve();
+            if (route.view === 'room' && String(route.id) === String(room.id)) render();
+          });
+        }, 80);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'study_room_poll_votes', filter: 'room_id=eq.' + room.id }, function () {
+        clearTimeout(NB_CHAT_REFRESH_TIMER);
+        NB_CHAT_REFRESH_TIMER = setTimeout(function () {
+          var local = activeRoom(room.id);
+          if (!local) return;
+          window.nbLoadMessages(local, true).then(function () {
+            var route = resolve();
+            if (route.view === 'room' && String(route.id) === String(room.id)) render();
+          });
+        }, 80);
+      });
+    NB_SHARED_CHANNEL = channel;
+    channel.subscribe(function (status) {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('NEXTBYTE room chat Realtime status:', status);
+    });
+  };
+  try { nbSubscribeRoom = window.nbSubscribeRoom; } catch (_) {}
+
+  function cleanupRoomChannelIfOutside() {
+    var route = resolve();
+    if (route.view === 'room' && route.id && NB_CHAT_CHANNEL_ROOM === String(route.id)) return;
+    if (NB_SHARED_CHANNEL && dbClient) { try { dbClient.removeChannel(NB_SHARED_CHANNEL); } catch (_) {} }
+    NB_SHARED_CHANNEL = null; NB_CHAT_CHANNEL_ROOM = null;
+  }
+  window.addEventListener('hashchange', function () { setTimeout(cleanupRoomChannelIfOutside, 100); });
+
+  var style = document.createElement('style');
+  style.id = 'nextbyte-public-chat-repair-style';
+  style.textContent = `
+.nb-room-chat-scroll{flex:1;min-height:0;overflow-y:auto;width:100%;min-width:0;display:flex;flex-direction:column}
+.nb-room-chat-messages{width:100%;display:flex;flex-direction:column;gap:12px;padding:16px}
+.nb-room-chat-composer{width:100%;flex-shrink:0;display:flex;gap:8px;padding:10px 14px}
+.nb-room-chat-composer input{flex:1;min-width:0;height:44px;border-radius:999px;background:var(--secondary);border:1px solid var(--border);outline:none;padding:0 16px;font-size:14px}
+.nb-room-chat-tools{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 12px}
+.nb-chat-delete{border:0;background:transparent;color:var(--muted-fg);font-size:11px;padding:4px 2px;margin-top:3px;text-decoration:underline;cursor:pointer}
+.nb-chat-delete:hover{color:var(--danger)}
+.nb-chat-link-card,.nb-chat-poll{max-width:100%;min-width:210px;padding:12px;border:1px solid var(--border);border-radius:13px;background:var(--card);overflow-wrap:anywhere}
+.nb-chat-link-icon{height:36px;width:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:11px;background:var(--primary-soft);font-size:18px}
+.nb-poll-vote{width:100%;min-height:44px;display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:11px;background:var(--secondary);color:var(--fg)}
+.nb-poll-vote.selected{border-color:var(--primary);background:var(--primary-soft)}
+.nb-poll-vote:disabled{opacity:.78;cursor:default}
+.nb-poll-result{display:flex;flex-direction:column;align-items:flex-end;min-width:36px;font-weight:700}
+.nb-poll-result small{font-size:10px;font-weight:500;color:var(--muted-fg)}
+.nb-poll-option-row{display:flex;gap:8px;align-items:center}
+.nb-poll-option-row input{flex:1;min-width:0}
+#nbRoomShareForm .input,#nbRoomPollForm .input{width:100%;min-width:0}
+@media(max-width:420px){.nb-room-chat-messages{padding:12px}.nb-chat-link-card,.nb-chat-poll{min-width:0}.nb-room-chat-tools{gap:6px}.nb-room-chat-tools .chip{font-size:11px;padding:7px 9px}}
+  `;
+  if (!document.getElementById(style.id)) document.head.appendChild(style);
+
+  window.NEXBYTE_PUBLIC_ROOM_CHAT_REPAIR_VERSION = '1.0-author-only-delete-realtime-link-poll';
+})();
+
+</script>
 </body>
 </html>

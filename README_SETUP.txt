@@ -42,3 +42,31 @@ NEXTBYTE STUDY ROOM PUBLIC / PRIVATE VISIBILITY UPGRADE
 4. New Public Rooms appear in the signed-in public directory and can be joined there or with a public room invite code.
 5. New Private Rooms have no invite code, a capacity of one, owner-only database access, and no chat/messaging interface.
 6. Upload the updated index.html and SQL file to the GitHub repository. No service-role key is required or added to the frontend.
+
+
+PUBLIC STUDY ROOM CHAT REPAIR (November 22, 2026)
+
+After the existing room schema and room enhancement SQL have already been
+installed, and after NEXTBYTE_STUDY_ROOM_VISIBILITY.sql has been run, execute
+NEXTBYTE_PUBLIC_ROOM_CHAT_REPAIR.sql in Supabase Dashboard > SQL Editor. This
+adds the author-only message DELETE policy, Realtime old-row support, and the
+database-backed poll vote table. It preserves existing room messages and file
+objects. Do not skip this SQL migration: frontend button hiding alone is not
+security.
+
+Then deploy the updated index.html and sw.js from this project to the Vercel-
+connected GitHub branch. Close and reopen NEXTBYTE while online so the v21
+service-worker cache can install. Test with two separate authenticated accounts.
+
+
+NEXTBYTE PUBLIC STUDY ROOM CHAT REPAIR (November 22, 2026)
+1. In Supabase Dashboard > SQL Editor, run NEXTBYTE_PUBLIC_ROOM_CHAT_REPAIR.sql AFTER these migrations have already been applied:
+   - NEXBYTE_ROOM_SCHEMA.sql
+   - NEXBYTE_ENHANCEMENTS.sql
+   - NEXTBYTE_STUDY_ROOM_VISIBILITY.sql
+2. The new migration makes message deletion author-only, enables room-filtered Realtime DELETE updates, and creates the unique poll-vote table. Do not skip it: the client-side poll voting requires study_room_poll_votes.
+3. The study-room-files bucket remains private. Room-file Preview now uses a short-lived signed URL after Supabase Storage authorizes the room member, then renders the downloaded Blob through NEXTBYTE's in-app file preview.
+4. Upload the extracted project files to the same GitHub paths, replacing index.html and sw.js. Keep supabase-config.js unchanged. Commit to the Vercel-connected branch and wait for Ready.
+5. Test with two authorized accounts in the same Public Room: one account should not see another person's Delete control; each account can delete only its own messages; deletion should disappear from both screens without reopening the room. Also test link sharing, uploaded file preview/download, and poll create/vote/change/close.
+
+The source ZIP did not contain a hard-coded visible nexbyte-mu.vercel.app label. Share cards avoid rendering a hostname banner.

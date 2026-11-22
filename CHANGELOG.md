@@ -194,3 +194,20 @@ Live Supabase Storage, real account policies, cross-device synchronization, and 
 - Added room visibility and owner metadata in the Study Room directory.
 - Added Supabase RLS migration and public-room join RPC.
 - Bumped the service-worker cache namespace to v19 for the updated app shell.
+
+
+## November 22, 2026 — Public Study Room chat repair
+
+- Restricted shared message deletion to the authenticated message author, including when the author is the room host.
+- Added an explicit confirmation and in-room local removal after Supabase confirms deletion.
+- Added room-filtered Realtime refresh for message and poll-vote changes; the SQL migration sets `REPLICA IDENTITY FULL` so filtered DELETE events contain the previous `room_id`.
+- Replaced browser prompt dialogs for link/file-link sharing and poll creation with validated NEXTBYTE sheets.
+- Replaced prompt-based link/file-link forms with validated, safer share sheets and clear supported-content descriptions.
+- Reworked the Public Room Files tab with file type/size details and in-app previews that fetch room files through short-lived signed URLs after Storage authorization. Download remains available.
+- Added a dedicated poll-vote table with a unique `(poll_message_id, user_id)` key, database voting rules, result counts, and creator-only poll closing.
+- Incremented the service-worker app-shell cache to v21 for the final chat/file preview update.
+- The supplied project source did not contain a hard-coded visible `nexbyte-mu.vercel.app` label; the new share sheets do not render a domain banner.
+
+## Validation limits
+
+Static syntax and package integrity checks were run locally. The Supabase migration was not run against the live project, and true two-account Realtime behavior, Vercel deployment, Storage signed URLs, and Android browser UI still require live testing.
