@@ -1,3 +1,26 @@
+# NEXTBYTE Landscape File Preview Accessibility Enhancement — November 22, 2026
+
+## Improvements applied
+
+- Added a **Landscape view** control to the shared preview modal used by Study Hub materials, syllabus files, and task attachments.
+- Added a wide, full-screen reading layout with mobile safe-area handling and an independently scrollable file-preview area.
+- Added best-effort automatic landscape orientation locking through the Screen Orientation API; browsers that do not permit it retain the wide layout and can be rotated manually.
+- Added automatic wide layout when the device is already in landscape orientation with a short viewport.
+- Improved touch target sizes for PDF navigation and zoom controls, and increased the bounded maximum PDF zoom level.
+- Added cleanup for orientation locks and fullscreen state when the user exits landscape mode or closes the preview.
+- Updated the service-worker app-shell cache namespace to `nexbyte-pwa-v24-landscape-file-preview`.
+- Added `TESTING_REPORT_LANDSCAPE_PREVIEW_ACCESSIBILITY.md`.
+
+## Verification
+
+- All 9 inline JavaScript blocks passed Node.js syntax checks.
+- `sw.js` and `api/link-preview.js` passed Node.js syntax checks.
+- All inline stylesheet blocks parsed without CSS syntax errors.
+- Static checks confirmed the landscape control, orientation API fallback, fullscreen cleanup, responsive landscape layout, and expanded PDF zoom range.
+- Actual device rotation, PDF readability, and live Supabase file rendering still require testing on a deployed Android device/PWA.
+
+---
+
 # NEXTBYTE Study Hub File Preview Repair — November 22, 2026
 
 ## Repairs applied

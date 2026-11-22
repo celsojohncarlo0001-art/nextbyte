@@ -5855,6 +5855,33 @@ async function deleteRoomAny(id){
 .nbx-preview-table th{position:sticky;top:0;background:var(--secondary);z-index:1}
 @media(max-width:390px){.nbx-folder-grid{gap:8px}.nbx-folder-card{padding:10px;gap:7px}.nbx-folder-icon{flex-basis:32px;width:32px;height:32px}.nbx-folder-info strong{font-size:11px}.nbx-folder-info small{font-size:9px}.nbx-material-actions .btn{flex:1 1 calc(50% - 7px)}}
 @media(min-width:600px){.nbx-preview-frame{height:68vh}.nbx-preview-body{max-height:70vh}}
+/* Accessible landscape reading mode: expands the preview to the available screen,
+   makes the viewer independently scrollable, and keeps controls easy to tap. */
+.nbx-preview-heading{min-width:0}
+.nbx-preview-heading-actions{flex:0 0 auto}
+.nbx-preview-landscape-toggle{min-height:42px;padding:0 11px;font-size:12px;white-space:nowrap}
+.nbx-preview-orientation-hint{margin:0 0 9px;color:var(--muted-fg);font-size:12px;line-height:1.45}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode{align-items:stretch}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode .ov-sheet{box-sizing:border-box;width:100vw;max-width:none;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;border-radius:0;overflow:hidden;display:flex;flex-direction:column;padding: max(12px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px));}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode .nbx-preview-heading{margin-bottom:8px}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode .nbx-preview-orientation-hint{font-size:11px;margin-bottom:6px}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode .nbx-preview-body{flex:1 1 auto;min-height:0;max-height:none;overflow:auto}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode .nbx-pdf-viewer{box-sizing:border-box;display:flex;flex:1 1 auto;flex-direction:column;height:100%;min-height:0}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode .nbx-pdf-canvas-wrap{flex:1 1 auto;min-height:0;max-height:100%;overscroll-behavior:contain;touch-action:pan-x pan-y}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode .nbx-pdf-toolbar button{min-width:44px;min-height:42px;font-size:14px}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode .nbx-pdf-page-label{font-size:13px;min-width:88px}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode .nbx-preview-image{max-height:100%;max-height:calc(100dvh - 150px)}
+.nbx-file-preview-overlay.nbx-preview-landscape-mode .nbx-preview-frame{height:100%;min-height:0}
+@media (orientation:landscape) and (max-height:650px){
+  .nbx-file-preview-overlay:not(.nbx-preview-landscape-mode){align-items:stretch}
+  .nbx-file-preview-overlay:not(.nbx-preview-landscape-mode) .ov-sheet{box-sizing:border-box;width:100vw;max-width:none;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;border-radius:0;overflow:hidden;display:flex;flex-direction:column;padding: max(10px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px))}
+  .nbx-file-preview-overlay:not(.nbx-preview-landscape-mode) .nbx-preview-heading{margin-bottom:7px}
+  .nbx-file-preview-overlay:not(.nbx-preview-landscape-mode) .nbx-preview-orientation-hint{font-size:11px;margin-bottom:5px}
+  .nbx-file-preview-overlay:not(.nbx-preview-landscape-mode) .nbx-preview-body{flex:1 1 auto;min-height:0;max-height:none;overflow:auto}
+  .nbx-file-preview-overlay:not(.nbx-preview-landscape-mode) .nbx-pdf-viewer{box-sizing:border-box;display:flex;flex:1 1 auto;flex-direction:column;height:100%;min-height:0}
+  .nbx-file-preview-overlay:not(.nbx-preview-landscape-mode) .nbx-pdf-canvas-wrap{flex:1 1 auto;min-height:0;max-height:100%;overscroll-behavior:contain}
+}
+@media(max-width:390px){.nbx-preview-landscape-toggle{font-size:11px;padding:0 8px}.nbx-preview-heading-actions{gap:5px}}
 </style>
 
 <style id="nbx-task-video-layout-v2">
@@ -6218,21 +6245,41 @@ async function deleteRoomAny(id){
   function nbxCreatePreviewPanel(name, type) {
     var accept = '.pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.md,.csv,.mp3,.wav,.m4a,.ogg,.mp4,.webm,.mov,.m4v,.docx,.xlsx,.xls,.doc,.pptx,.ppt';
     var panel = sheet(
-      '<div class="f jb aic g2 mb3"><div class="grow minw"><h3 class="txl semi">File preview</h3><p class="txs muted nbx-preview-title" title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</p></div><button class="iconbtn" type="button" data-close-preview aria-label="Close preview">' + ic('x',18) + '</button></div>' +
-      '<div class="nbx-preview-meta txs muted mb2">' + nbxEscape(type || 'File') + '</div><div id="nbxPreviewBody" class="nbx-preview-body"><p class="txm muted">Loading preview…</p></div>' +
+      '<div class="f jb aic g2 mb3 nbx-preview-heading"><div class="grow minw"><h3 class="txl semi">File preview</h3><p class="txs muted nbx-preview-title" title="' + nbxEscape(name) + '">' + nbxEscape(name) + '</p></div><div class="f aic g1 nbx-preview-heading-actions"><button class="btn btn-secondary nbx-preview-landscape-toggle" type="button" data-toggle-landscape aria-pressed="false" aria-label="Open landscape reading mode">↻ Landscape view</button><button class="iconbtn" type="button" data-close-preview aria-label="Close preview">' + ic('x',18) + '</button></div></div>' +
+      '<div class="nbx-preview-meta txs muted mb2">' + nbxEscape(type || 'File') + '</div><p class="nbx-preview-orientation-hint" aria-live="polite">For a wider reading area, turn your device sideways. Use the PDF + and − controls to enlarge the page.</p><div id="nbxPreviewBody" class="nbx-preview-body"><p class="txm muted">Loading preview…</p></div>' +
       '<input type="file" data-open-device-input accept="' + accept + '" hidden />' +
       '<div class="f g2 mt3"><button class="btn btn-secondary grow" type="button" data-open-device>' + ic('upload',15) + ' Open from Device</button><button class="btn btn-primary grow" type="button" data-preview-download>' + ic('download',15) + ' Download &amp; save offline</button></div>' +
       '<div class="f mt2"><button class="btn btn-secondary btn-block" type="button" data-close-preview-bottom>Close</button></div>'
     );
     NBX_ACTIVE_PREVIEW_PANEL = panel;
+    panel.classList.add('nbx-file-preview-overlay');
     panel.__nbxPreviewObjectUrl = null;
+    panel.__nbxLandscapeMode = false;
+    panel.__nbxRequestedFullscreen = false;
     // Resolve the controls from this panel before registering handlers.
     // The previous build referenced deviceButton/deviceInput without declaring
     // them, throwing a ReferenceError here and leaving the modal on its initial
     // "Loading preview..." message before the file renderer could even start.
     var deviceButton = panel.querySelector('[data-open-device]');
     var deviceInput = panel.querySelector('[data-open-device-input]');
+    var landscapeButton = panel.querySelector('[data-toggle-landscape]');
     function releasePreviewResources() {
+      if (panel.__nbxLandscapeMode) {
+        panel.__nbxLandscapeMode = false;
+        panel.classList.remove('nbx-preview-landscape-mode');
+        try {
+          if (window.screen && window.screen.orientation && typeof window.screen.orientation.unlock === 'function') window.screen.orientation.unlock();
+        } catch (orientationUnlockError) { console.warn('Could not release the screen orientation lock:', orientationUnlockError); }
+      }
+      if (panel.__nbxRequestedFullscreen && document.fullscreenElement === panel && typeof document.exitFullscreen === 'function') {
+        panel.__nbxRequestedFullscreen = false;
+        try { var exitFullscreenPromise = document.exitFullscreen(); if (exitFullscreenPromise && typeof exitFullscreenPromise.catch === 'function') exitFullscreenPromise.catch(function (error) { console.warn('Could not exit preview fullscreen:', error); }); }
+        catch (fullscreenError) { console.warn('Could not exit preview fullscreen:', fullscreenError); }
+      }
+      if (panel.__nbxFullscreenChangeHandler) {
+        document.removeEventListener('fullscreenchange', panel.__nbxFullscreenChangeHandler);
+        panel.__nbxFullscreenChangeHandler = null;
+      }
       if (NBX_ACTIVE_PREVIEW_PANEL === panel) NBX_ACTIVE_PREVIEW_PANEL = null;
       if (panel.__nbxPdfCleanup) {
         try { panel.__nbxPdfCleanup(); } catch (cleanupError) { console.warn('PDF viewer cleanup failed:', cleanupError); }
@@ -6245,7 +6292,7 @@ async function deleteRoomAny(id){
       if (panel.__nbxRemovalObserver) { panel.__nbxRemovalObserver.disconnect(); panel.__nbxRemovalObserver = null; }
     }
     panel.__nbxReleasePreviewResources = releasePreviewResources;
-    if (!deviceButton || !deviceInput) {
+    if (!deviceButton || !deviceInput || !landscapeButton) {
       releasePreviewResources();
       closeTop();
       throw new Error('The file-preview controls could not be initialized. Please refresh NEXTBYTE and try again.');
@@ -6256,9 +6303,62 @@ async function deleteRoomAny(id){
       });
       panel.__nbxRemovalObserver.observe(document.body, { childList:true, subtree:true });
     }
+    panel.__nbxFullscreenChangeHandler = function () {
+      if (panel.__nbxRequestedFullscreen && document.fullscreenElement !== panel) {
+        panel.__nbxRequestedFullscreen = false;
+        if (panel.__nbxLandscapeMode) {
+          panel.__nbxLandscapeMode = false;
+          panel.classList.remove('nbx-preview-landscape-mode');
+          landscapeButton.setAttribute('aria-pressed', 'false');
+          landscapeButton.textContent = '↻ Landscape view';
+          landscapeButton.setAttribute('aria-label', 'Open landscape reading mode');
+          try { if (window.screen && window.screen.orientation && typeof window.screen.orientation.unlock === 'function') window.screen.orientation.unlock(); } catch (_) {}
+        }
+      }
+    };
+    document.addEventListener('fullscreenchange', panel.__nbxFullscreenChangeHandler);
     function closePreview() { releasePreviewResources(); closeTop(); }
     panel.querySelector('[data-close-preview]').onclick = closePreview;
     panel.querySelector('[data-close-preview-bottom]').onclick = closePreview;
+    async function setLandscapeMode(enabled) {
+      panel.__nbxLandscapeMode = !!enabled;
+      panel.classList.toggle('nbx-preview-landscape-mode', !!enabled);
+      landscapeButton.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+      landscapeButton.textContent = enabled ? 'Exit landscape view' : '↻ Landscape view';
+      landscapeButton.setAttribute('aria-label', enabled ? 'Exit landscape reading mode' : 'Open landscape reading mode');
+      if (!enabled) {
+        try {
+          if (window.screen && window.screen.orientation && typeof window.screen.orientation.unlock === 'function') window.screen.orientation.unlock();
+        } catch (orientationUnlockError) { console.warn('Could not release the screen orientation lock:', orientationUnlockError); }
+        if (panel.__nbxRequestedFullscreen && document.fullscreenElement === panel && typeof document.exitFullscreen === 'function') {
+          panel.__nbxRequestedFullscreen = false;
+          try { await document.exitFullscreen(); } catch (fullscreenError) { console.warn('Could not exit preview fullscreen:', fullscreenError); }
+        }
+        return;
+      }
+      // Fullscreen is requested from this user gesture because some mobile browsers
+      // allow an orientation lock only while an app is fullscreen or installed.
+      if (!document.fullscreenElement && typeof panel.requestFullscreen === 'function') {
+        try {
+          var fullscreenRequest = panel.requestFullscreen();
+          panel.__nbxRequestedFullscreen = true;
+          await fullscreenRequest;
+        } catch (fullscreenError) {
+          panel.__nbxRequestedFullscreen = false;
+          console.info('Landscape layout remains available; this browser did not allow fullscreen:', fullscreenError);
+        }
+      }
+      try {
+        var orientation = window.screen && window.screen.orientation;
+        if (orientation && typeof orientation.lock === 'function') await orientation.lock('landscape');
+      } catch (orientationError) {
+        // Keep the wide layout active. The user can rotate the device manually;
+        // orientation locking is restricted in some browser/tab configurations.
+        console.info('Automatic landscape rotation is not available in this browser mode:', orientationError);
+      }
+      setTimeout(function () { window.dispatchEvent(new Event('resize')); }, 120);
+    }
+    landscapeButton.onclick = function () { setLandscapeMode(!panel.__nbxLandscapeMode); };
     deviceButton.onclick = function () { deviceInput.click(); };
     deviceInput.addEventListener('change', function () {
       var selected = deviceInput.files && deviceInput.files[0];
@@ -6453,7 +6553,7 @@ async function deleteRoomAny(id){
       var baseViewport = page.getViewport({ scale:1 });
       var availableWidth = Math.max(220, canvasWrap.clientWidth - 18);
       var fitScale = availableWidth / baseViewport.width;
-      var scale = Math.max(0.35, Math.min(4, fitScale * state.zoom));
+      var scale = Math.max(0.35, Math.min(5, fitScale * state.zoom));
       var viewport = page.getViewport({ scale:scale });
       var pixelRatio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
       canvas.width = Math.max(1, Math.floor(viewport.width * pixelRatio));
@@ -6480,7 +6580,7 @@ async function deleteRoomAny(id){
     prev.onclick = function () { if (state.page > 1) { state.page--; renderPage().catch(showRenderError); } };
     next.onclick = function () { if (state.page < pdf.numPages) { state.page++; renderPage().catch(showRenderError); } };
     zoomOut.onclick = function () { state.zoom = Math.max(0.5, state.zoom / 1.2); renderPage().catch(showRenderError); };
-    zoomIn.onclick = function () { state.zoom = Math.min(3.5, state.zoom * 1.2); renderPage().catch(showRenderError); };
+    zoomIn.onclick = function () { state.zoom = Math.min(5, state.zoom * 1.2); renderPage().catch(showRenderError); };
     fit.onclick = function () { state.zoom = 1; renderPage().catch(showRenderError); canvasWrap.scrollTo({ top:0, left:0, behavior:'smooth' }); };
     function showRenderError(error) {
       console.error('PDF page rendering failed:', error);
