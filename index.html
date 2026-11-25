@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
 <meta name="theme-color" content="#2563EB"/>
 <meta name="nexbyte-repair-layer" content="4.4"/>
 <meta name="description" content="NEXBYTE — your personal academic workspace, available online and offline."/>
@@ -894,10 +894,16 @@ var ICONS={
   zap:'<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/>',
   skipBack:'<path d="M19 20 9 12l10-8v16Z"/><path d="M5 19V5"/>',
   skipFwd:'<path d="M5 4l10 8-10 8V4Z"/><path d="M19 5v14"/>',
-  upload:'<path d="M12 21V9"/><path d="m7 13 5-5 5 5"/><path d="M4 4h16"/>'
+  upload:'<path d="M12 21V9"/><path d="m7 13 5-5 5 5"/><path d="M4 4h16"/>',
+  cloud:'<path d="M20 16.5a4.5 4.5 0 0 0-1.1-8.9A6.5 6.5 0 0 0 6.2 9.4 3.8 3.8 0 0 0 6 17h13"/>',
+  heart:'<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/>',
+  repeat:'<path d="m17 1 4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="m7 23-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  shuffle:'<path d="m18 14 4 4-4 4"/><path d="M18 2l4 4-4 4"/><path d="M2 18h2.5a5 5 0 0 0 4-2l7-8a5 5 0 0 1 4-2H22"/><path d="M2 6h2.5a5 5 0 0 1 4 2l1 1"/><path d="m14 16 1.5 2a5 5 0 0 0 4 2H22"/>',
+  volume:'<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>'
+
 };
-function ic(n,s){s=s||20;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+(ICONS[n]||'')+'</svg>';}
-function icf(n,s){s=s||20;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="currentColor" stroke="none">'+(ICONS[n]||'')+'</svg>';}
+function ic(n,s){s=s||20;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">'+(ICONS[n]||'')+'</svg>';}
+function icf(n,s){s=s||20;return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">'+(ICONS[n]||'')+'</svg>';}
 function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function logo(size){return '<div class="logo" style="width:'+size+'px;height:'+size+'px;border-radius:'+Math.round(size*.26)+'px">'+ic('grad',size*.55)+'</div>';}
 function avatar(initials,color,size){return '<div class="avatar" style="width:'+size+'px;height:'+size+'px;background:'+color+';font-size:'+Math.round(size*.38)+'px">'+esc(initials)+'</div>';}
@@ -951,7 +957,7 @@ var UI={
 /* Focus-session runtime state used by Lock-In and room focus controls. */
 var LOCK={
   subjectId:null,phase:'setup',duration:25*60,left:25*60,running:false,
-  strict:false,chime:true,mode:'solo',roomId:null,interval:null,startedAt:null,_logged:false
+  strict:false,chime:true,mode:'solo',roomId:null,interval:null,startedAt:null,endsAt:null,_logged:false
 };
 if(!S.music.favorites)S.music.favorites=[];if(!S.music.playlists)S.music.playlists=[];
 /* FIX 1: track unsaved notes globally so logout/clear can reset it */
@@ -1437,7 +1443,7 @@ function filterMusicLibrary(query){UI.musicQuery=query||'';var list=document.get
 function musicTrackRows(list,query){
   query=(query||'').toLowerCase();list=list.filter(function(t){return ((t.title||t.name)+' '+(t.artist||'')).toLowerCase().indexOf(query)>=0;});
   if(!list.length)return '<div class="empty" style="padding:28px 16px"><div class="em">🎧</div><p class="txm muted">'+(query?'No tracks match your search.':'No songs in this view yet.')+'</p></div>';
-  return list.map(function(t,index){var active=S.music.localId===t.id&&S.music.active==='local',favorite=S.music.favorites.indexOf(t.id)>=0;return '<div class="nb-music-row'+(active?' active':'')+'"><button class="nb-music-play" onclick="playLocalMusic(\''+t.id+'\')" aria-label="Play '+esc(t.name)+'">'+(active&&S.music.playing?icf('pause',16):icf('play',16))+'</button><button class="nb-music-track" onclick="playLocalMusic(\''+t.id+'\')"><strong>'+esc(t.title||t.name)+'</strong><small>'+esc(t.artist||'Saved audio')+' · '+fmtSize(t.size)+'</small></button><button class="iconbtn nb-music-icon" onclick="musicToggleFavorite(\''+t.id+'\')" aria-label="'+(favorite?'Remove favorite':'Add favorite')+'">'+(favorite?icf('heart',17):ic('heart',17))+'</button><button class="iconbtn nb-music-icon" onclick="musicAddToPlaylist(\''+t.id+'\')" aria-label="Add to playlist">'+ic('listChecks',17)+'</button><button class="iconbtn nb-music-icon" onclick="musicDownloadOffline(\''+t.id+'\')" aria-label="Download for offline">'+ic('download',16)+'</button><button class="iconbtn nb-music-icon" onclick="musicDeleteTrack(\''+t.id+'\')" aria-label="Remove track">'+ic('trash',16)+'</button></div>';}).join('');
+  return list.map(function(t,index){var active=S.music.localId===t.id&&S.music.active==='local',favorite=S.music.favorites.indexOf(t.id)>=0;return '<div class="nb-music-row'+(active?' active':'')+'"><button class="nb-music-play" onclick="playLocalMusic(\''+t.id+'\')" aria-label="'+(active&&S.music.playing?'Pause ':'Play ')+esc(t.name)+'" title="'+(active&&S.music.playing?'Pause ':'Play ')+esc(t.name)+'">'+(active&&S.music.playing?icf('pause',16):icf('play',16))+'</button><button class="nb-music-track" onclick="playLocalMusic(\''+t.id+'\')"><strong>'+esc(t.title||t.name)+'</strong><small>'+esc(t.artist||'Saved audio')+' · '+fmtSize(t.size)+'</small></button><button class="iconbtn nb-music-icon" onclick="musicToggleFavorite(\''+t.id+'\')" aria-label="'+(favorite?'Remove favorite':'Add favorite')+'">'+(favorite?icf('heart',17):ic('heart',17))+'</button><button class="iconbtn nb-music-icon" onclick="musicAddToPlaylist(\''+t.id+'\')" aria-label="Add to playlist">'+ic('listChecks',17)+'</button><button class="iconbtn nb-music-icon" onclick="musicDownloadOffline(\''+t.id+'\')" aria-label="Download for offline">'+ic('download',16)+'</button><button class="iconbtn nb-music-icon" onclick="musicDeleteTrack(\''+t.id+'\')" aria-label="Remove track">'+ic('trash',16)+'</button></div>';}).join('');
 }
 function musicLibraryTab(){
   var view=S.music.view||'all',playlist=S.music.playlists.filter(function(p){return p.id===view;})[0];
@@ -1456,7 +1462,7 @@ function musicLibraryTab(){
 function activePlayerCard(){
   if(S.music.active==='local'){
     var track=musicTrackById(S.music.localId);
-    return '<div class="nb-music-player card padc"><div class="f jb aic"><div class="f g3 aic minw"><div class="nb-music-art">'+ic('music',22)+'</div><div class="grow minw"><p class="txm semi trunc">'+esc(track?track.title||track.name:'Audio track')+'</p><p class="txs muted trunc">'+esc(track?track.artist||'Saved audio':'')+'</p></div></div><button class="iconbtn" onclick="stopMusic()" aria-label="Stop playback">'+ic('x',16)+'</button></div><div class="f g2 aic mt3"><span class="txs muted" id="musicCurrentTime">0:00</span><div class="bar grow" style="height:6px"><div id="musicProgressBar" style="width:0%;background:var(--primary)"></div></div><span class="txs muted" id="musicDuration">0:00</span></div><input id="musicSeek" class="nb-music-range mt2" type="range" min="0" max="1000" value="0" oninput="window.NB_MUSIC_SEEKING=true;musicSeek(this.value)" onchange="window.NB_MUSIC_SEEKING=false" aria-label="Seek in track"/><div class="f jb aic mt3"><button class="iconbtn'+(S.music.shuffle?' blue':'')+'" onclick="musicToggleShuffle()" aria-label="Toggle shuffle">'+ic('shuffle',17)+'</button><button class="iconbtn" onclick="musicPrev()" aria-label="Previous track">'+ic('skipBack',18)+'</button><button class="playbtn" id="musicBigPlay" style="height:54px;width:54px;background:var(--primary)" onclick="musicTogglePlay()">'+(S.music.playing?icf('pause',22):icf('play',22))+'</button><button class="iconbtn" onclick="musicNext(false)" aria-label="Next track">'+ic('skipFwd',18)+'</button><button class="iconbtn'+(S.music.repeat!=='off'?' blue':'')+'" onclick="musicCycleRepeat()" aria-label="Repeat mode '+S.music.repeat+'">'+ic('repeat',17)+(S.music.repeat==='one'?'<span class="nb-repeat-one">1</span>':'')+'</button></div><div class="f g2 aic mt2"><span class="muted">'+ic('volume',16)+'</span><input class="nb-music-range" type="range" min="0" max="100" value="'+S.music.volume+'" oninput="musicVolume(this.value)" aria-label="Volume"/></div></div>';
+    return '<div class="nb-music-player card padc"><div class="f jb aic"><div class="f g3 aic minw"><div class="nb-music-art">'+ic('music',22)+'</div><div class="grow minw"><p class="txm semi trunc">'+esc(track?track.title||track.name:'Audio track')+'</p><p class="txs muted trunc">'+esc(track?track.artist||'Saved audio':'')+'</p></div></div><button class="iconbtn" onclick="stopMusic()" aria-label="Stop playback">'+ic('x',16)+'</button></div><div class="f g2 aic mt3"><span class="txs muted" id="musicCurrentTime">0:00</span><div class="bar grow" style="height:6px"><div id="musicProgressBar" style="width:0%;background:var(--primary)"></div></div><span class="txs muted" id="musicDuration">0:00</span></div><input id="musicSeek" class="nb-music-range mt2" type="range" min="0" max="1000" value="0" oninput="window.NB_MUSIC_SEEKING=true;musicSeek(this.value)" onchange="window.NB_MUSIC_SEEKING=false" aria-label="Seek in track"/><div class="f jb aic mt3"><button class="iconbtn'+(S.music.shuffle?' blue':'')+'" onclick="musicToggleShuffle()" aria-label="Toggle shuffle">'+ic('shuffle',17)+'</button><button class="iconbtn" onclick="musicPrev()" aria-label="Previous track">'+ic('skipBack',18)+'</button><button class="playbtn" id="musicBigPlay" style="height:54px;width:54px;background:var(--primary)" onclick="musicTogglePlay()" aria-label="'+(S.music.playing?'Pause':'Play')+' current track" title="'+(S.music.playing?'Pause':'Play')+'">'+(S.music.playing?icf('pause',22):icf('play',22))+'</button><button class="iconbtn" onclick="musicNext(false)" aria-label="Next track">'+ic('skipFwd',18)+'</button><button class="iconbtn'+(S.music.repeat!=='off'?' blue':'')+'" onclick="musicCycleRepeat()" aria-label="Repeat mode '+S.music.repeat+'">'+ic('repeat',17)+(S.music.repeat==='one'?'<span class="nb-repeat-one">1</span>':'')+'</button></div><div class="f g2 aic mt2"><span class="muted">'+ic('volume',16)+'</span><input class="nb-music-range" type="range" min="0" max="100" value="'+S.music.volume+'" oninput="musicVolume(this.value)" aria-label="Volume"/></div></div>';
   }
   if(S.music.active==='youtube')return '<div class="card padc"><div class="f jb aic mb2"><div><p class="txm semi">YouTube player</p><p class="txs muted">Video or playlist playback</p></div><div class="f g1"><button class="iconbtn" onclick="openYoutubeExternally()" title="Open in YouTube">'+ic('link',16)+'</button><button class="iconbtn" onclick="stopMusic()" title="Stop">'+ic('x',16)+'</button></div></div><div id="mediaHolder" class="nb-youtube-holder"><span class="txs muted">Loading YouTube player…</span></div><p class="txs muted mt2">Some videos disable embedding or have regional restrictions. Use “Open in YouTube” for those videos.</p></div>';
   return '';
@@ -1468,7 +1474,7 @@ function youtubeTab(){
 function vMusic(){
   var html='<div class="pad pt nb-music-heading"><div><h1 class="tx2 bold">Music</h1><p class="txm muted">Your private library and YouTube playback.</p></div></div>';
   if(S.music.active!=='none')html+='<div class="pad">'+activePlayerCard()+'</div>';
-  html+='<div class="pad mt3"><div class="seg"><button class="'+(UI.musicTab==='offline'?'on':'')+'" onclick="setMusicTab(\'offline\')">'+ic('headphones',14)+' Library</button><button class="'+(UI.musicTab==='youtube'?'on':'')+'" onclick="setMusicTab(\'youtube\')">'+ic('play',14)+' YouTube</button></div></div>';
+  html+='<div class="pad mt3"><div class="seg nb-music-tabs"><button class="'+(UI.musicTab==='offline'?'on':'')+'" onclick="setMusicTab(\'offline\')">'+ic('headphones',14)+' Library</button><button class="'+(UI.musicTab==='youtube'?'on':'')+'" onclick="setMusicTab(\'youtube\')">'+ic('play',14)+' YouTube</button></div></div>';
   html+=UI.musicTab==='youtube'?youtubeTab():musicLibraryTab();return html;
 }
 function offlineTab(){return musicLibraryTab();}
@@ -1479,8 +1485,8 @@ function roomMusicPanel(room){
   return '<div class="nb-room-music card padc"><div class="f jb aic"><div class="f g2 aic minw"><span class="iconbtn" style="background:var(--primary-soft);color:var(--primary-text)">'+ic('headphones',17)+'</span><div class="grow minw"><p class="txm semi">Study music</p><p class="txs muted trunc">'+esc(track?(track.title||track.name):'Choose audio from your cloud library')+'</p></div></div><span class="tag">Personal</span></div><div class="f g2 mt2"><button class="btn btn-secondary btn-sm grow" onclick="go(\'/music\')">'+ic('music',14)+' Library</button><button class="btn btn-primary btn-sm grow" onclick="'+(track?'musicTogglePlay()':'go(\'/music\')')+'">'+(track?(playing?icf('pause',14)+' Pause':icf('play',14)+' Play'):'Choose track')+'</button></div><p class="txs muted mt2">Audio plays on your device only; it is not broadcast to room members.</p></div>';
 }
 
-function persistLock(){try{sessionStorage.setItem('nb_lock',JSON.stringify({subjectId:LOCK.subjectId,phase:LOCK.phase,duration:LOCK.duration,left:LOCK.left,running:LOCK.running,strict:LOCK.strict,chime:LOCK.chime,mode:LOCK.mode,roomId:LOCK.roomId,startedAt:LOCK.startedAt}));}catch(e){}}
-function restoreLock(){try{var r=sessionStorage.getItem('nb_lock');if(r){var p=JSON.parse(r);Object.assign(LOCK,p);LOCK.interval=null;}}catch(e){}}
+function persistLock(){try{sessionStorage.setItem('nb_lock',JSON.stringify({subjectId:LOCK.subjectId,phase:LOCK.phase,duration:LOCK.duration,left:LOCK.left,running:LOCK.running,strict:LOCK.strict,chime:LOCK.chime,mode:LOCK.mode,roomId:LOCK.roomId,startedAt:LOCK.startedAt,endsAt:LOCK.endsAt}));}catch(e){}}
+function restoreLock(){try{var r=sessionStorage.getItem('nb_lock');if(r){var p=JSON.parse(r);Object.assign(LOCK,p);LOCK.interval=null;if(LOCK.running){var deadline=Number(LOCK.endsAt);if(!Number.isFinite(deadline)||deadline<=0)deadline=Date.now()+Math.max(0,Number(LOCK.left)||0)*1000;LOCK.endsAt=deadline;LOCK.left=Math.max(0,Math.ceil((deadline-Date.now())/1000));}else{LOCK.endsAt=null;}}}catch(e){LOCK.interval=null;}}
 
 function go(path){if(location.hash==='#'+path){render();}else{location.hash='#'+path;}}
 function resolve(){
@@ -1518,9 +1524,9 @@ function miniPlayerHtml(){
   return '<div class="nb-mini" id="nbMini">'+
     '<div class="cover" id="miniCover">'+(S.music.playing?'<span class="eq"><i></i><i></i><i></i></span>':ic('music',18))+'</div>'+ 
     '<div class="info"><p class="title">'+esc(currentTrackName()||'Nothing playing')+'</p><p class="sub">'+esc(currentTrackSub())+'</p><div class="bar" style="height:3px;margin-top:4px"><div id="miniProgress" style="width:0%;background:var(--primary)"></div></div></div>'+
-    (S.music.active==='local'?'<button class="btn play" id="miniPlayBtn" onclick="musicTogglePlay()">'+(S.music.playing?icf('pause',16):icf('play',16))+'</button>':'')+
-    '<button class="btn" onclick="go(\'/music\')" title="Open music player">'+ic('arrowR',16)+'</button>'+ 
-    '<button class="btn" onclick="stopMusic()" title="Stop">'+ic('x',16)+'</button></div>';
+    (S.music.active==='local'?'<button class="btn play" id="miniPlayBtn" onclick="musicTogglePlay()" aria-label="'+(S.music.playing?'Pause':'Play')+' current track" title="'+(S.music.playing?'Pause':'Play')+'">'+(S.music.playing?icf('pause',16):icf('play',16))+'</button>':'')+
+    '<button class="btn" onclick="go(\'/music\')" title="Open music player" aria-label="Open music player">'+ic('arrowR',16)+'</button>'+ 
+    '<button class="btn" onclick="stopMusic()" title="Stop" aria-label="Stop music">'+ic('x',16)+'</button></div>';
 }
 function bottomNav(active){
   var items=[
@@ -1800,7 +1806,7 @@ function vDashboard(){
   h+='</div>';
   h+='<div class="pad mt5"><h2 class="txm semi mb3">Your subjects</h2><div class="hscroll" style="padding-bottom:4px">'+S.subjects.map(function(s){return '<button class="roomcard" style="min-width:170px;background:'+s.color+'0F;border-color:'+s.color+'33" onclick="go(\'/study/'+s.id+'\')"><div class="f jb aic"><span class="txs bold" style="color:'+s.color+'">'+esc(s.code)+'</span><span class="txs muted">'+s.progress+'%</span></div><p class="txm semi mt2 clamp2" style="min-height:36px">'+esc(s.name)+'</p><div class="bar mt2" style="height:6px"><div style="width:'+s.progress+'%;background:'+s.color+'"></div></div></button>';}).join('')+'</div></div>';
   h+='<div class="pad mt5 pb"><h2 class="txm semi mb3">Widgets</h2><div class="fc g3">'+
-    '<div class="card padc f g3 aic"><span class="iconbtn" style="height:44px;width:44px;background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',20)+'</span><div class="grow minw"><p class="txs muted" id="dashMusicSub">'+(currentTrackSub()||'Open Music to start')+'</p><p class="txm semi trunc" id="dashMusicTitle">'+(currentTrackName()||'Nothing playing')+'</p></div><button class="playbtn" id="dashMusicBtn" style="height:40px;width:40px;background:#A78BFA" onclick="'+(S.music.active==='local'?'musicTogglePlay()':'go(\'/music\')')+'">'+(S.music.playing?icf('pause',16):icf('play',16))+'</button></div>'+
+    '<div class="card padc f g3 aic"><span class="iconbtn" style="height:44px;width:44px;background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',20)+'</span><div class="grow minw"><p class="txs muted" id="dashMusicSub">'+(currentTrackSub()||'Open Music to start')+'</p><p class="txm semi trunc" id="dashMusicTitle">'+(currentTrackName()||'Nothing playing')+'</p></div><button class="playbtn" id="dashMusicBtn" style="height:40px;width:40px;background:#A78BFA" onclick="'+(S.music.active==='local'?'musicTogglePlay()':'go(\'/music\')')+'" aria-label="'+(S.music.active==='local'?(S.music.playing?'Pause music':'Play music'):'Open music library')+'" title="'+(S.music.active==='local'?(S.music.playing?'Pause music':'Play music'):'Open music library')+'">'+(S.music.playing?icf('pause',16):icf('play',16))+'</button></div>'+
     '<div class="card padc"><div class="f jb aic mb2"><span class="txs muted f g2 aic">'+ic('target',15)+' Daily goal</span><span class="txs semi" style="color:#2DD4BF">'+pct+'%</span></div><div class="bar" style="height:8px"><div style="width:'+pct+'%;background:linear-gradient(90deg,#2563EB,#2DD4BF)"></div></div><p class="txs muted mt2">'+Math.max(0,goal-todayMin)+' minutes left to hit today\'s target.</p></div></div>';
   h+='<div class="mt5"><h2 class="txm semi mb3">Recent activity</h2><div class="fc">'+S.activities.slice(0,5).map(function(a){return '<div class="actrow"><span class="actdot" style="background:'+a.color+'18"><i style="background:'+a.color+'"></i></span><p class="grow txm muted">'+esc(a.text)+'</p><span class="txs muted" style="white-space:nowrap">'+esc(a.time)+'</span></div>';}).join('')+'</div></div></div>';
   return h;
@@ -1956,40 +1962,41 @@ function vLockIn(subjectId){
 }
 function lockSetup(s){
   var durs=[15,25,45,60];
-  return '<div class="lockin"><div class="hdr"><button class="iconbtn" onclick="go(\'/study/'+s.id+'\')">'+ic('chevL',20)+'</button><div class="grow minw"><h1 class="txl semi">Lock-In Workspace</h1><p class="txs muted">'+esc(s.code)+' · '+esc(s.name)+'</p></div></div><div class="main" style="padding:20px;display:flex;flex-direction:column;gap:20px"><div class="card padc center" style="padding:24px;border-color:'+s.color+'44;background:'+s.color+'0A"><span class="iconbtn" style="height:52px;width:52px;margin:0 auto 12px;background:'+s.color+'20;color:'+s.color+'">'+ic('zap',24)+'</span><h2 class="txl bold">Focus on '+esc(s.code)+'</h2><p class="txs muted mt1">Every completed minute is logged to the subject automatically.</p></div><div><p class="txs semi muted mb2">DURATION</p><div class="grid2">'+durs.map(function(d){var on=LOCK.duration===d*60;return '<button class="btn" style="height:52px;'+(on?'background:'+s.color+';color:#fff;border:none':'background:var(--card);border:1px solid var(--border);color:var(--muted-fg)')+'" onclick="setLockDuration('+d+')">'+d+' min</button>';}).join('')+'</div></div><div><p class="txs semi muted mb2">MODE</p><div class="f g2"><button class="modebtn'+(LOCK.mode==='solo'?' on':'')+'" style="'+(LOCK.mode==='solo'?'background:'+s.color:'')+'" onclick="setLockMode(\'solo\')">'+ic('brain',18)+'<span>Solo Lock-In</span></button><button class="modebtn'+(LOCK.mode==='room'?' on':'')+'" style="'+(LOCK.mode==='room'?'background:'+s.color:'')+'" onclick="setLockMode(\'room\')">'+ic('users',18)+'<span>Room Focus</span></button></div></div><div class="card padc"><div class="prow"><div><p class="txm med">Strict Mode</p><p class="txs muted">Blocks navigation until the timer ends</p></div><button class="toggle'+(LOCK.strict?' on':'')+'" onclick="LOCK.strict=!LOCK.strict;render()"><span></span></button></div><div class="hr"></div><div class="prow"><div><p class="txm med">Chime</p><p class="txs muted">Play a sound when the session ends</p></div><button class="toggle'+(LOCK.chime?' on':'')+'" onclick="LOCK.chime=!LOCK.chime;render()"><span></span></button></div></div><div class="card padc f g3 aic"><span class="iconbtn" style="height:44px;width:44px;background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',20)+'</span><div class="grow minw"><p class="txs muted">Music</p><p class="txm semi trunc">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active==='local'?'<button class="playbtn" style="height:40px;width:40px;background:#A78BFA" onclick="musicTogglePlay()">'+(S.music.playing?icf('pause',16):icf('play',16))+'</button>':'<button class="playbtn" style="height:40px;width:40px;background:#A78BFA" onclick="go(\'/music\')">'+ic('chevR',16)+'</button>')+'</div><button class="btn btn-primary btn-lg btn-block" onclick="startLock()">'+ic('play',20)+' Start '+Math.round(LOCK.duration/60)+'-minute session</button></div></div>';
+  return '<div class="lockin"><div class="hdr"><button class="iconbtn" onclick="go(\'/study/'+s.id+'\')">'+ic('chevL',20)+'</button><div class="grow minw"><h1 class="txl semi">Lock-In Workspace</h1><p class="txs muted">'+esc(s.code)+' · '+esc(s.name)+'</p></div></div><div class="main" style="padding:20px;display:flex;flex-direction:column;gap:20px"><div class="card padc center" style="padding:24px;border-color:'+s.color+'44;background:'+s.color+'0A"><span class="iconbtn" style="height:52px;width:52px;margin:0 auto 12px;background:'+s.color+'20;color:'+s.color+'">'+ic('zap',24)+'</span><h2 class="txl bold">Focus on '+esc(s.code)+'</h2><p class="txs muted mt1">Every completed minute is logged to the subject automatically.</p></div><div><p class="txs semi muted mb2">DURATION</p><div class="grid2">'+durs.map(function(d){var on=LOCK.duration===d*60;return '<button class="btn" style="height:52px;'+(on?'background:'+s.color+';color:#fff;border:none':'background:var(--card);border:1px solid var(--border);color:var(--muted-fg)')+'" onclick="setLockDuration('+d+')">'+d+' min</button>';}).join('')+'</div></div><div><p class="txs semi muted mb2">MODE</p><div class="f g2"><button class="modebtn'+(LOCK.mode==='solo'?' on':'')+'" style="'+(LOCK.mode==='solo'?'background:'+s.color:'')+'" onclick="setLockMode(\'solo\')" aria-pressed="'+(LOCK.mode==='solo'?'true':'false')+'">'+ic('brain',18)+'<span>Solo Lock-In</span></button><button class="modebtn'+(LOCK.mode==='room'?' on':'')+'" style="'+(LOCK.mode==='room'?'background:'+s.color:'')+'" onclick="setLockMode(\'room\')" aria-pressed="'+(LOCK.mode==='room'?'true':'false')+'">'+ic('users',18)+'<span>Room Focus</span></button></div></div><div class="card padc"><div class="prow"><div><p class="txm med">Strict Mode</p><p class="txs muted">Blocks navigation until the timer ends</p></div><button class="toggle'+(LOCK.strict?' on':'')+'" onclick="LOCK.strict=!LOCK.strict;render()" role="switch" aria-label="Strict mode" aria-checked="'+(LOCK.strict?'true':'false')+'"><span></span></button></div><div class="hr"></div><div class="prow"><div><p class="txm med">Chime</p><p class="txs muted">Play a sound when the session ends</p></div><button class="toggle'+(LOCK.chime?' on':'')+'" onclick="LOCK.chime=!LOCK.chime;render()" role="switch" aria-label="Completion chime" aria-checked="'+(LOCK.chime?'true':'false')+'"><span></span></button></div></div><div class="card padc f g3 aic"><span class="iconbtn" style="height:44px;width:44px;background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',20)+'</span><div class="grow minw"><p class="txs muted">Music</p><p class="txm semi trunc">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active==='local'?'<button class="playbtn" style="height:40px;width:40px;background:#A78BFA" onclick="musicTogglePlay()" aria-label="Play or pause current music" title="Play or pause music">'+(S.music.playing?icf('pause',16):icf('play',16))+'</button>':'<button class="playbtn" style="height:40px;width:40px;background:#A78BFA" onclick="go(\'/music\')" aria-label="Open music library" title="Open music library">'+ic('chevR',16)+'</button>')+'</div><button class="btn btn-primary btn-lg btn-block" onclick="startLock()">'+ic('play',20)+' Start '+Math.round(LOCK.duration/60)+'-minute session</button></div></div>';
 }
 function lockRunner(s){
   var R=130,C=2*Math.PI*R;var pct=(LOCK.duration-LOCK.left)/LOCK.duration;var bg=LOCK.strict?'lockin lockin-strict':'lockin';
-  return '<div class="'+bg+'"><div class="hdr" style="border-color:rgba(255,255,255,.06)"><div class="grow minw"><h1 class="txl semi trunc" style="color:'+s.color+'">'+esc(s.code)+' · '+esc(s.name)+'</h1><p class="txs muted">'+(LOCK.strict?'Strict Mode · ':'')+(LOCK.mode==='room'?'Room Focus':'Solo Lock-In')+'</p></div>'+(LOCK.strict?'':'<button class="iconbtn" onclick="abandonLock()">'+ic('x',18)+'</button>')+'</div><div class="main fc aic jc" style="padding:24px"><div class="ring-wrap"><svg viewBox="0 0 300 300"><circle cx="150" cy="150" r="'+R+'" fill="none" stroke="rgba(148,163,184,.22)" stroke-width="14"/><circle id="ring" cx="150" cy="150" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="14" stroke-linecap="round" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C-pct*C)+'"/></svg><div class="ring-center"><span id="timerText" class="ring-time" style="color:'+s.color+'">'+fmtTime(LOCK.left)+'</span><span class="txs muted mt1">'+Math.round(LOCK.duration/60)+'-minute session</span></div></div><div class="f g4 aic mt6"><button class="iconbtn" style="height:56px;width:56px" onclick="resetLock()">'+ic('reset',22)+'</button><button class="playbtn" style="width:72px;height:72px;background:'+s.color+';box-shadow:0 10px 30px '+s.color+'55" onclick="toggleLockRun()">'+(LOCK.running?icf('pause',28):icf('play',28))+'</button><button class="iconbtn" style="height:56px;width:56px" onclick="'+(S.music.active==='local'?'musicTogglePlay()':'go(\'/music\')')+'">'+ic('headphones',22)+'</button></div><div class="card padc mt6" style="width:100%;max-width:340px"><div class="f g3 aic"><span class="iconbtn" style="background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',18)+'</span><div class="grow minw"><p class="txs muted">'+(currentTrackSub()||'Music')+'</p><p class="txm semi trunc">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active==='local'?'<button class="iconbtn" onclick="musicTogglePlay()">'+(S.music.playing?ic('pause',16):ic('play',16))+'</button>':'<button class="iconbtn" onclick="go(\'/music\')">'+ic('chevR',16)+'</button>')+'</div></div>'+(LOCK.strict?'<p class="txs muted mt5 center">Strict Mode active — stay with it until the timer ends.</p>':'')+'</div></div>';
+  return '<div class="'+bg+'"><div class="hdr" style="border-color:rgba(255,255,255,.06)"><div class="grow minw"><h1 class="txl semi trunc" style="color:'+s.color+'">'+esc(s.code)+' · '+esc(s.name)+'</h1><p class="txs muted">'+(LOCK.strict?'Strict Mode · ':'')+(LOCK.mode==='room'?'Room Focus':'Solo Lock-In')+'</p></div>'+(LOCK.strict?'':'<button class="iconbtn" onclick="abandonLock()" aria-label="Abandon focus session" title="Abandon session">'+ic('x',18)+'</button>')+'</div><div class="main fc aic jc" style="padding:24px"><div class="ring-wrap"><svg viewBox="0 0 300 300"><circle cx="150" cy="150" r="'+R+'" fill="none" stroke="rgba(148,163,184,.22)" stroke-width="14"/><circle id="ring" cx="150" cy="150" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="14" stroke-linecap="round" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C-pct*C)+'"/></svg><div class="ring-center"><span id="timerText" class="ring-time" style="color:'+s.color+'">'+fmtTime(LOCK.left)+'</span><span class="txs muted mt1">'+Math.round(LOCK.duration/60)+'-minute session</span></div></div><div class="f g4 aic mt6"><button class="iconbtn" style="height:56px;width:56px" onclick="resetLock()" aria-label="Reset timer" title="Reset timer">'+ic('reset',22)+'</button><button class="playbtn" style="width:72px;height:72px;background:'+s.color+';box-shadow:0 10px 30px '+s.color+'55" onclick="toggleLockRun()" aria-label="'+(LOCK.running?'Pause':'Resume')+' focus timer" title="'+(LOCK.running?'Pause':'Resume')+' timer">'+(LOCK.running?icf('pause',28):icf('play',28))+'</button><button class="iconbtn" style="height:56px;width:56px" onclick="'+(S.music.active==='local'?'musicTogglePlay()':'go(\'/music\')')+'" aria-label="'+(S.music.active==='local'?(S.music.playing?'Pause music':'Play music'):'Open music library')+'" title="'+(S.music.active==='local'?(S.music.playing?'Pause music':'Play music'):'Open music library')+'">'+ic('headphones',22)+'</button></div><div class="card padc mt6" style="width:100%;max-width:340px"><div class="f g3 aic"><span class="iconbtn" style="background:rgba(167,139,250,.15);color:#A78BFA">'+ic('headphones',18)+'</span><div class="grow minw"><p class="txs muted">'+(currentTrackSub()||'Music')+'</p><p class="txm semi trunc">'+(currentTrackName()||'Nothing playing')+'</p></div>'+(S.music.active==='local'?'<button class="iconbtn" onclick="musicTogglePlay()" aria-label="'+(S.music.playing?'Pause':'Play')+' music" title="'+(S.music.playing?'Pause':'Play')+' music">'+(S.music.playing?ic('pause',16):ic('play',16))+'</button>':'<button class="iconbtn" onclick="go(\'/music\')" aria-label="Open music library" title="Open music library">'+ic('chevR',16)+'</button>')+'</div></div>'+(LOCK.strict?'<p class="txs muted mt5 center">Strict Mode active — stay with it until the timer ends.</p>':'')+'</div></div>';
 }
 function lockDone(s){
   var mins=Math.round(LOCK.duration/60);
   return '<div class="lockin"><div class="hdr"><div class="grow"><h1 class="txl semi">Session complete</h1></div></div><div class="main fc aic jc" style="padding:28px;text-align:center"><div style="font-size:56px">🎉</div><h2 class="tx2 bold mt3">Nice work!</h2><p class="txm muted mt2">Your '+mins+'-minute Lock-In was written to <span class="semi" style="color:'+s.color+'">'+esc(s.code)+'</span>.</p><div class="card padc mt5" style="width:100%;max-width:340px"><div class="f jb aic mb2"><span class="txs muted">Session length</span><span class="txm semi">'+mins+' min</span></div><div class="hr mb2"></div><div class="f jb aic mb2"><span class="txs muted">Total logged</span><span class="txm semi">'+fmtHours(s.loggedSeconds)+'</span></div><div class="hr mb2"></div><div class="f jb aic"><span class="txs muted">Course progress</span><span class="txm semi" style="color:'+s.color+'">'+s.progress+'%</span></div></div><div class="f g3 mt6" style="width:100%;max-width:340px"><button class="btn btn-secondary grow" onclick="lockAgain()">'+ic('reset',18)+' Again</button><button class="btn btn-primary grow" onclick="go(\'/study/'+s.id+'\')">Done</button></div></div></div>';
 }
-function setLockDuration(m){LOCK.duration=m*60;LOCK.left=m*60;render();}
+function setLockDuration(m){LOCK.duration=m*60;LOCK.left=m*60;LOCK.endsAt=null;persistLock();render();}
 function setLockMode(m){LOCK.mode=m;render();}
-function startLock(){LOCK.phase='running';LOCK.left=LOCK.duration;LOCK.running=true;LOCK.startedAt=Date.now();LOCK._logged=false;persistLock();render();}
-function toggleLockRun(){LOCK.running=!LOCK.running;persistLock();render();}
-function resetLock(){LOCK.running=false;LOCK.left=LOCK.duration;persistLock();render();}
-function abandonLock(){confirmSheet({title:'Abandon this session?',message:'Progress will not be logged to the subject.',confirmLabel:'Abandon',onConfirm:function(){LOCK.running=false;LOCK.phase='setup';LOCK.left=LOCK.duration;LOCK._logged=false;persistLock();render();}});}
-function lockAgain(){LOCK.phase='setup';LOCK.left=LOCK.duration;LOCK.running=false;LOCK._logged=false;persistLock();render();}
+function startLock(){LOCK.phase='running';LOCK.left=LOCK.duration;LOCK.running=true;LOCK.startedAt=Date.now();LOCK.endsAt=LOCK.startedAt+LOCK.duration*1000;LOCK._logged=false;persistLock();render();}
+function toggleLockRun(){if(LOCK.running){if(LOCK.endsAt)LOCK.left=Math.max(0,Math.ceil((Number(LOCK.endsAt)-Date.now())/1000));if(LOCK.left<=0){LOCK.left=0;LOCK.running=false;LOCK.endsAt=null;clearInterval(LOCK.interval);LOCK.interval=null;persistLock();completeLock();return;}LOCK.running=false;LOCK.endsAt=null;clearInterval(LOCK.interval);LOCK.interval=null;}else{if(LOCK.left<=0)LOCK.left=LOCK.duration;LOCK.running=true;LOCK.phase='running';LOCK.endsAt=Date.now()+LOCK.left*1000;}persistLock();render();}
+function resetLock(){LOCK.running=false;LOCK.endsAt=null;clearInterval(LOCK.interval);LOCK.interval=null;LOCK.left=LOCK.duration;persistLock();render();}
+function abandonLock(){confirmSheet({title:'Abandon this session?',message:'Progress will not be logged to the subject.',confirmLabel:'Abandon',onConfirm:function(){LOCK.running=false;LOCK.endsAt=null;clearInterval(LOCK.interval);LOCK.interval=null;LOCK.phase='setup';LOCK.left=LOCK.duration;LOCK._logged=false;persistLock();render();}});}
+function lockAgain(){LOCK.phase='setup';LOCK.left=LOCK.duration;LOCK.running=false;LOCK.endsAt=null;clearInterval(LOCK.interval);LOCK.interval=null;LOCK._logged=false;persistLock();render();}
 function mountLock(){
-  clearInterval(LOCK.interval);if(LOCK.phase!=='running'||!LOCK.running)return;
-  var txt=document.getElementById('timerText'),ring=document.getElementById('ring');var R=130,C=2*Math.PI*R;
-  LOCK.interval=setInterval(function(){
-    LOCK.left--;
-    if(LOCK.left<=0){LOCK.left=0;LOCK.running=false;clearInterval(LOCK.interval);completeLock();return;}
-    if(txt)txt.textContent=fmtTime(LOCK.left);
-    if(ring)ring.setAttribute('stroke-dashoffset',C-((LOCK.duration-LOCK.left)/LOCK.duration)*C);
-    if(LOCK.left%5===0)persistLock();
-  },1000);
+  clearInterval(LOCK.interval);LOCK.interval=null;if(LOCK.phase!=='running'||!LOCK.running)return;
+  if(!Number.isFinite(Number(LOCK.endsAt))||Number(LOCK.endsAt)<=0)LOCK.endsAt=Date.now()+Math.max(0,Number(LOCK.left)||0)*1000;
+  var txt=document.getElementById('timerText'),ring=document.getElementById('ring');var R=130,C=2*Math.PI*R,lastShown=null,lastPersisted=null;
+  function tick(){
+    LOCK.left=Math.max(0,Math.ceil((Number(LOCK.endsAt)-Date.now())/1000));
+    if(LOCK.left!==lastShown){lastShown=LOCK.left;if(txt)txt.textContent=fmtTime(LOCK.left);if(ring)ring.setAttribute('stroke-dashoffset',C-Math.min(1,Math.max(0,(LOCK.duration-LOCK.left)/Math.max(1,LOCK.duration)))*C);}
+    if(LOCK.left%5===0&&LOCK.left!==lastPersisted){lastPersisted=LOCK.left;persistLock();}
+    if(LOCK.left<=0){LOCK.left=0;LOCK.running=false;LOCK.endsAt=null;clearInterval(LOCK.interval);LOCK.interval=null;persistLock();completeLock();}
+  }
+  tick();if(LOCK.running)LOCK.interval=setInterval(tick,250);
 }
 /* FIX 3: guard against double logging + write date + per-day streak */
 function completeLock(){
   var s=subjectById(LOCK.subjectId);
   if(!s)return;
   if(LOCK._logged)return;
-  LOCK._logged=true;
+  LOCK._logged=true;LOCK.running=false;LOCK.endsAt=null;clearInterval(LOCK.interval);LOCK.interval=null;
   s.loggedSeconds+=LOCK.duration;
   s.progress=Math.min(100,Math.round((s.topics.length?s.topics.filter(function(t){return t.done;}).length/s.topics.length*100:0)+LOCK.duration/3600*2));
   var now=new Date();
@@ -4059,7 +4066,7 @@ async function deleteRoomAny(id){
   /* 9) Multiple persistent whiteboards backed by a dedicated table and RLS migration.
      Drawing state is never embedded into general chat messages. */
   var NB_BOARD = window.NB_BOARD || {};
-  Object.assign(NB_BOARD, { canvas: null, ctx: null, roomId: null, drawing: false, start: null, last: null, base: null, color: NB_BOARD.color || '#2563EB', size: NB_BOARD.size || 4, tool: NB_BOARD.tool || 'pen', undo: [], redo: [], activeBoardId: NB_BOARD.activeBoardId || null, saving: false, loading: false });
+  Object.assign(NB_BOARD, { canvas: null, ctx: null, roomId: null, drawing: false, start: null, last: null, base: null, color: NB_BOARD.color || '#2563EB', size: NB_BOARD.size || 4, tool: NB_BOARD.tool || 'pen', undo: [], redo: [], activeBoardId: NB_BOARD.activeBoardId || null, expectedUpdatedAt: NB_BOARD.expectedUpdatedAt || null, saving: false, loading: false });
   window.NB_BOARD = NB_BOARD;
   function nbBoardList(roomId) { return NB_ROOM_BOARDS[String(roomId)] || []; }
   async function nbLoadRoomBoards(roomId) {
@@ -4149,12 +4156,17 @@ async function deleteRoomAny(id){
       var user = await nbRequireSupabaseUser();
       var image = NB_BOARD.canvas.toDataURL('image/jpeg', 0.56);
       if (image.length > 1200000) throw new Error('This drawing is too large to save. Reduce it or split it across boards.');
-      var result = await dbClient.from('study_room_boards').update({ image_data: image, updated_by: user.id, updated_at: new Date().toISOString() }).eq('id', NB_BOARD.activeBoardId).eq('room_id', roomId).select('id').maybeSingle();
+      var expectedVersion = NB_BOARD.expectedUpdatedAt;
+      var update = dbClient.from('study_room_boards').update({ image_data: image, updated_by: user.id, updated_at: new Date().toISOString() }).eq('id', NB_BOARD.activeBoardId).eq('room_id', roomId);
+      update = expectedVersion ? update.eq('updated_at', expectedVersion) : update.is('updated_at', null);
+      var result = await update.select('id,updated_at').maybeSingle();
       if (result.error) throw result.error;
-      if (!result.data) throw new Error('No board was updated. Check the board UPDATE policy.');
+      if (!result.data) throw new Error('This whiteboard changed on another device before your save. Your drawing was not allowed to overwrite the newer version. Reopen the board to load the latest copy, then continue.');
       await nbLoadRoomBoards(roomId);
+      var savedBoard = nbBoardList(roomId).filter(function (item) { return String(item.id) === String(NB_BOARD.activeBoardId); })[0];
+      NB_BOARD.expectedUpdatedAt = (savedBoard && savedBoard.updated_at) || result.data.updated_at || null;
       if (!silent) toast('Whiteboard saved for room members.');
-    } catch (error) { console.error(error); if (!silent) toast('Could not save whiteboard: ' + ((error && error.message) || 'Run the board SQL migration and check room membership.')); }
+    } catch (error) { console.error(error); var message = (error && error.message) || 'Run the board SQL migration and check room membership.'; if (/changed on another device/i.test(message)) toast(message); else if (!silent) toast('Could not save whiteboard: ' + message); }
     finally { NB_BOARD.saving = false; }
   }
   function nbMountRoomBoard() {
@@ -4163,7 +4175,7 @@ async function deleteRoomAny(id){
     if (!room || !room.isShared) return;
     NB_BOARD.canvas = canvas; NB_BOARD.ctx = canvas.getContext('2d'); NB_BOARD.roomId = room.id; NB_BOARD.loading = true; NB_BOARD.drawing = false; NB_BOARD.undo = []; NB_BOARD.redo = [];
     var board = nbBoardList(room.id).filter(function (item) { return String(item.id) === String(NB_BOARD.activeBoardId); })[0] || nbBoardList(room.id)[0];
-    if (board) NB_BOARD.activeBoardId = board.id;
+    if (board) { NB_BOARD.activeBoardId = board.id; NB_BOARD.expectedUpdatedAt = board.updated_at || null; }
     NB_BOARD.ctx.fillStyle = '#fff'; NB_BOARD.ctx.fillRect(0, 0, canvas.width, canvas.height);
     nbBoardImage(board && board.image_data, canvas, function () {
       if (NB_BOARD.canvas !== canvas) return;
@@ -4401,8 +4413,10 @@ async function deleteRoomAny(id){
       return age < 12 * 60 * 60 * 1000 && (message.status === 'active' || message.status === 'paused');
     }).sort(function (a, b) { return String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')); });
     var body = sessions.length ? sessions.map(function (session) {
-      var remaining = Math.max(0, Number(session.secondsRemaining || 0));
-      var statusLabel = session.status === 'active' ? 'Focusing' : 'Paused';
+      var updatedAt = Date.parse(session.updatedAt || session.startedAt || '') || Date.now();
+      var elapsed = session.status === 'active' ? Math.max(0, Math.floor((Date.now() - updatedAt) / 1000)) : 0;
+      var remaining = Math.max(0, Number(session.secondsRemaining || 0) - elapsed);
+      var statusLabel = session.status === 'active' && remaining > 0 ? 'Focusing' : (session.status === 'paused' ? 'Paused' : 'Timer ended');
       return '<div class="rowitem"><div class="grow minw"><p class="txm semi">' + esc(session.from || 'Room member') + '</p><p class="txs muted">' + esc(session.subjectCode || session.subjectName || 'Study session') + ' · ' + Math.ceil(remaining / 60) + ' min left</p></div><span class="badge">' + statusLabel + '</span></div>';
     }).join('') : '<p class="txs muted">No active or paused room focus sessions right now. Start Room Lock-In from a subject to share your status.</p>';
     return '<section class="card padc mt3"><h3 class="txm semi">Room Lock-In activity</h3><p class="txs muted mt1">Each member has their own timer and progress. Starting, pausing, and completing a session updates this room activity.</p><div class="fc g1 mt2">' + body + '</div></section>';
@@ -4441,7 +4455,8 @@ async function deleteRoomAny(id){
   abandonLock = function () {
     confirmSheet({ title: 'Abandon this session?', message: 'Progress will not be logged to the subject.', confirmLabel: 'Abandon', onConfirm: function () {
       var wasRoom = LOCK.mode === 'room';
-      LOCK.running = false; LOCK.phase = 'setup'; LOCK.left = LOCK.duration; LOCK._logged = false; persistLock(); render();
+      LOCK.running = false; LOCK.endsAt = null; clearInterval(LOCK.interval); LOCK.interval = null;
+      LOCK.phase = 'setup'; LOCK.left = LOCK.duration; LOCK._logged = false; persistLock(); render();
       if (wasRoom) nbWriteRoomFocus('cancelled');
     }});
   };
@@ -9053,5 +9068,47 @@ async function deleteRoomAny(id){
 @media(prefers-reduced-motion:reduce){.nbx-pdf-preview-active .nbx-pdf-canvas-wrap{scroll-behavior:auto}}
 </style>
 
+<style id="nexbyte-final-icons-buttons-layout-v2">
+/* Scope the clipping repairs to Music and Lock-In; preserve Study Hub styling. */
+#app .lockin .modebtn{box-sizing:border-box;flex:1 1 0;min-width:0;max-width:100%;min-height:64px;height:auto;padding:12px 8px;white-space:normal;overflow-wrap:anywhere;text-align:center;line-height:1.3;justify-content:center;}
+#app .lockin .modebtn span{display:block;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;text-align:center;}
+#app .lockin .btn{box-sizing:border-box;min-width:0;max-width:100%;height:auto;min-height:44px;padding:10px 12px;white-space:normal;overflow-wrap:anywhere;line-height:1.25;justify-content:center;text-align:center;}
+#app .lockin .btn svg{flex:0 0 auto;}
+#app .lockin .f.g2>.btn{flex:1 1 0;}
+#app .lockin .playbtn,#app .lockin .iconbtn{flex:0 0 auto;}
+#app .nb-music-panel,#app .nb-music-upload,#app .nb-music-player{box-sizing:border-box;min-width:0;max-width:100%;}
+#app .nb-music-panel .btn,#app .nb-music-upload .btn,#app .nb-music-player .btn{box-sizing:border-box;min-width:0;max-width:100%;min-height:44px;height:auto;padding:10px 12px;white-space:normal;overflow-wrap:anywhere;line-height:1.25;justify-content:center;text-align:center;}
+#app .nb-music-panel .btn svg,#app .nb-music-upload .btn svg,#app .nb-music-player .btn svg{flex:0 0 auto;}
+#app .nb-music-panel .f.g2>.btn{flex:1 1 0;}
+#app .nb-music-tabs{display:flex;min-width:0;}
+#app .nb-music-tabs>button{flex:1 1 0;min-width:0;min-height:44px;height:auto;padding:8px 6px;white-space:normal;overflow-wrap:anywhere;line-height:1.25;text-align:center;}
+#app .nb-music-row{box-sizing:border-box;display:grid;grid-template-columns:36px minmax(0,1fr) repeat(4,36px);gap:6px;align-items:center;min-width:0;max-width:100%;}
+#app .nb-music-row>.nb-music-play{box-sizing:border-box;width:36px;height:36px;min-width:36px;min-height:36px;padding:0;}
+#app .nb-music-row>.nb-music-track{box-sizing:border-box;width:100%;min-width:0;max-width:100%;padding:2px 4px;white-space:normal;text-align:left;}
+#app .nb-music-row>.nb-music-icon{box-sizing:border-box;width:36px;height:36px;min-width:36px;min-height:36px;padding:0;}
+#app .nb-music-track strong,#app .nb-music-track small{display:block;max-width:100%;min-width:0;overflow-wrap:anywhere;}
+#app .nb-music-player .f.jb.aic.mt3{gap:6px;}
+#app .nb-music-player .f.jb.aic.mt3>.iconbtn{flex:0 0 40px;width:40px;min-width:40px;min-height:40px;height:40px;padding:0;}
+#app .nb-music-player #musicBigPlay{flex:0 0 52px;width:52px;min-width:52px;min-height:52px;height:52px;}
+@media(max-width:420px){
+  #app .nb-music-panel{padding-left:12px;padding-right:12px;}
+  #app .nb-music-row{grid-template-columns:repeat(4,minmax(0,1fr));grid-template-areas:"play track track track" "fav playlist download delete";gap:6px;padding:8px;}
+  #app .nb-music-row>.nb-music-play{grid-area:play;justify-self:center;}
+  #app .nb-music-row>.nb-music-track{grid-area:track;}
+  #app .nb-music-row>.nb-music-icon:nth-child(3){grid-area:fav;}
+  #app .nb-music-row>.nb-music-icon:nth-child(4){grid-area:playlist;}
+  #app .nb-music-row>.nb-music-icon:nth-child(5){grid-area:download;}
+  #app .nb-music-row>.nb-music-icon:nth-child(6){grid-area:delete;}
+  #app .nb-music-row>.nb-music-icon{justify-self:center;}
+  #app .lockin .main{padding-left:14px!important;padding-right:14px!important;}
+  #app .lockin .modebtn{padding:10px 6px;font-size:11px;}
+}
+@media(max-width:340px){
+  #app .nb-music-player .f.jb.aic.mt3{gap:4px;}
+  #app .nb-music-player .f.jb.aic.mt3>.iconbtn{flex-basis:36px;width:36px;min-width:36px;min-height:36px;height:36px;}
+  #app .nb-music-player #musicBigPlay{flex-basis:46px;width:46px;min-width:46px;min-height:46px;height:46px;}
+  #app .lockin .ring-time{font-size:clamp(36px,13vw,52px);}
+}
+</style>
 </body>
 </html>
