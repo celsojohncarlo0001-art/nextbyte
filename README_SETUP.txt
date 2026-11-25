@@ -70,3 +70,14 @@ NEXTBYTE PUBLIC STUDY ROOM CHAT REPAIR (November 22, 2026)
 5. Test with two authorized accounts in the same Public Room: one account should not see another person's Delete control; each account can delete only its own messages; deletion should disappear from both screens without reopening the room. Also test link sharing, uploaded file preview/download, and poll create/vote/change/close.
 
 The source ZIP did not contain a hard-coded visible nexbyte-mu.vercel.app label. Share cards avoid rendering a hostname banner.
+
+
+STUDY ROOM SHARED NOTES + TASKS REPAIR (November 25, 2026)
+
+- Deploy the updated index.html and sw.js from this ZIP to the existing Vercel-connected project. Keep supabase-config.js and its public publishable/anon key unchanged.
+- No new SQL migration is required for this frontend repair. Confirm the existing room schema, NEXBYTE_ENHANCEMENTS.sql, room visibility SQL, and public-room chat repair have already been applied as appropriate.
+- The existing study-room-files bucket must remain private, with the existing room-member read policy and user-folder upload policy. Do not make the bucket public and do not add broad RLS policies.
+- Shared notes now show file name/type/size and provide in-app Preview and Download. Attachments are restricted to supported academic document/image formats and 20 MB.
+- Shared Notes and Tasks now place their lists and forms inside one full-height scrollable panel. All joined members can publish notes/tasks, and each member's task response/status is saved as their own room-message row.
+- The new PWA cache is nexbyte-pwa-v26-study-room-notes-tasks. Open NEXTBYTE online after deployment and close/reopen the installed PWA if it continues showing the previous interface.
+- Follow TESTING_REPORT_STUDY_ROOM_NOTES_TASKS.md to verify with two separate authenticated room accounts.

@@ -9053,5 +9053,453 @@ async function deleteRoomAny(id){
 @media(prefers-reduced-motion:reduce){.nbx-pdf-preview-active .nbx-pdf-canvas-wrap{scroll-behavior:auto}}
 </style>
 
+<script>
+/* NEXTBYTE Study Room notes/tasks repair layer. Loaded after existing integrations so
+   the room tab renderers and actions below are the authoritative implementations. */
+(function () {
+  'use strict';
+
+  var MAX_FILE_BYTES = 20 * 1024 * 1024;
+  var ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt', 'md', 'csv', 'png', 'jpg', 'jpeg', 'webp'];
+  var noteBusy = Object.create(null);
+  var taskBusy = Object.create(null);
+  var responseBusy = Object.create(null);
+
+  function html(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function attr(value) { return html(value); }
+  function inlineArg(value) { return html(JSON.stringify(String(value == null ? '' : value))); }
+  function currentRoom(roomId) {
+    return (window.S && Array.isArray(S.rooms) ? S.rooms : []).filter(function (room) {
+      return String(room.id) === String(roomId) && room.isShared;
+    })[0] || null;
+  }
+  function currentUserId() {
+    return window.S && S.auth && S.auth.user && S.auth.user.id ? String(S.auth.user.id) : '';
+  }
+  function profileName() {
+    return (window.S && S.auth && S.auth.user && S.auth.user.name) || 'Room member';
+  }
+  function formatBytes(size) {
+    var n = Number(size) || 0;
+    if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    if (n >= 1024) return Math.max(1, Math.round(n / 1024)) + ' KB';
+    return n + ' B';
+  }
+  function formatDate(value) {
+    if (!value) return 'Date unavailable';
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return 'Date unavailable';
+    return date.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+  function fileExtension(name) {
+    var parts = String(name || '').toLowerCase().split('.');
+    return parts.length > 1 ? parts.pop() : '';
+  }
+  function validateFile(file) {
+    if (!file) return { ok: true };
+    if (!file.name) return { ok: false, message: 'Choose a file first.' };
+    if (!file.size) return { ok: false, message: 'The selected file is empty.' };
+    if (file.size > MAX_FILE_BYTES) return { ok: false, message: 'The file exceeds the 20 MB limit.' };
+    if (ALLOWED_EXTENSIONS.indexOf(fileExtension(file.name)) < 0) {
+      return { ok: false, message: 'Unsupported file type. Use PDF, Office, TXT, Markdown, CSV, PNG, JPG, or WEBP.' };
+    }
+    return { ok: true };
+  }
+  function safeFileName(name) {
+    return String(name || 'attachment').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^\.+/, '').slice(-100) || 'attachment';
+  }
+  function mimeType(file) {
+    if (file && file.type) return file.type;
+    var types = {
+      pdf: 'application/pdf', doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ppt: 'application/vnd.ms-powerpoint',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      xls: 'application/vnd.ms-excel',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      txt: 'text/plain', md: 'text/markdown', csv: 'text/csv',
+      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp'
+    };
+    return types[fileExtension(file && file.name)] || 'application/octet-stream';
+  }
+  function statusMessage(id, message, isError) {
+    var node = document.getElementById(id);
+    if (!node) return;
+    node.textContent = message || '';
+    node.className = 'nb-room-status' + (isError ? ' is-error' : '');
+    node.setAttribute('role', 'status');
+    node.setAttribute('aria-live', 'polite');
+  }
+  function toast(message) {
+    if (typeof window.toast === 'function') window.toast(message);
+    else console.info(message);
+  }
+  function makeId() {
+    if (typeof window.uid === 'function') return window.uid();
+    if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    return 'nb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+  }
+  function sharedPayload(kind, data) {
+    if (typeof window.nbSharedPayload === 'function') return window.nbSharedPayload(kind, data);
+    return 'NB_SHARED_V1:' + JSON.stringify(Object.assign({ kind: kind }, data));
+  }
+  function parsePayload(body) {
+    var prefix = 'NB_SHARED_V1:';
+    if (typeof body !== 'string' || body.indexOf(prefix) !== 0) return {};
+    try { return JSON.parse(body.slice(prefix.length)); } catch (error) { return {}; }
+  }
+  function upsertLocalMessage(room, databaseId, userId, body, createdAt) {
+    if (!room) return;
+    var parsed = parsePayload(body);
+    var existingIndex = (room.messages || []).findIndex(function (item) { return String(item.dbId || '') === String(databaseId || ''); });
+    var row = Object.assign({}, parsed, {
+      dbId: databaseId, userId: String(userId), from: parsed.from || profileName(),
+      createdAt: createdAt || parsed.createdAt || new Date().toISOString(), me: true
+    });
+    if (!Array.isArray(room.messages)) room.messages = [];
+    if (existingIndex >= 0) room.messages[existingIndex] = row;
+    else room.messages.push(row);
+  }
+  async function requireUserAndMembership(roomId) {
+    if (!window.dbClient) throw new Error('Supabase is not configured. Check the project URL and publishable key.');
+    if (typeof window.nbRequireSupabaseUser !== 'function') throw new Error('The sign-in verifier is unavailable. Refresh the page and sign in again.');
+    var user = await window.nbRequireSupabaseUser();
+    var membership = await dbClient.from('study_room_members')
+      .select('room_id,user_id,role').eq('room_id', String(roomId)).eq('user_id', String(user.id)).limit(1).maybeSingle();
+    if (membership.error) throw new Error('Could not verify room membership: ' + membership.error.message);
+    if (!membership.data) throw new Error('You are not a member of this room. Rejoin using its invite code, then try again.');
+    return user;
+  }
+  async function refreshMessages(room) {
+    if (typeof window.nbLoadMessages === 'function') await window.nbLoadMessages(room, true);
+    if (typeof window.render === 'function') window.render();
+  }
+
+  window.nbRoomFileSelected = function (input, statusId) {
+    var file = input && input.files && input.files[0];
+    if (!file) { statusMessage(statusId, '', false); return; }
+    var validation = validateFile(file);
+    statusMessage(statusId, validation.ok ? ('Selected: ' + file.name + ' · ' + formatBytes(file.size) + '. It will upload when you share the note.') : validation.message, !validation.ok);
+  };
+
+  function noteCard(room, note) {
+    var author = note.from || 'Room member';
+    var timestamp = formatDate(note.createdAt || note.time);
+    var attachment = '';
+    if (note.filePath) {
+      var extension = fileExtension(note.fileName || '');
+      var kind = extension ? extension.toUpperCase() : String(note.fileType || 'File').toUpperCase();
+      attachment = '<div class="nb-room-attachment"><div class="nb-room-file-symbol" aria-hidden="true">📎</div><div class="nb-room-file-meta"><strong>' + html(note.fileName || 'Attached file') + '</strong><span>' + html(kind) + (note.fileSize ? ' · ' + html(formatBytes(note.fileSize)) : '') + '</span></div><div class="nb-room-file-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',false,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">Preview</button><button type="button" class="btn btn-primary btn-sm" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',true,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">Download</button></div></div>';
+    }
+    var ownControls = note.me ? '<div class="nb-room-record-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Edit note</button><button type="button" class="btn btn-danger btn-sm" onclick="nbDeleteSharedRecord(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Delete</button></div>' : '';
+    return '<article class="card padc nb-room-record-card"><div class="nb-room-card-heading"><div class="grow minw"><h3 class="txm semi nb-room-record-title">' + html(note.title || 'Shared note') + '</h3><p class="txs muted mt1">Shared by ' + html(author) + ' · ' + html(timestamp) + '</p></div></div>' + (note.text ? '<p class="txm mt3 nb-room-preserve-text">' + html(note.text) + '</p>' : '') + attachment + ownControls + '</article>';
+  }
+
+  function renderNotes(room) {
+    var notes = (room.messages || []).filter(function (item) { return item.kind === 'shared-note'; });
+    notes.sort(function (a, b) { return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(); });
+    var cards = notes.length ? notes.map(function (note) { return noteCard(room, note); }).join('') : '<div class="empty nb-room-empty"><div class="em">📝</div><h3 class="txm semi">No shared notes yet</h3><p class="txs muted mt1">Be the first to share notes or an attachment with this room.</p></div>';
+    return '<div class="nb-room-scroll-page"><section class="nb-room-record-list" aria-label="Shared notes">' + cards + '</section>' +
+      '<section class="card padc nb-room-compose"><div><h2 class="txl semi">Share your own notes</h2><p class="txs muted mt1">Every room member can contribute notes and attachments. Files are private to authorized room members.</p></div>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteTitle">Note or document title</label><input id="sharedNoteTitle" class="input" maxlength="160" placeholder="e.g. Biology Chapter 2 summary" autocomplete="off"/></div>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteText">Your notes</label><textarea id="sharedNoteText" class="input" rows="5" maxlength="20000" placeholder="Write explanations, summaries, or study notes…"></textarea></div>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteFile">Attachment (optional · 20 MB maximum)</label><input id="sharedNoteFile" type="file" class="input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp" onchange="nbRoomFileSelected(this,\'nbRoomNoteFileStatus\')"/><p id="nbRoomNoteFileStatus" class="nb-room-status" role="status" aria-live="polite"></p><p class="txs muted">Supported: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, and WEBP.</p></div>' +
+      '<button type="button" class="btn btn-primary btn-block" id="nbShareRoomNoteButton" onclick="nbPublishRoomNote(\'' + attr(room.id) + '\')">Share note or file</button>' +
+      '<p id="nbRoomNoteSubmitStatus" class="nb-room-status" role="status" aria-live="polite"></p></section></div>';
+  }
+
+  window.nbPublishRoomNote = async function (roomId) {
+    var key = String(roomId || '');
+    if (!key || noteBusy[key]) return;
+    var room = currentRoom(key);
+    if (!room || !room.isJoined) { toast('Open a room that you have joined before sharing notes.'); return; }
+    var titleInput = document.getElementById('sharedNoteTitle');
+    var textInput = document.getElementById('sharedNoteText');
+    var fileInput = document.getElementById('sharedNoteFile');
+    var button = document.getElementById('nbShareRoomNoteButton');
+    var title = String(titleInput && titleInput.value || '').trim();
+    var text = String(textInput && textInput.value || '').trim();
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    if (title.length > 160 || text.length > 20000) { toast('The title or note is too long.'); return; }
+    if (!text && !file) { toast('Write a note or select an attachment first.'); return; }
+    var check = validateFile(file);
+    if (!check.ok) { statusMessage('nbRoomNoteFileStatus', check.message, true); toast(check.message); return; }
+    if (!title) title = file ? file.name : 'Shared study note';
+
+    noteBusy[key] = true;
+    if (button) { button.disabled = true; button.textContent = 'Sharing…'; }
+    statusMessage('nbRoomNoteSubmitStatus', file ? 'Verifying room access and uploading your attachment…' : 'Saving your note…', false);
+    var uploadedPath = null;
+    var messageSaved = false;
+    try {
+      var user = await requireUserAndMembership(key);
+      if (file) {
+        uploadedPath = key + '/' + user.id + '/notes/' + Date.now() + '_' + makeId() + '_' + safeFileName(file.name);
+        var upload = await dbClient.storage.from('study-room-files').upload(uploadedPath, file, {
+          upsert: false, contentType: mimeType(file), cacheControl: '3600'
+        });
+        if (upload.error) throw upload.error;
+        if (!upload.data || !upload.data.path) throw new Error('Storage did not confirm that the file was saved.');
+      }
+      var payload = sharedPayload('shared-note', {
+        id: makeId(), title: title, text: text, filePath: uploadedPath,
+        fileName: file ? file.name : null, fileSize: file ? file.size : null,
+        fileType: file ? mimeType(file) : null, from: profileName(), createdAt: new Date().toISOString()
+      });
+      var inserted = await dbClient.from('study_room_messages')
+        .insert({ room_id: key, user_id: user.id, body: payload })
+        .select('id,room_id,user_id,body,created_at').single();
+      if (inserted.error) throw inserted.error;
+      messageSaved = true;
+      upsertLocalMessage(room, inserted.data.id, user.id, payload, inserted.data.created_at);
+      if (titleInput) titleInput.value = '';
+      if (textInput) textInput.value = '';
+      if (fileInput) fileInput.value = '';
+      statusMessage('nbRoomNoteFileStatus', '', false);
+      statusMessage('nbRoomNoteSubmitStatus', 'Your note' + (file ? ' and attachment' : '') + ' has been saved to this room.', false);
+      await refreshMessages(room);
+      toast(file ? 'Note and attachment shared with the room.' : 'Note shared with the room.');
+    } catch (error) {
+      if (uploadedPath && !messageSaved) {
+        try { await dbClient.storage.from('study-room-files').remove([uploadedPath]); }
+        catch (cleanupError) { console.warn('Could not remove an orphaned room attachment:', cleanupError); }
+      }
+      console.error('Shared note could not be published:', error);
+      var message = error && error.message ? error.message : 'An unexpected error occurred.';
+      statusMessage('nbRoomNoteSubmitStatus', 'Share failed: ' + message, true);
+      toast('Could not share your note: ' + message);
+    } finally {
+      noteBusy[key] = false;
+      if (button && button.isConnected) { button.disabled = false; button.textContent = 'Share note or file'; }
+    }
+  };
+
+  function responseStatusLabel(status) {
+    if (status === 'done') return 'Completed';
+    if (status === 'progress') return 'In progress';
+    return 'To do';
+  }
+  function renderTask(room, task) {
+    var userId = currentUserId();
+    var responses = (room.messages || []).filter(function (item) {
+      return item.kind === 'shared-task-response' && String(item.taskId) === String(task.id);
+    });
+    var mine = responses.filter(function (item) { return String(item.userId) === userId; })[0] || null;
+    var progress = responses.map(function (item) {
+      return '<div class="nb-room-member-progress"><div class="nb-room-member-progress-head"><strong>' + html(item.from || 'Room member') + '</strong><span class="nb-room-status-pill status-' + html(item.status || 'todo') + '">' + html(responseStatusLabel(item.status)) + '</span></div>' +
+        (item.response ? '<p class="txs nb-room-preserve-text mt1">' + html(item.response) + '</p>' : '<p class="txs muted mt1">No written response.</p>') +
+        '<p class="txs muted mt1">Updated ' + html(formatDate(item.submittedAt || item.createdAt || item.time)) + '</p></div>';
+    }).join('');
+    var due = task.due ? '<span class="nb-room-meta-chip">Due ' + html(task.due) + '</span>' : '';
+    var category = task.category ? '<span class="nb-room-meta-chip">' + html(task.category) + '</span>' : '';
+    var created = formatDate(task.createdAt || task.time);
+    var creatorActions = task.me ? '<button type="button" class="btn btn-danger btn-sm" onclick="nbDeleteSharedRecord(' + inlineArg(room.id) + ',' + inlineArg(task.dbId) + ')">Delete task</button>' : '';
+    return '<article class="card padc nb-room-record-card nb-room-task-card"><div class="nb-room-card-heading"><div class="grow minw"><h3 class="txm semi nb-room-record-title">' + html(task.title || 'Room task') + '</h3><p class="txs muted mt1">Created by ' + html(task.from || 'Room member') + ' · ' + html(created) + '</p><div class="nb-room-meta-row">' + category + due + '</div></div>' + creatorActions + '</div>' +
+      (task.details ? '<div class="nb-room-task-instructions"><p class="field-label">Instructions and expected result</p><p class="txm nb-room-preserve-text mt1">' + html(task.details) + '</p></div>' : '') +
+      '<section class="nb-room-response-panel"><div><h4 class="txm semi">Your individual response</h4><p class="txs muted mt1">Your response and progress are saved separately from other members.</p></div>' +
+      '<label class="field-label" for="nbTaskResponse_' + attr(task.id) + '">Describe your work or progress</label><textarea id="nbTaskResponse_' + attr(task.id) + '" class="input" rows="4" maxlength="8000" placeholder="Write your response or describe your progress…">' + html(mine ? mine.response || '' : '') + '</textarea>' +
+      '<div class="nb-room-response-controls"><div class="nb-room-form-field"><label class="field-label" for="nbTaskStatus_' + attr(task.id) + '">Your status</label><select id="nbTaskStatus_' + attr(task.id) + '" class="input"><option value="todo" ' + (!mine || mine.status === 'todo' ? 'selected' : '') + '>To do</option><option value="progress" ' + (mine && mine.status === 'progress' ? 'selected' : '') + '>In progress</option><option value="done" ' + (mine && mine.status === 'done' ? 'selected' : '') + '>Completed</option></select></div><button type="button" class="btn btn-primary" onclick="nbSubmitRoomTaskResponse(' + inlineArg(room.id) + ',' + inlineArg(task.id) + ')">Save my progress</button></div></section>' +
+      '<div class="nb-room-task-progress"><p class="txs muted">' + responses.length + ' member response(s) · ' + ((room.members || []).length) + ' room member(s)</p>' +
+      (progress ? '<details class="nb-room-progress-details"><summary>View member responses and progress</summary><div class="nb-room-progress-list">' + progress + '</div></details>' : '<p class="txs muted mt2">No member progress submitted yet.</p>') + '</div></article>';
+  }
+  function renderTasks(room) {
+    var tasks = (room.messages || []).filter(function (item) { return item.kind === 'shared-task'; });
+    tasks.sort(function (a, b) { return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(); });
+    var cards = tasks.length ? tasks.map(function (task) { return renderTask(room, task); }).join('') : '<div class="empty nb-room-empty"><div class="em">✓</div><h3 class="txm semi">No room tasks yet</h3><p class="txs muted mt1">Create a task for the room. Every member can publish tasks and track their own progress.</p></div>';
+    return '<div class="nb-room-scroll-page"><section class="nb-room-record-list" aria-label="Room tasks">' + cards + '</section>' +
+      '<section class="card padc nb-room-compose"><div><h2 class="txl semi">Create a room task</h2><p class="txs muted mt1">All authorized room members can publish tasks. Every member’s response and status are stored independently.</p></div>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedTaskTitle">Task title</label><input id="sharedTaskTitle" class="input" maxlength="160" placeholder="e.g. Review Chapter 3" autocomplete="off"/></div>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedTaskCategory">Task category</label><select id="sharedTaskCategory" class="input"><option value="General">General</option><option value="Reading">Reading</option><option value="Research">Research</option><option value="Practice">Practice</option><option value="Group discussion">Group discussion</option><option value="Project / Presentation">Project / Presentation</option><option value="Review">Review</option></select></div>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedTaskDue">Due date (optional)</label><input id="sharedTaskDue" class="input" type="date"/></div>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedTaskDetails">Detailed instructions and expected result</label><textarea id="sharedTaskDetails" class="input" rows="5" maxlength="20000" placeholder="Describe what needs to be completed and the expected result…"></textarea></div>' +
+      '<button type="button" class="btn btn-primary btn-block" id="nbPublishRoomTaskButton" onclick="nbCreateRoomTask(\'' + attr(room.id) + '\')">Publish task to room</button><p id="nbRoomTaskSubmitStatus" class="nb-room-status" role="status" aria-live="polite"></p></section></div>';
+  }
+
+  window.nbCreateRoomTask = async function (roomId) {
+    var key = String(roomId || '');
+    if (!key || taskBusy[key]) return;
+    var room = currentRoom(key);
+    if (!room || !room.isJoined) { toast('Open a room that you have joined before publishing tasks.'); return; }
+    var titleInput = document.getElementById('sharedTaskTitle');
+    var categoryInput = document.getElementById('sharedTaskCategory');
+    var dueInput = document.getElementById('sharedTaskDue');
+    var detailsInput = document.getElementById('sharedTaskDetails');
+    var button = document.getElementById('nbPublishRoomTaskButton');
+    var title = String(titleInput && titleInput.value || '').trim();
+    var category = String(categoryInput && categoryInput.value || 'General').trim();
+    var due = String(dueInput && dueInput.value || '').trim();
+    var details = String(detailsInput && detailsInput.value || '').trim();
+    if (!title) { toast('Enter a task title first.'); if (titleInput) titleInput.focus(); return; }
+    if (title.length > 160 || details.length > 20000) { toast('The task title or instructions are too long.'); return; }
+    if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) { toast('Choose a valid due date.'); return; }
+
+    taskBusy[key] = true;
+    if (button) { button.disabled = true; button.textContent = 'Publishing…'; }
+    statusMessage('nbRoomTaskSubmitStatus', 'Verifying room access and publishing your task…', false);
+    try {
+      var user = await requireUserAndMembership(key);
+      var now = new Date().toISOString();
+      var payload = sharedPayload('shared-task', {
+        id: makeId(), title: title, category: category || 'General', due: due,
+        details: details, done: false, from: profileName(), createdAt: now
+      });
+      var inserted = await dbClient.from('study_room_messages')
+        .insert({ room_id: key, user_id: user.id, body: payload })
+        .select('id,room_id,user_id,body,created_at').single();
+      if (inserted.error) throw inserted.error;
+      upsertLocalMessage(room, inserted.data.id, user.id, payload, inserted.data.created_at);
+      if (titleInput) titleInput.value = '';
+      if (detailsInput) detailsInput.value = '';
+      if (dueInput) dueInput.value = '';
+      if (categoryInput) categoryInput.value = 'General';
+      statusMessage('nbRoomTaskSubmitStatus', 'Your task has been published to the room.', false);
+      await refreshMessages(room);
+      toast('Task published to the room.');
+    } catch (error) {
+      console.error('Room task could not be created:', error);
+      var message = error && error.message ? error.message : 'An unexpected error occurred.';
+      statusMessage('nbRoomTaskSubmitStatus', 'Publish failed: ' + message, true);
+      toast('Could not publish the task: ' + message);
+    } finally {
+      taskBusy[key] = false;
+      if (button && button.isConnected) { button.disabled = false; button.textContent = 'Publish task to room'; }
+    }
+  };
+
+  window.nbSubmitRoomTaskResponse = async function (roomId, taskId) {
+    var room = currentRoom(roomId);
+    var task = room && (room.messages || []).filter(function (item) {
+      return item.kind === 'shared-task' && String(item.id) === String(taskId);
+    })[0];
+    if (!room || !task || !room.isJoined) { toast('Open a joined room and select a task before saving progress.'); return; }
+    var userId = currentUserId();
+    if (!userId) { toast('Sign in again before saving your task progress.'); return; }
+    var lockKey = String(roomId) + ':' + String(taskId) + ':' + userId;
+    if (responseBusy[lockKey]) return;
+    var responseInput = document.getElementById('nbTaskResponse_' + taskId);
+    var statusInput = document.getElementById('nbTaskStatus_' + taskId);
+    var responseText = String(responseInput && responseInput.value || '').trim();
+    var status = String(statusInput && statusInput.value || 'todo');
+    if (responseText.length > 8000) { toast('Your response must be 8,000 characters or fewer.'); return; }
+    if (['todo', 'progress', 'done'].indexOf(status) < 0) { toast('Choose a valid progress status.'); return; }
+
+    responseBusy[lockKey] = true;
+    try {
+      var user = await requireUserAndMembership(roomId);
+      var existing = (room.messages || []).filter(function (item) {
+        return item.kind === 'shared-task-response' && String(item.taskId) === String(taskId) && String(item.userId) === String(user.id);
+      })[0] || null;
+      var payload = sharedPayload('shared-task-response', {
+        id: existing ? existing.id : makeId(), taskId: String(taskId), userId: String(user.id),
+        response: responseText, status: status, from: profileName(), submittedAt: new Date().toISOString()
+      });
+      var result;
+      if (existing && existing.dbId) {
+        result = await dbClient.from('study_room_messages').update({ body: payload })
+          .eq('id', existing.dbId).eq('room_id', String(roomId)).eq('user_id', String(user.id))
+          .select('id').maybeSingle();
+      } else {
+        result = await dbClient.from('study_room_messages')
+          .insert({ room_id: String(roomId), user_id: user.id, body: payload })
+          .select('id').single();
+      }
+      if (result.error) throw result.error;
+      if (!result.data) throw new Error('Your progress was not saved. Refresh the room and try again.');
+      upsertLocalMessage(room, result.data.id, user.id, payload, new Date().toISOString());
+      await refreshMessages(room);
+      toast('Your task response and progress have been saved.');
+    } catch (error) {
+      console.error('Task response could not be saved:', error);
+      toast('Could not save your progress: ' + (error && error.message ? error.message : 'An unexpected error occurred.'));
+    } finally {
+      delete responseBusy[lockKey];
+    }
+  };
+
+  /* Pass original file metadata into the existing private Storage preview pipeline. */
+  var previousOpenRoomFile = window.nbOpenRoomFile;
+  window.nbOpenRoomFile = function (roomId, path, download, fileName, fileType) {
+    if (typeof window.nbPreviewRoomStorageFile === 'function') {
+      return window.nbPreviewRoomStorageFile(roomId, path, fileName || null, fileType || null, !!download).catch(function (error) {
+        console.error('Room attachment could not be opened:', error);
+        toast('Could not ' + (download ? 'download' : 'preview') + ' this room file: ' + (error && error.message ? error.message : 'Unknown error'));
+      });
+    }
+    return previousOpenRoomFile ? previousOpenRoomFile(roomId, path, download) : Promise.reject(new Error('Room file preview is unavailable.'));
+  };
+
+  /* The room work area now has one scroll container containing both records and the
+     creation form. This removes the clipped composer / half-height task-panel behavior. */
+  var previousRoomTabBody = window.roomTabBody || (typeof roomTabBody === 'function' ? roomTabBody : null);
+  window.roomTabBody = function (room) {
+    if (room && room.isShared && room.isJoined && window.UI && UI.roomTab === 'notes') return renderNotes(room);
+    if (room && room.isShared && room.isJoined && window.UI && UI.roomTab === 'tasks') return renderTasks(room);
+    return previousRoomTabBody ? previousRoomTabBody(room) : '<div class="empty"><p class="txm muted">This room section is unavailable.</p></div>';
+  };
+  try { roomTabBody = window.roomTabBody; } catch (error) { /* window renderer is used by the router */ }
+
+  var styles = document.createElement('style');
+  styles.id = 'nextbyte-study-room-notes-tasks-fix';
+  styles.textContent = `
+    .nb-room-content{display:flex!important;flex-direction:column!important;flex:1 1 auto!important;min-height:0!important;overflow:hidden!important;max-height:none!important}
+    .nb-room-scroll-page{box-sizing:border-box;width:100%;height:100%;max-height:none;min-height:0;flex:1 1 0%;display:flex;flex-direction:column;align-items:stretch;gap:14px;overflow-y:auto;overflow-x:hidden;padding:14px 14px calc(22px + env(safe-area-inset-bottom,0px));-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+    .nb-room-record-list{width:100%;min-width:0;min-height:auto;max-height:none;flex:0 0 auto;display:flex;flex-direction:column;gap:12px;overflow:visible;padding:0}
+    .nb-room-record-card{width:100%;min-width:0;box-sizing:border-box;overflow-wrap:anywhere}
+    .nb-room-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0}
+    .nb-room-record-title{overflow-wrap:anywhere}
+    .nb-room-preserve-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;line-height:1.55}
+    .nb-room-compose{flex:0 0 auto;width:100%;min-width:0;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;overflow:visible}
+    .nb-room-form-field{display:flex;flex-direction:column;gap:6px;min-width:0;width:100%}
+    .nb-room-form-field .input{width:100%;min-width:0;box-sizing:border-box}
+    .nb-room-status{display:block;min-height:0;margin:0;font-size:12px;color:var(--muted-fg);overflow-wrap:anywhere}
+    .nb-room-status:empty{display:none}
+    .nb-room-status.is-error{color:#dc2626}
+    .nb-room-attachment{display:flex;align-items:center;gap:10px;min-width:0;margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--secondary)}
+    .nb-room-file-symbol{font-size:22px;flex:0 0 auto}
+    .nb-room-file-meta{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+    .nb-room-file-meta strong{font-size:13px;overflow-wrap:anywhere}
+    .nb-room-file-meta span{font-size:11px;color:var(--muted-fg);overflow-wrap:anywhere}
+    .nb-room-file-actions,.nb-room-record-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .nb-room-file-actions .btn,.nb-room-record-actions .btn{min-height:36px;height:36px;padding:0 12px;font-size:12px}
+    .nb-room-meta-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .nb-room-meta-chip{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:var(--secondary);color:var(--muted-fg);font-size:11px;font-weight:600}
+    .nb-room-task-instructions{margin-top:14px;padding:12px;border-radius:12px;background:var(--secondary);min-width:0}
+    .nb-room-response-panel{display:flex;flex-direction:column;gap:10px;margin-top:16px;padding:14px;border:1px solid var(--border);border-radius:14px;min-width:0}
+    .nb-room-response-panel textarea{width:100%;min-height:104px;box-sizing:border-box}
+    .nb-room-response-controls{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+    .nb-room-response-controls .nb-room-form-field{flex:1 1 150px}
+    .nb-room-response-controls>.btn{flex:0 1 auto;min-height:42px}
+    .nb-room-task-progress{margin-top:14px;min-width:0}
+    .nb-room-progress-details{margin-top:10px;border-top:1px solid var(--border);padding-top:10px}
+    .nb-room-progress-details summary{cursor:pointer;font-size:13px;font-weight:600;padding:6px 0}
+    .nb-room-progress-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+    .nb-room-member-progress{padding:10px;border:1px solid var(--border);border-radius:10px;min-width:0}
+    .nb-room-member-progress-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+    .nb-room-member-progress-head strong{font-size:12px;overflow-wrap:anywhere}
+    .nb-room-status-pill{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:var(--secondary);font-size:10px;font-weight:700;white-space:nowrap}
+    .nb-room-status-pill.status-done{background:rgba(22,163,74,.12);color:#15803d}
+    .nb-room-status-pill.status-progress{background:rgba(37,99,235,.12);color:#2563eb}
+    .nb-room-status-pill.status-todo{background:var(--secondary);color:var(--muted-fg)}
+    .nb-room-empty{width:100%;box-sizing:border-box;padding:28px 14px}
+    @media(max-width:480px){
+      .nb-room-scroll-page{padding:10px 10px calc(20px + env(safe-area-inset-bottom,0px));gap:10px}
+      .nb-room-attachment{align-items:flex-start;flex-wrap:wrap}
+      .nb-room-file-meta{flex:1 1 calc(100% - 40px)}
+      .nb-room-file-actions{width:100%}
+      .nb-room-file-actions .btn{flex:1 1 100px}
+      .nb-room-response-controls{align-items:stretch}
+      .nb-room-response-controls>.btn{width:100%;flex:1 1 100%}
+    }
+    @media(min-width:700px){.nb-room-scroll-page{padding:18px;gap:16px}.nb-room-compose,.nb-room-record-card{padding:18px}}
+  `;
+  if (!document.getElementById(styles.id)) document.head.appendChild(styles);
+  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.0.0';
+})();
+
+</script>
 </body>
 </html>

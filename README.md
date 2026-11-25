@@ -83,7 +83,7 @@ For the current preview correction, all eight inline JavaScript blocks passed No
 
 ### Deployment note
 
-Deploy the files in this project folder as the root of the existing Vercel project. Keep the existing `supabase-config.js`, project URL, and public anon/publishable key. The current service-worker cache namespace is `nexbyte-pwa-v17-file-preview-device-picker`; open NEXTBYTE online after deployment so the updated worker can install and activate.
+Deploy the files in this project folder as the root of the existing Vercel project. Keep the existing `supabase-config.js`, project URL, and public anon/publishable key. The current service-worker cache namespace is `nexbyte-pwa-v26-study-room-notes-tasks`; open NEXTBYTE online after deployment so the updated worker can install and activate.
 
 ## Latest follow-up — Study Hub Add Task button
 
@@ -102,3 +102,19 @@ This build also includes a fix for the `nbProfileName is not defined` error in S
 - **Open from Device** uses the browser file picker to read a file locally without uploading it. **Download & save offline** downloads the original filename and saves a separate account-tagged copy in this device's existing IndexedDB cache.
 - The pinned PDF.js main/worker assets and the DOCX/XLSX preview libraries load online on first use and are cached on that device. PDF offline-ready status is not shown until the PWA service worker controls the page and the PDF preparation pass completes. The compiled PDF.js distribution is not physically bundled under `vendor/pdfjs`; see that folder's README.
 - Offline copies are device-specific and account-scoped. Each device must download the file and prepare its preview engine independently. Browser storage quota and media codec support can affect offline preview or playback.
+
+
+## Study Room Shared Notes and Tasks repair (November 25, 2026)
+
+The Study Room Notes and Tasks tabs now use one full-height, vertically scrollable content area that contains both the record list and its creation form. The list can no longer consume the available height while leaving the composer clipped below the room panel.
+
+- Every joined room member can publish their own shared note or task. The server-side membership check is performed before creating the record; the existing Supabase Row Level Security policies remain the actual authorization boundary.
+- Notes support text-only, attachment-only, and text-plus-attachment submissions. Supported files are PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, and WEBP up to 20 MB. Uploads use the existing private `study-room-files` bucket and the existing room/user folder layout.
+- Shared note cards display the author, date, file name, type, and size, with separate in-app Preview and Download actions. Failed message inserts attempt to remove a just-uploaded orphan file.
+- Tasks include a category, optional due date, detailed instructions, author/date metadata, and separate per-member response/status records. Response updates are filtered by room, message row, and the authenticated user ID so another member's response is not overwritten.
+- Existing note edit/delete actions and task-author delete actions remain available. Existing room SQL schema and policies are reused; no new table or policy broadening is introduced.
+- The service-worker cache namespace is now `nexbyte-pwa-v26-study-room-notes-tasks` so installed clients fetch the updated room interface.
+
+No new SQL migration is included for this repair. The deployment must already have the existing room schema, `NEXBYTE_ENHANCEMENTS.sql`, the room visibility migration, and the public-room chat repair installed as applicable. In particular, the private `study-room-files` bucket must exist with the existing member-read and user-folder upload policies. Do not add permissive policies or expose the bucket publicly to work around access errors.
+
+Static JavaScript, HTML, and manifest checks are recorded in `TESTING_REPORT_STUDY_ROOM_NOTES_TASKS.md`. Live two-account Supabase behavior and Vercel deployment have not been tested from this environment; use the two-account verification steps in that report after deploying.
