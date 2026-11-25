@@ -15,7 +15,7 @@ WHAT WAS FIXED
 - The preview uses authenticated private Supabase Storage access and keeps the existing user-study-files bucket and existing paths.
 - Original filenames are preferred over UUID-like storage object names.
 - Download & Save Offline stores a separate IndexedDB Blob with filename, MIME type, file/path identifiers, and account ownership. Open from Device previews files selected through the device file picker without uploading them.
-- Current service-worker cache namespace is `nexbyte-pwa-v26-icons-music-lockin-room` for the Music, Lock-In, and room UI repairs. It checks the network for a fresh app shell and removes older NEXTBYTE app-shell caches while leaving IndexedDB user files alone.
+- Service worker cache version is v19 for the updated Study Room application shell. It checks the network for a fresh app shell and removes older NEXTBYTE app-shell caches while leaving IndexedDB user files alone.
 - A one-time reload on service-worker controller change helps avoid showing an old preview panel after deployment.
 
 PDF.JS / VENDOR FOLDER
@@ -55,7 +55,7 @@ objects. Do not skip this SQL migration: frontend button hiding alone is not
 security.
 
 Then deploy the updated index.html and sw.js from this project to the Vercel-
-connected GitHub branch. Close and reopen NEXTBYTE while online so the v26
+connected GitHub branch. Close and reopen NEXTBYTE while online so the v21
 service-worker cache can install. Test with two separate authenticated accounts.
 
 
@@ -70,16 +70,3 @@ NEXTBYTE PUBLIC STUDY ROOM CHAT REPAIR (November 22, 2026)
 5. Test with two authorized accounts in the same Public Room: one account should not see another person's Delete control; each account can delete only its own messages; deletion should disappear from both screens without reopening the room. Also test link sharing, uploaded file preview/download, and poll create/vote/change/close.
 
 The source ZIP did not contain a hard-coded visible nexbyte-mu.vercel.app label. Share cards avoid rendering a hostname banner.
-
-
-CURRENT SHARED-ROOM MIGRATION ORDER (November 25, 2026)
-Before applying SQL, back up the Supabase database and inspect existing tables and policies. The shared-room application requires the following sequence:
-1. NEXBYTE_ROOM_SCHEMA.sql
-2. NEXBYTE_ENHANCEMENTS.sql
-3. NEXTBYTE_STUDY_ROOM_VISIBILITY.sql
-4. NEXTBYTE_PUBLIC_ROOM_CHAT_REPAIR.sql
-
-Run schema.sql only if user_workspaces is missing. Review NEXBYTE_UPLOAD_STORAGE_FIX.sql independently and only apply the relevant changes if the personal user-study-files bucket or policies need repair. Never add another permissive policy without checking for old policies, because permissive Supabase policies combine using OR. Verify shared Notes, Tasks, Files, Polls, Whiteboards, and Realtime with two different authenticated accounts after migrations.
-
-CURRENT FRONTEND REPAIR (November 25, 2026)
-The current package uses `nexbyte-pwa-v26-icons-music-lockin-room`. Music and Lock-In button wrapping is improved, missing icon definitions are supplied, the Lock-In timer uses an absolute local deadline, and shared whiteboard writes reject stale snapshot versions. These changes are source-level fixes; they do not prove live Supabase, Vercel, media playback, or physical-device behavior. See README.md and TESTING_REPORT.md for limitations and verification status.

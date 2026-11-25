@@ -1,6 +1,6 @@
 {
   "id": "./index.html",
-  "name": "NEXBYTE \u2014 Academic Collaboration Environment",
+  "name": "NEXBYTE — Academic Collaboration Environment",
   "short_name": "NEXBYTE",
   "description": "Your personal academic workspace, available online and with saved offline files.",
   "start_url": "./index.html#/dashboard",
@@ -24,7 +24,7 @@
       "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ],
   "share_target": {
