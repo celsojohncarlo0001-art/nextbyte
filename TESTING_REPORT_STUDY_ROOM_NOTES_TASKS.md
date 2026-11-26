@@ -1,44 +1,47 @@
 # NEXTBYTE Study Room Shared Notes and Tasks — Repair Verification
 
-Date: November 25, 2026
+Date: November 26, 2026
 
-## Implemented in this package
+## Shared Notes improvements in this build
 
-- Replaced the final active Shared Notes and Tasks tab renderers with a unified full-height scroll layout. Both the record list and the composer remain inside the same scroll container, fixing the clipped/half-visible creation area.
-- Shared note creation is available to every joined room member. Text-only, attachment-only, and combined notes are supported. Titles and note content are length-checked.
-- File upload uses the existing private `study-room-files` bucket, stores objects under `<room-id>/<user-id>/notes/...`, validates the 20 MB size limit and supported extensions, displays status feedback, and removes an uploaded orphan if the message insert fails.
-- Note cards show author, timestamp, content, original filename, type, and size. Preview and Download pass the original file metadata to the existing authenticated private-file preview pipeline. Existing author edit/delete controls remain.
-- Task creation is available to every joined room member and includes category, optional due date, instructions, author, and timestamp.
-- Task responses are individual `shared-task-response` message rows. Updates are constrained to the current row, room, and authenticated author, preventing one member's update from overwriting another member's response. Member progress is displayed separately.
-- Existing Supabase schema and policies are reused. No new RLS policies or public Storage access were added.
-- PWA cache namespace updated to `nexbyte-pwa-v26-study-room-notes-tasks`.
+- Replaced the always-visible Create Note form beneath the records with a separate, accessible **Create note** dialog. The Shared Notes/My Notes list remains the primary content in the room tab.
+- Public rooms use **Shared Notes** and **Share note with room** labels. Owner-only private workspaces use **My Notes** and **Save note to my room** labels.
+- Selecting a file immediately displays a selected-file card with the original filename, extension, MIME type, file size, and upload-ready or validation-error state.
+- Supported image selections show a local thumbnail. PDF and image selections offer a Preview action. Users can replace or remove a selected file before submitting.
+- The existing 20 MB limit, extension allow-list, private `study-room-files` bucket, `<room-id>/<user-id>/notes/...` storage path, signed in-app preview/download flow, and orphan cleanup on failed database insertion are retained.
+- Successful note submissions close the composer, reset its fields and temporary preview, update the room messages, and put the new note at the top of the list without a manual page refresh.
+- Added a restricted owner recovery path for a room owner whose roster row is missing: the authenticated account must match `study_rooms.owner_id` before the owner membership row can be restored. A non-owner without membership is still rejected. Existing RLS and private Storage policies were not broadened.
+- The previous Tasks renderer and per-member task response implementation remain in place. The shared refresh helper no longer forces a navigation from Tasks to Notes.
+- Bumped the service-worker cache namespace to `nexbyte-pwa-v27-shared-notes-composer-preview`.
+- No database schema, SQL migration, Storage bucket visibility, or public file access changes were made.
 
-## Static verification completed
+## Verification performed
 
-- All non-empty inline JavaScript blocks extracted from `index.html` passed `node --check`.
-- The added repair layer passed `node --check`.
+- Extracted all 10 non-empty inline JavaScript blocks from `index.html`; all passed `node --check`.
 - `sw.js` passed `node --check`.
 - `manifest.webmanifest` parsed as valid JSON.
-- HTML parser completed without a fatal parse error.
-- A renderer smoke test checked that the Notes and Tasks renderers produce the unified scroll container, the corresponding create forms, file attachment controls, task category/due date fields, and per-member response controls.
-- Handler smoke tests verified membership checking, user-scoped file paths, member-authored note/task inserts, and an individual task-response insert using a mocked Supabase client.
-- Chromium layout smoke tests used the project styles and the live renderer output at 390 × 844 (Notes and Tasks) and 1280 × 800 (Tasks). In each case the create form was reachable by scrolling the single room content panel, and no JavaScript page errors occurred. The Notes test also checked that a filename containing apostrophes and quotation marks reached the Preview action intact.
-- ZIP integrity check passed after packaging.
+- Python's HTML parser completed without a fatal parse error.
+- Chromium browser smoke tests ran at 390 × 844 (mobile) and 1280 × 800 (desktop) using the actual final Notes renderer, actual project CSS, and a mocked Supabase client.
+- Public-room member and private-room owner scenarios passed: Shared Notes/My Notes labels, closed-by-default composer, separate Create Note dialog, file selection, PDF preview action, image thumbnail, file replacement, unsupported extension error, remove action, successful mocked storage upload/message insert, attachment Preview/Download actions, and newest-note-first ordering.
+- The private-room test exercised owner-only roster recovery when the mocked membership lookup returned no row.
+- A non-member test confirmed the handler refuses to publish and does not automatically enroll the user.
+- No page-level JavaScript errors were recorded in the Chromium smoke cases.
 
 ## Not verified from this environment
 
-- No authenticated connection to the user's live Supabase project was available, so live uploads, RLS, Realtime, and database persistence were not executed.
-- No Vercel deployment was initiated.
-- Cross-account synchronization and mobile browser interaction require testing against the deployed site using two separate authenticated accounts.
+- The browser tests used a mocked Supabase client. No authenticated connection to the user's live Supabase project was available, so actual Storage uploads, RLS execution, signed URLs, database persistence, and cross-account synchronization were not exercised.
+- No deployment to Vercel was initiated.
+- Real Android/iOS browser file pickers and two-account collaboration still need post-deployment checks.
 
-## Required post-deployment checks
+## Recommended post-deployment checks
 
-1. Confirm all existing room SQL migrations are installed in the documented order. The `study-room-files` bucket must be private, with member-read and owner-folder upload policies already configured by the existing room enhancement SQL.
-2. Account A creates a shared public room; account B joins it. Verify both are members.
-3. Account A and account B each publish a note, then each uploads a PDF or image. Verify both notes list the author, date, filename, file type, and file size.
-4. Preview and download each attachment as both room members. Remove one user from the room and verify that account can no longer fetch room files.
-5. Account A and account B each publish their own task with category, due date, and instructions. Verify both tasks appear for both users.
-6. Submit different response text and statuses from each account on the same task. Verify each user can see their own response and that one user's subsequent update does not overwrite the other's response.
-7. Refresh the room and reopen it. Confirm notes, attachments, tasks, and individual response states persist.
-8. Repeat on a phone/tablet and desktop width. Verify the entire Notes/Tasks page scrolls and the create form is reachable; no controls are clipped or overlapped.
-9. Inspect browser console, network requests, Supabase Storage errors, and RLS errors if a test fails. Do not resolve permission errors by making the bucket public or weakening RLS.
+1. Open an existing public room as a regular member and as the host. Confirm both accounts can create notes and attachments.
+2. Open an existing private workspace as its owner. Confirm the My Notes tab accepts a text-only note and an attachment-only note.
+3. Select an image and PDF. Verify filename, type, size, thumbnail/Preview control, Replace, and Remove are visible before upload.
+4. Share a note with an attachment. Confirm the dialog closes, the new note appears first, and the attachment opens/downloads through the private room-file flow.
+5. Refresh and reopen both public and private rooms. Confirm notes and files persist.
+6. Verify an unauthorized account cannot read a private room note or fetch its attachment.
+7. Confirm the Create Note dialog and Notes list remain usable on a phone/tablet and desktop, and inspect browser console, network, Supabase Storage, and RLS errors if any step fails.
+8. Recheck that Tasks remains selected after publishing a task or saving a response.
+
+Do not resolve any live permission error by making the room Storage bucket public or by weakening room-membership RLS.

@@ -271,3 +271,13 @@ Live Supabase Storage, real account policies, cross-device synchronization, and 
 ## Validation limits
 
 Static syntax and package integrity checks were run locally. The Supabase migration was not run against the live project, and true two-account Realtime behavior, Vercel deployment, Storage signed URLs, and Android browser UI still require live testing.
+
+
+## November 26, 2026 — Study Room My Notes and Shared Notes composer repair
+
+- Reworked the active Study Room Notes view so the Shared Notes/My Notes list is the primary page content, with a separate **Create note** dialog instead of an always-visible form merged beneath the list.
+- Added a selected-file card that appears immediately after choosing an attachment and displays the original filename, extension/type, size, upload readiness, and an appropriate document icon. Image selections display a local thumbnail; PDF/image files have a Preview action.
+- Added Remove and reselect support, immediate validation feedback, and cleanup of temporary thumbnail object URLs. Existing 20 MB limit, accepted file types, private Storage bucket, per-room/per-user path, and signed in-app preview/download flow are preserved.
+- After a successful save, the composer closes, its fields reset, and the new note appears at the top of the list without a manual refresh. Private rooms use My Notes / Save note to my room wording; public rooms use Shared Notes / Share note with room.
+- Added owner-only recovery for legacy room rows missing the room owner's roster entry. The repair first verifies `study_rooms.owner_id` against the authenticated user and never enrolls a non-owner or changes room access policies.
+- Bumped the service-worker cache namespace to `nexbyte-pwa-v27-shared-notes-composer-preview`. No SQL migration, new bucket, public Storage access, or schema change was added.

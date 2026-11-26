@@ -4999,7 +4999,7 @@ async function deleteRoomAny(id){
       nb42SetStatus(fileInput, 'nb42SharedNoteStatus', 'Share failed: ' + message, true);
       toast('Could not share note: ' + message);
     } finally {
-      if (button && button.isConnected) { button.disabled = false; button.textContent = 'Share note or file'; }
+      if (button && button.isConnected) { button.disabled = false; button.textContent = room && room.roomType === 'private' ? 'Save note to my room' : 'Share note with room'; }
       nb42Unlock(key);
     }
   };
@@ -9074,7 +9074,7 @@ async function deleteRoomAny(id){
   function inlineArg(value) { return html(JSON.stringify(String(value == null ? '' : value))); }
   function currentRoom(roomId) {
     return (window.S && Array.isArray(S.rooms) ? S.rooms : []).filter(function (room) {
-      return String(room.id) === String(roomId) && room.isShared;
+      return String(room.id) === String(roomId) && (room.isShared || room.roomType === 'private');
     })[0] || null;
   }
   function currentUserId() {
@@ -9171,19 +9171,138 @@ async function deleteRoomAny(id){
     var membership = await dbClient.from('study_room_members')
       .select('room_id,user_id,role').eq('room_id', String(roomId)).eq('user_id', String(user.id)).limit(1).maybeSingle();
     if (membership.error) throw new Error('Could not verify room membership: ' + membership.error.message);
-    if (!membership.data) throw new Error('You are not a member of this room. Rejoin using its invite code, then try again.');
+    if (membership.data) return user;
+
+    /* Older owner-created workspaces may have a room row but be missing their
+       owner roster row. Recover only the verified owner membership; never
+       auto-enroll a regular user or grant access to another account. */
+    var roomResult = await dbClient.from('study_rooms')
+      .select('id,owner_id,room_type').eq('id', String(roomId)).maybeSingle();
+    if (roomResult.error) throw new Error('Could not verify room ownership: ' + roomResult.error.message);
+    var isOwner = !!(roomResult.data && String(roomResult.data.owner_id) === String(user.id));
+    if (!isOwner) throw new Error('You are not a member of this room. Join the public room before sharing notes.');
+    var repaired = await dbClient.from('study_room_members')
+      .insert({ room_id: String(roomId), user_id: user.id, role: 'owner' })
+      .select('room_id,user_id,role').maybeSingle();
+    if (repaired.error) {
+      /* A simultaneous repair or existing row may win the race. Recheck before
+         reporting an error so the owner does not receive a false denial. */
+      var retry = await dbClient.from('study_room_members')
+        .select('room_id,user_id,role').eq('room_id', String(roomId)).eq('user_id', String(user.id)).limit(1).maybeSingle();
+      if (retry.error || !retry.data) throw new Error('Could not restore your room-owner access: ' + repaired.error.message);
+    }
     return user;
   }
   async function refreshMessages(room) {
     if (typeof window.nbLoadMessages === 'function') await window.nbLoadMessages(room, true);
     if (typeof window.render === 'function') window.render();
+    if (typeof window.requestAnimationFrame === 'function') requestAnimationFrame(function () {
+      var page = document.querySelector('.nb-room-scroll-page');
+      if (page) page.scrollTop = 0;
+      var list = document.querySelector('.nb-room-record-list');
+      if (list && typeof list.focus === 'function') list.focus({ preventScroll: true });
+    });
   }
 
+  var selectedNotePreviewUrl = null;
+  function releaseSelectedNotePreview() {
+    if (selectedNotePreviewUrl && window.URL && typeof URL.revokeObjectURL === 'function') {
+      try { URL.revokeObjectURL(selectedNotePreviewUrl); } catch (_) {}
+    }
+    selectedNotePreviewUrl = null;
+  }
+  function createNode(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = String(text);
+    return node;
+  }
+  function selectedFileIcon(file) {
+    var ext = fileExtension(file && file.name);
+    if (['png', 'jpg', 'jpeg', 'webp'].indexOf(ext) >= 0) return '🖼️';
+    if (ext === 'pdf') return '📕';
+    if (['doc', 'docx', 'txt', 'md', 'csv'].indexOf(ext) >= 0) return '📄';
+    if (['ppt', 'pptx'].indexOf(ext) >= 0) return '📊';
+    if (['xls', 'xlsx'].indexOf(ext) >= 0) return '📈';
+    return '📎';
+  }
+  window.nbPreviewSelectedRoomNoteFile = function () {
+    var input = document.getElementById('sharedNoteFile');
+    var file = input && input.files && input.files[0];
+    if (!file) { toast('Choose a file before previewing it.'); return; }
+    var validation = validateFile(file);
+    if (!validation.ok) { toast(validation.message); return; }
+    try {
+      var url = URL.createObjectURL(file);
+      var opened = window.open(url, '_blank');
+      if (opened) opened.opener = null;
+      else toast('Your browser blocked the preview tab. Allow pop-ups or use the file after sharing.');
+      window.setTimeout(function () { try { URL.revokeObjectURL(url); } catch (_) {} }, 5 * 60 * 1000);
+    } catch (error) {
+      toast('Could not preview this selected file. You can still share it.');
+    }
+  };
+  window.nbRemoveSelectedRoomNoteFile = function () {
+    var input = document.getElementById('sharedNoteFile');
+    if (input) input.value = '';
+    window.nbRoomFileSelected(input, 'nbRoomNoteFileStatus');
+  };
   window.nbRoomFileSelected = function (input, statusId) {
     var file = input && input.files && input.files[0];
+    var preview = document.getElementById('nbRoomNoteSelectedFile');
+    releaseSelectedNotePreview();
+    if (preview) preview.innerHTML = '';
     if (!file) { statusMessage(statusId, '', false); return; }
     var validation = validateFile(file);
-    statusMessage(statusId, validation.ok ? ('Selected: ' + file.name + ' · ' + formatBytes(file.size) + '. It will upload when you share the note.') : validation.message, !validation.ok);
+    statusMessage(statusId, validation.ok ? 'Selected file is ready. It will upload when you save this note.' : validation.message, !validation.ok);
+    if (!preview) return;
+
+    var card = createNode('div', 'nb-room-selected-file' + (validation.ok ? '' : ' is-invalid'));
+    var visual = createNode('div', 'nb-room-selected-file-visual');
+    if (validation.ok && ['png', 'jpg', 'jpeg', 'webp'].indexOf(fileExtension(file.name)) >= 0 && window.URL && URL.createObjectURL) {
+      selectedNotePreviewUrl = URL.createObjectURL(file);
+      var image = createNode('img', 'nb-room-selected-file-thumbnail');
+      image.src = selectedNotePreviewUrl;
+      image.alt = 'Preview of ' + file.name;
+      visual.appendChild(image);
+    } else {
+      visual.appendChild(createNode('span', 'nb-room-selected-file-icon', selectedFileIcon(file)));
+    }
+    var details = createNode('div', 'nb-room-selected-file-details');
+    details.appendChild(createNode('strong', '', file.name));
+    var ext = fileExtension(file.name).toUpperCase() || 'FILE';
+    details.appendChild(createNode('span', '', ext + ' · ' + formatBytes(file.size) + ' · ' + (mimeType(file) || 'Unknown type')));
+    details.appendChild(createNode('span', 'nb-room-selected-file-state', validation.ok ? 'Ready to upload' : validation.message));
+    var actions = createNode('div', 'nb-room-selected-file-actions');
+    if (validation.ok && (ext === 'PDF' || ['PNG', 'JPG', 'JPEG', 'WEBP'].indexOf(ext) >= 0)) {
+      var previewButton = createNode('button', 'btn btn-secondary btn-sm', 'Preview');
+      previewButton.type = 'button';
+      previewButton.onclick = window.nbPreviewSelectedRoomNoteFile;
+      actions.appendChild(previewButton);
+    }
+    var removeButton = createNode('button', 'btn btn-secondary btn-sm', 'Remove');
+    removeButton.type = 'button';
+    removeButton.onclick = window.nbRemoveSelectedRoomNoteFile;
+    actions.appendChild(removeButton);
+    card.appendChild(visual);
+    card.appendChild(details);
+    card.appendChild(actions);
+    preview.appendChild(card);
+  };
+  window.nbOpenRoomNoteComposer = function () {
+    var modal = document.getElementById('nbRoomNoteComposerModal');
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add('nb-room-note-modal-open');
+    var title = document.getElementById('sharedNoteTitle');
+    if (title) title.focus();
+  };
+  window.nbCloseRoomNoteComposer = function () {
+    var modal = document.getElementById('nbRoomNoteComposerModal');
+    if (modal) modal.hidden = true;
+    document.body.classList.remove('nb-room-note-modal-open');
+    var trigger = document.getElementById('nbOpenRoomNoteComposerButton');
+    if (trigger && typeof trigger.focus === 'function') trigger.focus();
   };
 
   function noteCard(room, note) {
@@ -9196,20 +9315,34 @@ async function deleteRoomAny(id){
       attachment = '<div class="nb-room-attachment"><div class="nb-room-file-symbol" aria-hidden="true">📎</div><div class="nb-room-file-meta"><strong>' + html(note.fileName || 'Attached file') + '</strong><span>' + html(kind) + (note.fileSize ? ' · ' + html(formatBytes(note.fileSize)) : '') + '</span></div><div class="nb-room-file-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',false,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">Preview</button><button type="button" class="btn btn-primary btn-sm" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',true,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">Download</button></div></div>';
     }
     var ownControls = note.me ? '<div class="nb-room-record-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Edit note</button><button type="button" class="btn btn-danger btn-sm" onclick="nbDeleteSharedRecord(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Delete</button></div>' : '';
-    return '<article class="card padc nb-room-record-card"><div class="nb-room-card-heading"><div class="grow minw"><h3 class="txm semi nb-room-record-title">' + html(note.title || 'Shared note') + '</h3><p class="txs muted mt1">Shared by ' + html(author) + ' · ' + html(timestamp) + '</p></div></div>' + (note.text ? '<p class="txm mt3 nb-room-preserve-text">' + html(note.text) + '</p>' : '') + attachment + ownControls + '</article>';
+    var ownerLabel = room.roomType === 'private' ? 'Saved by ' : 'Shared by ';
+    return '<article class="card padc nb-room-record-card"><div class="nb-room-card-heading"><div class="grow minw"><h3 class="txm semi nb-room-record-title">' + html(note.title || 'Shared note') + '</h3><p class="txs muted mt1">' + ownerLabel + html(author) + ' · ' + html(timestamp) + '</p></div></div>' + (note.text ? '<p class="txm mt3 nb-room-preserve-text">' + html(note.text) + '</p>' : '') + attachment + ownControls + '</article>';
   }
 
   function renderNotes(room) {
     var notes = (room.messages || []).filter(function (item) { return item.kind === 'shared-note'; });
     notes.sort(function (a, b) { return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(); });
-    var cards = notes.length ? notes.map(function (note) { return noteCard(room, note); }).join('') : '<div class="empty nb-room-empty"><div class="em">📝</div><h3 class="txm semi">No shared notes yet</h3><p class="txs muted mt1">Be the first to share notes or an attachment with this room.</p></div>';
-    return '<div class="nb-room-scroll-page"><section class="nb-room-record-list" aria-label="Shared notes">' + cards + '</section>' +
-      '<section class="card padc nb-room-compose"><div><h2 class="txl semi">Share your own notes</h2><p class="txs muted mt1">Every room member can contribute notes and attachments. Files are private to authorized room members.</p></div>' +
+    var isPersonalRoom = room.roomType === 'private';
+    var sectionTitle = isPersonalRoom ? 'My Notes' : 'Shared Notes';
+    var emptyTitle = isPersonalRoom ? 'No personal notes yet' : 'No shared notes yet';
+    var emptyCopy = isPersonalRoom ? 'Create your first note or save a file in this private study room.' : 'Be the first to share notes or an attachment with this room.';
+    var cards = notes.length ? notes.map(function (note) { return noteCard(room, note); }).join('') : '<div class="empty nb-room-empty"><div class="em">📝</div><h3 class="txm semi">' + html(emptyTitle) + '</h3><p class="txs muted mt1">' + html(emptyCopy) + '</p></div>';
+    var modalTitle = isPersonalRoom ? 'Create a personal note' : 'Create a shared note';
+    var submitLabel = isPersonalRoom ? 'Save note to my room' : 'Share note with room';
+    var modalDescription = isPersonalRoom ? 'Your notes and attachments are private to your account.' : 'Every authorized room member can contribute notes and attachments. Attachments stay private to this room.';
+    return '<div class="nb-room-notes-root"><div class="nb-room-scroll-page">' +
+      '<header class="nb-room-notes-header"><div class="grow minw"><h2 class="txl semi">' + html(sectionTitle) + '</h2><p class="txs muted mt1">' + notes.length + (isPersonalRoom ? ' saved note' : ' shared note') + (notes.length === 1 ? '' : 's') + '</p></div><button type="button" class="btn btn-primary" id="nbOpenRoomNoteComposerButton" onclick="nbOpenRoomNoteComposer()">＋ Create note</button></header>' +
+      '<section class="nb-room-record-list" aria-label="' + html(sectionTitle) + '" tabindex="-1">' + cards + '</section>' +
+      '</div>' +
+      '<div id="nbRoomNoteComposerModal" class="nb-room-note-modal" role="dialog" aria-modal="true" aria-labelledby="nbRoomNoteComposerTitle" hidden>' +
+      '<section class="card padc nb-room-compose nb-room-note-dialog">' +
+      '<header class="nb-room-note-dialog-header"><div class="grow minw"><h2 class="txl semi" id="nbRoomNoteComposerTitle">' + html(modalTitle) + '</h2><p class="txs muted mt1">' + html(modalDescription) + '</p></div><button type="button" class="iconbtn" aria-label="Close create note" onclick="nbCloseRoomNoteComposer()">✕</button></header>' +
       '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteTitle">Note or document title</label><input id="sharedNoteTitle" class="input" maxlength="160" placeholder="e.g. Biology Chapter 2 summary" autocomplete="off"/></div>' +
-      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteText">Your notes</label><textarea id="sharedNoteText" class="input" rows="5" maxlength="20000" placeholder="Write explanations, summaries, or study notes…"></textarea></div>' +
-      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteFile">Attachment (optional · 20 MB maximum)</label><input id="sharedNoteFile" type="file" class="input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp" onchange="nbRoomFileSelected(this,\'nbRoomNoteFileStatus\')"/><p id="nbRoomNoteFileStatus" class="nb-room-status" role="status" aria-live="polite"></p><p class="txs muted">Supported: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, and WEBP.</p></div>' +
-      '<button type="button" class="btn btn-primary btn-block" id="nbShareRoomNoteButton" onclick="nbPublishRoomNote(\'' + attr(room.id) + '\')">Share note or file</button>' +
-      '<p id="nbRoomNoteSubmitStatus" class="nb-room-status" role="status" aria-live="polite"></p></section></div>';
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteText">' + (isPersonalRoom ? 'Your notes' : 'Note content') + '</label><textarea id="sharedNoteText" class="input" rows="6" maxlength="20000" placeholder="Write explanations, summaries, or study notes…"></textarea></div>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteFile">Attachment (optional · 20 MB maximum)</label><input id="sharedNoteFile" type="file" class="input nb-room-file-input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp" onchange="nbRoomFileSelected(this,&quot;nbRoomNoteFileStatus&quot;)"/><div id="nbRoomNoteSelectedFile" class="nb-room-selected-file-host" aria-live="polite"></div><p id="nbRoomNoteFileStatus" class="nb-room-status" role="status" aria-live="polite"></p><p class="txs muted">Supported: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, and WEBP.</p></div>' +
+      '<div class="nb-room-note-dialog-actions"><button type="button" class="btn btn-secondary" onclick="nbCloseRoomNoteComposer()">Cancel</button><button type="button" class="btn btn-primary" id="nbShareRoomNoteButton" onclick="nbPublishRoomNote(' + inlineArg(room.id) + ')">' + html(submitLabel) + '</button></div>' +
+      '<p id="nbRoomNoteSubmitStatus" class="nb-room-status" role="status" aria-live="polite"></p>' +
+      '</section></div></div>';
   }
 
   window.nbPublishRoomNote = async function (roomId) {
@@ -9231,7 +9364,7 @@ async function deleteRoomAny(id){
     if (!title) title = file ? file.name : 'Shared study note';
 
     noteBusy[key] = true;
-    if (button) { button.disabled = true; button.textContent = 'Sharing…'; }
+    if (button) { button.disabled = true; button.textContent = room.roomType === 'private' ? 'Saving…' : 'Sharing…'; }
     statusMessage('nbRoomNoteSubmitStatus', file ? 'Verifying room access and uploading your attachment…' : 'Saving your note…', false);
     var uploadedPath = null;
     var messageSaved = false;
@@ -9259,10 +9392,16 @@ async function deleteRoomAny(id){
       if (titleInput) titleInput.value = '';
       if (textInput) textInput.value = '';
       if (fileInput) fileInput.value = '';
+      releaseSelectedNotePreview();
       statusMessage('nbRoomNoteFileStatus', '', false);
-      statusMessage('nbRoomNoteSubmitStatus', 'Your note' + (file ? ' and attachment' : '') + ' has been saved to this room.', false);
+      statusMessage('nbRoomNoteSubmitStatus', '', false);
+      var selectedPreview = document.getElementById('nbRoomNoteSelectedFile');
+      if (selectedPreview) selectedPreview.innerHTML = '';
+      window.nbCloseRoomNoteComposer();
       await refreshMessages(room);
-      toast(file ? 'Note and attachment shared with the room.' : 'Note shared with the room.');
+      toast(room.roomType === 'private'
+        ? (file ? 'Your note and attachment were saved to My Notes.' : 'Your note was saved to My Notes.')
+        : (file ? 'Note and attachment shared with the room.' : 'Note shared with the room.'));
     } catch (error) {
       if (uploadedPath && !messageSaved) {
         try { await dbClient.storage.from('study-room-files').remove([uploadedPath]); }
@@ -9432,8 +9571,8 @@ async function deleteRoomAny(id){
     return previousOpenRoomFile ? previousOpenRoomFile(roomId, path, download) : Promise.reject(new Error('Room file preview is unavailable.'));
   };
 
-  /* The room work area now has one scroll container containing both records and the
-     creation form. This removes the clipped composer / half-height task-panel behavior. */
+  /* Notes are prioritized in a dedicated scrolling list; the separate composer is
+     opened in an accessible, independently scrollable dialog. */
   var previousRoomTabBody = window.roomTabBody || (typeof roomTabBody === 'function' ? roomTabBody : null);
   window.roomTabBody = function (room) {
     if (room && room.isShared && room.isJoined && window.UI && UI.roomTab === 'notes') return renderNotes(room);
@@ -9485,6 +9624,43 @@ async function deleteRoomAny(id){
     .nb-room-status-pill.status-progress{background:rgba(37,99,235,.12);color:#2563eb}
     .nb-room-status-pill.status-todo{background:var(--secondary);color:var(--muted-fg)}
     .nb-room-empty{width:100%;box-sizing:border-box;padding:28px 14px}
+    .nb-room-notes-root{position:relative;display:flex;flex:1 1 auto;flex-direction:column;min-width:0;min-height:0;width:100%;height:100%;overflow:hidden}
+    .nb-room-notes-header{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-width:0;padding:2px 0 4px}
+    .nb-room-notes-header .btn{flex:0 0 auto;min-height:42px;white-space:nowrap}
+    .nb-room-notes-header h2{overflow-wrap:anywhere}
+    .nb-room-note-modal[hidden]{display:none!important}
+    .nb-room-note-modal{position:fixed;inset:0;z-index:1200;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:16px;padding-top:max(16px,env(safe-area-inset-top,0px));padding-bottom:max(16px,env(safe-area-inset-bottom,0px));background:rgba(15,23,42,.62);backdrop-filter:blur(3px)}
+    .nb-room-note-dialog{width:min(680px,100%);max-height:min(92dvh,860px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;gap:14px;box-shadow:0 24px 80px rgba(15,23,42,.28)}
+    .nb-room-note-dialog-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-width:0}
+    .nb-room-note-dialog-header .iconbtn{flex:0 0 auto}
+    .nb-room-note-dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+    .nb-room-note-dialog-actions .btn{min-height:42px}
+    .nb-room-selected-file-host:empty{display:none}
+    .nb-room-selected-file{display:flex;align-items:center;gap:12px;width:100%;min-width:0;margin-top:9px;padding:12px;box-sizing:border-box;border:1px solid var(--border);border-radius:14px;background:var(--secondary)}
+    .nb-room-selected-file.is-invalid{border-color:#dc2626;background:rgba(220,38,38,.06)}
+    .nb-room-selected-file-visual{display:flex;align-items:center;justify-content:center;flex:0 0 58px;width:58px;height:58px;overflow:hidden;border-radius:10px;background:var(--card,rgba(255,255,255,.7))}
+    .nb-room-selected-file-thumbnail{display:block;width:100%;height:100%;object-fit:cover}
+    .nb-room-selected-file-icon{font-size:27px;line-height:1}
+    .nb-room-selected-file-details{display:flex;flex:1 1 auto;flex-direction:column;gap:4px;min-width:0}
+    .nb-room-selected-file-details strong{font-size:13px;line-height:1.35;overflow-wrap:anywhere;word-break:break-word}
+    .nb-room-selected-file-details span{font-size:11px;line-height:1.4;color:var(--muted-fg);overflow-wrap:anywhere}
+    .nb-room-selected-file-details .nb-room-selected-file-state{font-weight:700;color:#15803d}
+    .nb-room-selected-file.is-invalid .nb-room-selected-file-state{color:#dc2626}
+    .nb-room-selected-file-actions{display:flex;flex:0 0 auto;gap:6px;flex-wrap:wrap}
+    .nb-room-selected-file-actions .btn{min-height:34px}
+    body.nb-room-note-modal-open{overflow:hidden}
+    @media(max-width:600px){
+      .nb-room-note-modal{align-items:flex-end;padding:8px;padding-top:max(8px,env(safe-area-inset-top,0px));padding-bottom:max(8px,env(safe-area-inset-bottom,0px))}
+      .nb-room-note-dialog{width:100%;max-height:94dvh;border-radius:18px 18px 12px 12px;padding:16px}
+      .nb-room-notes-header{align-items:flex-start}
+      .nb-room-notes-header .btn{min-height:38px;padding:0 12px;font-size:12px}
+      .nb-room-selected-file{align-items:flex-start;flex-wrap:wrap}
+      .nb-room-selected-file-details{flex:1 1 calc(100% - 76px)}
+      .nb-room-selected-file-actions{width:100%;padding-left:70px}
+      .nb-room-selected-file-actions .btn{flex:1 1 90px}
+      .nb-room-note-dialog-actions{flex-direction:column-reverse}
+      .nb-room-note-dialog-actions .btn{width:100%}
+    }
     @media(max-width:480px){
       .nb-room-scroll-page{padding:10px 10px calc(20px + env(safe-area-inset-bottom,0px));gap:10px}
       .nb-room-attachment{align-items:flex-start;flex-wrap:wrap}
@@ -9497,7 +9673,7 @@ async function deleteRoomAny(id){
     @media(min-width:700px){.nb-room-scroll-page{padding:18px;gap:16px}.nb-room-compose,.nb-room-record-card{padding:18px}}
   `;
   if (!document.getElementById(styles.id)) document.head.appendChild(styles);
-  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.0.0';
+  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.1.0-shared-notes-composer-preview';
 })();
 
 </script>
