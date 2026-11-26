@@ -1,3 +1,12 @@
+## 2026-11-27 — Shared Notes V32 attachment synchronization repair
+- Added a committed-note overlay so a saved note remains visible if an overlapping or stale room-message refresh temporarily replaces the in-memory list.
+- Render the verified note immediately after the Storage upload and database insert complete; the follow-up room refresh now reconciles in the background.
+- Generate the note ID before upload and reuse it in both the private Storage path and the note payload to strengthen attachment-to-note association.
+- Verify the returned note kind, note ID, room/user IDs, filename, and file path before reporting success.
+- Synchronize the V32 file cache with legacy preview/remove helpers; explicit removal, closing the composer, or opening a new composer clears both file caches to prevent a previous attachment from leaking into a later note.
+- Bumped the PWA cache to V32.
+- No Supabase SQL, bucket visibility, or RLS policies were changed.
+
 ## 2026-11-26 — Shared Notes V31 authoritative file upload handler
 - Consolidated the final Shared Notes button entry point after the historical patches to ensure one authoritative file-aware submit handler runs.
 - Captures the selected File directly from the input and retains it by room across DOM redraws.
