@@ -320,3 +320,12 @@ Static syntax and package integrity checks were run locally. The Supabase migrat
 - Bumped service-worker cache to `nexbyte-pwa-v29-shared-note-commit-persistence-fix`.
 - Inspected the connected Supabase project read-only: RLS is enabled, private-room payload validation allows `shared-note`, and `study-room-files` is a private 20 MiB bucket with room-member-scoped policies. No database schema or policy changes were made.
 - Local submit-flow and stale-refresh harness tests passed; real authenticated uploads and Android/Vercel end-to-end testing remain pending.
+
+## 2026-11-26 – Shared Notes attachment selection and upload reliability
+
+- Capture the selected browser `File` object at file-picker change time and retain it by Study Room ID so native Android/PWA input replacement does not lose the attachment before submission.
+- Use delegated change handling for the dynamically rendered Shared Notes file input.
+- Block silent text-only submission when the composer still indicates that an attachment is selected but the file object is missing.
+- Display the active Storage upload stage and verify the saved object path before creating the shared-note message.
+- Preserve the note draft and attachment selection when upload or database saving fails.
+- Bumped the PWA service-worker cache to `nexbyte-pwa-v30-shared-note-file-object-retention-fix`.

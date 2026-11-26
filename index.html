@@ -9324,6 +9324,11 @@ async function deleteRoomAny(id){
   }
 
   var selectedNotePreviewUrl = null;
+  /* Android/iOS file pickers can return focus after the original input has been
+     replaced by a room redraw. Keep the actual File object in memory from the
+     change event so submission does not silently fall back to a text-only note. */
+  var selectedRoomNoteFile = null;
+  var selectedRoomNoteFileRoomId = null;
   function releaseSelectedNotePreview() {
     if (selectedNotePreviewUrl && window.URL && typeof URL.revokeObjectURL === 'function') {
       try { URL.revokeObjectURL(selectedNotePreviewUrl); } catch (_) {}
@@ -9363,11 +9368,21 @@ async function deleteRoomAny(id){
   };
   window.nbRemoveSelectedRoomNoteFile = function () {
     var input = document.getElementById('sharedNoteFile');
+    selectedRoomNoteFile = null;
+    selectedRoomNoteFileRoomId = null;
     if (input) input.value = '';
     window.nbRoomFileSelected(input, 'nbRoomNoteFileStatus');
   };
   window.nbRoomFileSelected = function (input, statusId) {
-    var file = input && input.files && input.files[0];
+    var inputFile = input && input.files && input.files[0];
+    /* Prefer a newly selected File, but keep the previous File when the native
+       picker is cancelled or the input node was recreated by the PWA shell. */
+    if (inputFile) {
+      selectedRoomNoteFile = inputFile;
+      var selectedRoute = typeof currentRoute === 'function' ? currentRoute() : null;
+      selectedRoomNoteFileRoomId = selectedRoute && selectedRoute.id ? String(selectedRoute.id) : null;
+    }
+    var file = inputFile || selectedRoomNoteFile;
     var preview = document.getElementById('nbRoomNoteSelectedFile');
     releaseSelectedNotePreview();
     if (preview) preview.innerHTML = '';
@@ -9424,6 +9439,19 @@ async function deleteRoomAny(id){
     if (trigger && typeof trigger.focus === 'function') trigger.focus();
   };
 
+  /* Delegate the file-change event because the note composer is rendered
+     dynamically. This avoids relying on an inline handler on an input that can
+     be replaced when Android's document picker returns to the PWA. */
+  if (!window.__nbRoomNoteFileChangeBound) {
+    document.addEventListener('change', function (event) {
+      var target = event && event.target;
+      if (target && target.id === 'sharedNoteFile') {
+        window.nbRoomFileSelected(target, 'nbRoomNoteFileStatus');
+      }
+    }, true);
+    window.__nbRoomNoteFileChangeBound = true;
+  }
+
   function noteCard(room, note) {
     var author = note.from || 'Room member';
     var timestamp = formatDate(note.createdAt || note.time);
@@ -9458,7 +9486,7 @@ async function deleteRoomAny(id){
       '<header class="nb-room-note-dialog-header"><div class="grow minw"><h2 class="txl semi" id="nbRoomNoteComposerTitle">' + html(modalTitle) + '</h2><p class="txs muted mt1">' + html(modalDescription) + '</p></div><button type="button" class="iconbtn" aria-label="Close create note" onclick="nbCloseRoomNoteComposer()">✕</button></header>' +
       '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteTitle">Note or document title</label><input id="sharedNoteTitle" class="input" maxlength="160" placeholder="e.g. Biology Chapter 2 summary" autocomplete="off"/></div>' +
       '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteText">' + (isPersonalRoom ? 'Your notes' : 'Note content') + '</label><textarea id="sharedNoteText" class="input" rows="6" maxlength="20000" placeholder="Write explanations, summaries, or study notes…"></textarea></div>' +
-      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteFile">Attachment (optional · 20 MB maximum)</label><input id="sharedNoteFile" type="file" class="input nb-room-file-input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp" onchange="nbRoomFileSelected(this,&quot;nbRoomNoteFileStatus&quot;)"/><div id="nbRoomNoteSelectedFile" class="nb-room-selected-file-host" aria-live="polite"></div><p id="nbRoomNoteFileStatus" class="nb-room-status" role="status" aria-live="polite"></p><p class="txs muted">Supported: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, and WEBP.</p></div>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteFile">Attachment (optional · 20 MB maximum)</label><input id="sharedNoteFile" type="file" class="input nb-room-file-input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"/><div id="nbRoomNoteSelectedFile" class="nb-room-selected-file-host" aria-live="polite"></div><p id="nbRoomNoteFileStatus" class="nb-room-status" role="status" aria-live="polite"></p><p class="txs muted">Supported: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, and WEBP.</p></div>' +
       '<div class="nb-room-note-dialog-actions"><button type="button" class="btn btn-secondary" onclick="nbCloseRoomNoteComposer()">Cancel</button><button type="button" class="btn btn-primary" id="nbShareRoomNoteButton" onclick="nbPublishRoomNote(' + inlineArg(room.id) + ')">' + html(submitLabel) + '</button></div>' +
       '<p id="nbRoomNoteSubmitStatus" class="nb-room-status" role="status" aria-live="polite"></p>' +
       '</section></div></div>';
@@ -9480,7 +9508,21 @@ async function deleteRoomAny(id){
     var button = document.getElementById('nbShareRoomNoteButton');
     var title = String(titleInput && titleInput.value || '').trim();
     var text = String(textInput && textInput.value || '').trim();
-    var file = fileInput && fileInput.files && fileInput.files[0];
+    var inputFile = fileInput && fileInput.files && fileInput.files[0];
+    if (inputFile) {
+      selectedRoomNoteFile = inputFile;
+      selectedRoomNoteFileRoomId = key;
+    }
+    var cachedFile = selectedRoomNoteFileRoomId === key ? selectedRoomNoteFile : null;
+    var file = inputFile || cachedFile;
+    var visibleSelectedFile = document.querySelector('#nbRoomNoteSelectedFile .nb-room-selected-file');
+    var fileStatus = document.getElementById('nbRoomNoteFileStatus');
+    var uiSaysFileSelected = !!(fileStatus && /selected file is ready/i.test(fileStatus.textContent || ''));
+    if (!file && (visibleSelectedFile || uiSaysFileSelected)) {
+      statusMessage('nbRoomNoteSubmitStatus', 'The selected file is no longer available to upload. Please choose it again before sharing.', true);
+      toast('Please select the attachment again. The file is not available to upload. No text-only note was submitted.');
+      return;
+    }
 
     if (title.length > 160 || text.length > 20000) {
       toast('The title or note is too long.');
@@ -9520,13 +9562,23 @@ async function deleteRoomAny(id){
 
       if (file) {
         uploadedPath = key + '/' + user.id + '/notes/' + Date.now() + '_' + makeId() + '_' + safeFileName(file.name);
-        var upload = await dbClient.storage.from('study-room-files').upload(uploadedPath, file, {
+        statusMessage('nbRoomNoteSubmitStatus', 'Uploading ' + file.name + ' (' + formatBytes(file.size) + ') to secure room storage…', false);
+        var storageBucket = dbClient.storage.from('study-room-files');
+        if (!storageBucket || typeof storageBucket.upload !== 'function') {
+          throw new Error('Supabase Storage is unavailable in this session. Refresh the page and sign in again.');
+        }
+        var upload = await storageBucket.upload(uploadedPath, file, {
           upsert: false,
           contentType: mimeType(file),
           cacheControl: '3600'
         });
-        if (upload.error) throw new Error('Attachment upload failed: ' + upload.error.message);
-        if (!upload.data || !upload.data.path) throw new Error('Storage did not confirm that the attachment was saved.');
+        if (upload && upload.error) {
+          var uploadError = upload.error;
+          throw new Error('Attachment upload failed: ' + (uploadError.message || uploadError.error || JSON.stringify(uploadError)));
+        }
+        if (!upload || !upload.data || !upload.data.path || String(upload.data.path) !== uploadedPath) {
+          throw new Error('Supabase Storage did not confirm the expected attachment path. No note was published.');
+        }
         uploadConfirmed = true;
       }
 
@@ -9604,6 +9656,8 @@ async function deleteRoomAny(id){
       if (titleInput) titleInput.value = '';
       if (textInput) textInput.value = '';
       if (fileInput) fileInput.value = '';
+      selectedRoomNoteFile = null;
+      selectedRoomNoteFileRoomId = null;
       releaseSelectedNotePreview();
       statusMessage('nbRoomNoteFileStatus', '', false);
       statusMessage('nbRoomNoteSubmitStatus', 'Your note has been saved.', false);
@@ -9623,7 +9677,7 @@ async function deleteRoomAny(id){
       /* If confirmation is ambiguous, leave the uploaded object in place. A
          potentially committed row must never be left pointing at a deleted
          attachment. A definite insert failure is cleaned up below. */
-      if (uploadedPath && uploadConfirmed && !messageSaved && !keepUploadedFile) {
+      if (uploadedPath && !messageSaved && !keepUploadedFile) {
         try {
           var cleanup = await dbClient.storage.from('study-room-files').remove([uploadedPath]);
           if (cleanup && cleanup.error) console.warn('Could not clean up an attachment after a failed note save:', cleanup.error);
@@ -10089,7 +10143,7 @@ async function deleteRoomAny(id){
     @media(min-width:700px){.nb-room-scroll-page{padding:18px;gap:16px}.nb-room-compose,.nb-room-record-card{padding:18px}}
   `;
   if (!document.getElementById(styles.id)) document.head.appendChild(styles);
-  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.3.0-note-commit-verification-and-refresh-retention';
+  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.4.1-room-scoped-file-object-retention-and-upload-diagnostics';
 })();
 
 </script>
