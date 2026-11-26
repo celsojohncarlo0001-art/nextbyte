@@ -309,3 +309,14 @@ Static syntax and package integrity checks were run locally. The Supabase migrat
 - After a successful save, the composer closes, its fields reset, and the new note appears at the top of the list without a manual refresh. Private rooms use My Notes / Save note to my room wording; public rooms use Shared Notes / Share note with room.
 - Added owner-only recovery for legacy room rows missing the room owner's roster entry. The repair first verifies `study_rooms.owner_id` against the authenticated user and never enrolls a non-owner or changes room access policies.
 - Bumped the service-worker cache namespace to `nexbyte-pwa-v27-shared-notes-composer-preview`. No SQL migration, new bucket, public Storage access, or schema change was added.
+
+## November 26, 2026 — Shared Notes commit verification and stale-refresh persistence repair
+
+- Reworked the active note submit flow to wait for successful room-file upload and a server-confirmed `study_room_messages` row before closing the Create Note dialog or reporting success.
+- Added exact-payload verification after an ambiguous insert response to avoid duplicate submissions when the server may already have committed the note.
+- Kept the note composer and draft intact on upload, insert, and verification failures; added safe cleanup for definitely unreferenced uploaded files.
+- Added a short-lived cache for confirmed note commits so concurrent/stale room message refreshes cannot immediately hide a new note. Fresh database reads remain authoritative; successful deletes clear the cached record and note edits refresh the cached payload.
+- Preserved `room_type` when loading shared rooms so private rooms render the My Notes state correctly.
+- Bumped service-worker cache to `nexbyte-pwa-v29-shared-note-commit-persistence-fix`.
+- Inspected the connected Supabase project read-only: RLS is enabled, private-room payload validation allows `shared-note`, and `study-room-files` is a private 20 MiB bucket with room-member-scoped policies. No database schema or policy changes were made.
+- Local submit-flow and stale-refresh harness tests passed; real authenticated uploads and Android/Vercel end-to-end testing remain pending.

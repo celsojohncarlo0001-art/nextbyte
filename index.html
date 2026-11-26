@@ -2449,7 +2449,7 @@ async function nbRequireSupabaseUser(){
 }
 function nbRoomFromRow(row,members){
  var ms=(members||[]).map(function(m){var isMe=m.user_id===nbCurrentUserId();return {userId:m.user_id,name:isMe?(S.auth.user.name||'You'):'Member '+String(m.user_id).slice(0,8),initials:isMe?(S.auth.user.initials||'ME'):'M',color:isMe?(S.auth.user.color||'#2563EB'):'#A78BFA',role:m.role==='owner'?'Host':'Member'};});
- return {id:row.id,name:row.name,subjectTag:row.subject_tag||'Study group',emoji:row.emoji||'📘',color:row.color||'#2563EB',description:row.description||'Invite-only shared study room',isPrivate:true,isShared:true,inviteCode:row.invite_code,ownerId:row.owner_id,maxCapacity:row.max_capacity||8,status:'focus',round:1,timer:0,isJoined:true,members:ms,messages:[],tasks:[],sharedNote:'',polls:[],createdAt:row.created_at};
+ return {id:row.id,name:row.name,subjectTag:row.subject_tag||'Study group',emoji:row.emoji||'📘',color:row.color||'#2563EB',description:row.description||'Invite-only shared study room',isPrivate:row.room_type==='private',roomType:row.room_type==='private'?'private':'public',isShared:true,inviteCode:row.invite_code,ownerId:row.owner_id,maxCapacity:row.max_capacity||8,status:'focus',round:1,timer:0,isJoined:true,members:ms,messages:[],tasks:[],sharedNote:'',polls:[],createdAt:row.created_at};
 }
 async function nbLoadSharedRooms(silent){
  if(!dbClient||!nbCurrentUserId())return;
@@ -8496,6 +8496,7 @@ async function deleteRoomAny(id){
         if (deleted.error) throw deleted.error;
         if (!deleted.data) throw new Error('The message was not deleted. Check the author-only DELETE policy in Supabase.');
         room.messages = (room.messages || []).filter(function (message) { return String(message.dbId) !== String(dbId); });
+        if (typeof window.nbClearCommittedNoteCache === 'function') window.nbClearCommittedNoteCache(room.id, item.dbId);
         if (item.filePath) {
           var cleanup = await dbClient.storage.from('study-room-files').remove([item.filePath]);
           if (cleanup.error) console.warn('The message was deleted but its attachment cleanup did not complete:', cleanup.error);
@@ -9101,6 +9102,57 @@ async function deleteRoomAny(id){
   var noteBusy = Object.create(null);
   var taskBusy = Object.create(null);
   var responseBusy = Object.create(null);
+  var committedNoteCache = Object.create(null);
+
+  function cacheCommittedNote(roomId, row, userId) {
+    if (!roomId || !row || !row.id || !row.body) return;
+    var key = String(roomId);
+    if (!committedNoteCache[key]) committedNoteCache[key] = Object.create(null);
+    committedNoteCache[key][String(row.id)] = {
+      row: row,
+      userId: String(userId || row.user_id || ''),
+      expiresAt: Date.now() + (2 * 60 * 1000)
+    };
+  }
+  window.nbClearCommittedNoteCache = function (roomId, messageId) {
+    var key = String(roomId || '');
+    if (!committedNoteCache[key]) return;
+    if (messageId != null) delete committedNoteCache[key][String(messageId)];
+    if (!Object.keys(committedNoteCache[key]).length) delete committedNoteCache[key];
+  };
+
+  /* Keep the confirmed insert visible if a realtime notification starts a
+     concurrent room refresh before the new row is included in its SELECT. */
+  var previousRoomMessageLoader = window.nbLoadMessages;
+  if (typeof previousRoomMessageLoader === 'function' && !window.__nbCommittedNoteLoaderWrapped) {
+    window.nbLoadMessages = async function (room, quiet) {
+      var result = await previousRoomMessageLoader(room, quiet);
+      if (!room || !room.id) return result;
+      var key = String(room.id);
+      var cached = committedNoteCache[key];
+      if (!cached) return result;
+      var restored = false;
+      Object.keys(cached).forEach(function (id) {
+        var entry = cached[id];
+        if (!entry || entry.expiresAt < Date.now()) {
+          delete cached[id];
+          return;
+        }
+        var alreadyLoaded = (room.messages || []).some(function (item) {
+          return String(item.dbId || '') === id;
+        });
+        if (alreadyLoaded) delete cached[id];
+        else {
+          upsertLocalMessage(room, entry.row.id, entry.userId, entry.row.body, entry.row.created_at);
+          restored = true;
+        }
+      });
+      if (!Object.keys(cached).length) delete committedNoteCache[key];
+      if (restored && !quiet && typeof window.render === 'function') window.render();
+      return result;
+    };
+    window.__nbCommittedNoteLoaderWrapped = true;
+  }
 
   function html(value) {
     return String(value == null ? '' : value)
@@ -9230,15 +9282,45 @@ async function deleteRoomAny(id){
     }
     return user;
   }
-  async function refreshMessages(room) {
-    if (typeof window.nbLoadMessages === 'function') await window.nbLoadMessages(room, true);
-    if (typeof window.render === 'function') window.render();
+  async function refreshMessages(room, committedRow, committedUserId, committedBody) {
+    var refreshConfirmed = true;
+    if (typeof window.nbLoadMessages === 'function') {
+      try {
+        await window.nbLoadMessages(room, true);
+      } catch (error) {
+        refreshConfirmed = false;
+        console.warn('Room messages could not be refreshed after a confirmed note save:', error);
+      }
+    }
+
+    /* The shared-room loader deliberately handles its own errors. A successful
+       INSERT can therefore be followed by a silent/stale read that replaces the
+       in-memory array. Keep the exact row returned by PostgREST visible even if
+       that subsequent read races or returns an incomplete result. */
+    if (committedRow && committedRow.id) {
+      var present = (room.messages || []).some(function (item) {
+        return String(item.dbId || '') === String(committedRow.id);
+      });
+      if (!present) {
+        upsertLocalMessage(room, committedRow.id, committedUserId, committedBody, committedRow.created_at);
+        refreshConfirmed = false;
+      }
+    }
+
+    if (typeof window.render === 'function') {
+      try { window.render(); }
+      catch (renderError) {
+        refreshConfirmed = false;
+        console.error('The note was saved, but the room view could not be redrawn:', renderError);
+      }
+    }
     if (typeof window.requestAnimationFrame === 'function') requestAnimationFrame(function () {
       var page = document.querySelector('.nb-room-scroll-page');
       if (page) page.scrollTop = 0;
       var list = document.querySelector('.nb-room-record-list');
       if (list && typeof list.focus === 'function') list.focus({ preventScroll: true });
     });
+    return refreshConfirmed;
   }
 
   var selectedNotePreviewUrl = null;
@@ -9385,8 +9467,13 @@ async function deleteRoomAny(id){
   window.nbPublishRoomNote = async function (roomId) {
     var key = String(roomId || '');
     if (!key || noteBusy[key]) return;
+
     var room = currentRoom(key);
-    if (!room || !room.isJoined) { toast('Open a room that you have joined before sharing notes.'); return; }
+    if (!room || !room.isJoined) {
+      toast('Open a room that you have joined before sharing notes.');
+      return;
+    }
+
     var titleInput = document.getElementById('sharedNoteTitle');
     var textInput = document.getElementById('sharedNoteText');
     var fileInput = document.getElementById('sharedNoteFile');
@@ -9394,63 +9481,166 @@ async function deleteRoomAny(id){
     var title = String(titleInput && titleInput.value || '').trim();
     var text = String(textInput && textInput.value || '').trim();
     var file = fileInput && fileInput.files && fileInput.files[0];
-    if (title.length > 160 || text.length > 20000) { toast('The title or note is too long.'); return; }
-    if (!text && !file) { toast('Write a note or select an attachment first.'); return; }
+
+    if (title.length > 160 || text.length > 20000) {
+      toast('The title or note is too long.');
+      return;
+    }
+    if (!text && !file) {
+      toast('Write a note or select an attachment first.');
+      return;
+    }
     var check = validateFile(file);
-    if (!check.ok) { statusMessage('nbRoomNoteFileStatus', check.message, true); toast(check.message); return; }
+    if (!check.ok) {
+      statusMessage('nbRoomNoteFileStatus', check.message, true);
+      toast(check.message);
+      return;
+    }
     if (!title) title = file ? file.name : 'Shared study note';
 
     noteBusy[key] = true;
-    if (button) { button.disabled = true; button.textContent = room.roomType === 'private' ? 'Saving…' : 'Sharing…'; }
-    statusMessage('nbRoomNoteSubmitStatus', file ? 'Verifying room access and uploading your attachment…' : 'Saving your note…', false);
+    if (button) {
+      button.disabled = true;
+      button.textContent = file ? 'Uploading and saving…' : 'Saving note…';
+    }
+    statusMessage('nbRoomNoteSubmitStatus', file
+      ? 'Verifying room access and uploading your attachment…'
+      : 'Verifying room access and saving your note…', false);
+
     var uploadedPath = null;
+    var uploadConfirmed = false;
     var messageSaved = false;
+    var keepUploadedFile = false;
+    var insertedRow = null;
+    var payload = null;
+    var user = null;
+
     try {
-      var user = await requireUserAndMembership(key);
+      user = await requireUserAndMembership(key);
+
       if (file) {
         uploadedPath = key + '/' + user.id + '/notes/' + Date.now() + '_' + makeId() + '_' + safeFileName(file.name);
         var upload = await dbClient.storage.from('study-room-files').upload(uploadedPath, file, {
-          upsert: false, contentType: mimeType(file), cacheControl: '3600'
+          upsert: false,
+          contentType: mimeType(file),
+          cacheControl: '3600'
         });
-        if (upload.error) throw upload.error;
-        if (!upload.data || !upload.data.path) throw new Error('Storage did not confirm that the file was saved.');
+        if (upload.error) throw new Error('Attachment upload failed: ' + upload.error.message);
+        if (!upload.data || !upload.data.path) throw new Error('Storage did not confirm that the attachment was saved.');
+        uploadConfirmed = true;
       }
-      var payload = sharedPayload('shared-note', {
-        id: makeId(), title: title, text: text, filePath: uploadedPath,
-        fileName: file ? file.name : null, fileSize: file ? file.size : null,
-        fileType: file ? mimeType(file) : null, from: profileName(), createdAt: new Date().toISOString()
+
+      var noteId = makeId();
+      payload = sharedPayload('shared-note', {
+        id: noteId,
+        title: title,
+        text: text,
+        filePath: uploadedPath,
+        fileName: file ? file.name : null,
+        fileSize: file ? file.size : null,
+        fileType: file ? mimeType(file) : null,
+        from: profileName(),
+        createdAt: new Date().toISOString()
       });
-      var inserted = await dbClient.from('study_room_messages')
-        .insert({ room_id: key, user_id: user.id, body: payload })
-        .select('id,room_id,user_id,body,created_at').single();
-      if (inserted.error) throw inserted.error;
+
+      /* Ask PostgREST to return the committed row. If the response is lost or
+         the returned representation is unavailable, verify the exact unique
+         payload before treating the operation as failed or asking the user to
+         retry. This avoids duplicate notes after a successful-but-ambiguous
+         network response. */
+      var insertError = null;
+      try {
+        var inserted = await dbClient.from('study_room_messages')
+          .insert({ room_id: key, user_id: user.id, body: payload })
+          .select('id,room_id,user_id,body,created_at').single();
+        if (inserted.error) insertError = inserted.error;
+        else insertedRow = inserted.data || null;
+      } catch (error) {
+        insertError = error;
+      }
+
+      if (!insertedRow || !insertedRow.id) {
+        var verified = null;
+        try {
+          var verifyResult = await dbClient.from('study_room_messages')
+            .select('id,room_id,user_id,body,created_at')
+            .eq('room_id', key).eq('user_id', user.id).eq('body', payload)
+            .maybeSingle();
+          if (verifyResult.error) throw verifyResult.error;
+          verified = verifyResult.data || null;
+        } catch (verifyError) {
+          keepUploadedFile = !!uploadConfirmed;
+          var verifyMessage = verifyError && verifyError.message ? verifyError.message : 'verification query failed';
+          throw new Error('The save response could not be confirmed. ' +
+            (insertError && insertError.message ? insertError.message + '. ' : '') +
+            'The note may have reached the database, but its status could not be checked (' + verifyMessage + '). Do not submit again until you refresh Shared Notes.');
+        }
+        if (verified) insertedRow = verified;
+        else {
+          var errorCode = String(insertError && insertError.code || '');
+          var definitelyRejected = /^(42501|22|23)/.test(errorCode) || !!(insertError && [400, 401, 403, 404, 409, 413, 422].indexOf(Number(insertError.status)) >= 0);
+          /* If the SELECT policy hides a row that may have committed, do not
+             delete its attachment. Only clean up when the database gave a
+             definitive constraint/permission rejection. */
+          keepUploadedFile = !!uploadConfirmed && !definitelyRejected;
+        }
+      }
+
+      if (!insertedRow || !insertedRow.id) {
+        throw insertError || new Error('The database did not return a saved note record.');
+      }
+      if (String(insertedRow.room_id) !== key || String(insertedRow.user_id) !== String(user.id)) {
+        keepUploadedFile = !!uploadConfirmed;
+        throw new Error('The saved note was returned with a different room or account. The attachment was retained for safety; contact support before retrying.');
+      }
       messageSaved = true;
-      upsertLocalMessage(room, inserted.data.id, user.id, payload, inserted.data.created_at);
+      cacheCommittedNote(key, insertedRow, user.id);
+
+      /* Keep the server-confirmed row in memory before any refresh can replace
+         room.messages. The database result is authoritative; this is only a
+         display fallback for a stale or failed follow-up read. */
+      upsertLocalMessage(room, insertedRow.id, user.id, insertedRow.body || payload, insertedRow.created_at);
+
       if (titleInput) titleInput.value = '';
       if (textInput) textInput.value = '';
       if (fileInput) fileInput.value = '';
       releaseSelectedNotePreview();
       statusMessage('nbRoomNoteFileStatus', '', false);
-      statusMessage('nbRoomNoteSubmitStatus', '', false);
-      var selectedPreview = document.getElementById('nbRoomNoteSelectedFile');
-      if (selectedPreview) selectedPreview.innerHTML = '';
+      statusMessage('nbRoomNoteSubmitStatus', 'Your note has been saved.', false);
+
+      /* Close only after the database has confirmed this exact note row. A
+         later list-refresh failure must never turn a successful save into a
+         misleading failure or remove its attachment. */
       window.nbCloseRoomNoteComposer();
-      await refreshMessages(room);
+      var refreshed = await refreshMessages(room, insertedRow, user.id, insertedRow.body || payload);
+      if (!refreshed) {
+        console.warn('Shared note was committed and retained locally; follow-up room refresh did not confirm the row.', insertedRow.id);
+      }
       toast(room.roomType === 'private'
         ? (file ? 'Your note and attachment were saved to My Notes.' : 'Your note was saved to My Notes.')
         : (file ? 'Note and attachment shared with the room.' : 'Note shared with the room.'));
     } catch (error) {
-      if (uploadedPath && !messageSaved) {
-        try { await dbClient.storage.from('study-room-files').remove([uploadedPath]); }
-        catch (cleanupError) { console.warn('Could not remove an orphaned room attachment:', cleanupError); }
+      /* If confirmation is ambiguous, leave the uploaded object in place. A
+         potentially committed row must never be left pointing at a deleted
+         attachment. A definite insert failure is cleaned up below. */
+      if (uploadedPath && uploadConfirmed && !messageSaved && !keepUploadedFile) {
+        try {
+          var cleanup = await dbClient.storage.from('study-room-files').remove([uploadedPath]);
+          if (cleanup && cleanup.error) console.warn('Could not clean up an attachment after a failed note save:', cleanup.error);
+        } catch (cleanupError) {
+          console.warn('Could not clean up an attachment after a failed note save:', cleanupError);
+        }
       }
-      console.error('Shared note could not be published:', error);
+      console.error('Shared note could not be confirmed as published:', error);
       var message = error && error.message ? error.message : 'An unexpected error occurred.';
       statusMessage('nbRoomNoteSubmitStatus', 'Share failed: ' + message, true);
-      toast('Could not share your note: ' + message);
+      toast('Could not confirm your note: ' + message);
     } finally {
       noteBusy[key] = false;
-      if (button && button.isConnected) { button.disabled = false; button.textContent = 'Share note or file'; }
+      if (button && button.isConnected) {
+        button.disabled = false;
+        button.textContent = room && room.roomType === 'private' ? 'Save note to my room' : 'Share note with room';
+      }
     }
   };
 
@@ -9585,6 +9775,7 @@ async function deleteRoomAny(id){
           var oldCleanup = await dbClient.storage.from('study-room-files').remove([previousPath]);
           if (oldCleanup.error) console.warn('The note was updated, but the old attachment could not be removed:', oldCleanup.error);
         }
+        cacheCommittedNote(room.id, { id: note.dbId, room_id: room.id, user_id: user.id, body: payload, created_at: note.createdAt }, user.id);
         upsertLocalMessage(room, note.dbId, user.id, payload, note.createdAt);
         if (replacementPreviewUrl) { try { URL.revokeObjectURL(replacementPreviewUrl); } catch (_) {} replacementPreviewUrl = null; }
         closeTop(); await refreshMessages(room);
@@ -9628,6 +9819,7 @@ async function deleteRoomAny(id){
             .select('id').maybeSingle();
           if (updated.error) throw updated.error;
           if (!updated.data) throw new Error('The attachment was not removed from the note. Refresh the room and try again.');
+          cacheCommittedNote(room.id, { id: note.dbId, room_id: room.id, user_id: user.id, body: payload, created_at: note.createdAt }, user.id);
           upsertLocalMessage(room, note.dbId, user.id, payload, note.createdAt);
           var cleanup = await dbClient.storage.from('study-room-files').remove([oldPath]);
           if (cleanup.error) console.warn('The note no longer references the attachment, but storage cleanup failed:', cleanup.error);
@@ -9897,7 +10089,7 @@ async function deleteRoomAny(id){
     @media(min-width:700px){.nb-room-scroll-page{padding:18px;gap:16px}.nb-room-compose,.nb-room-record-card{padding:18px}}
   `;
   if (!document.getElementById(styles.id)) document.head.appendChild(styles);
-  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.2.0-file-picker-focus-and-creator-attachments';
+  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.3.0-note-commit-verification-and-refresh-retention';
 })();
 
 </script>
