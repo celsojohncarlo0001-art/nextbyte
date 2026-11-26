@@ -9456,15 +9456,28 @@ async function deleteRoomAny(id){
   function noteCard(room, note) {
     var author = note.from || 'Room member';
     var timestamp = formatDate(note.createdAt || note.time);
-    var attachment = '';
+    var fileActions = '';
     if (note.filePath) {
       var extension = fileExtension(note.fileName || '');
       var kind = extension ? extension.toUpperCase() : String(note.fileType || 'File').toUpperCase();
-      attachment = '<div class="nb-room-attachment"><div class="nb-room-file-symbol" aria-hidden="true">📎</div><div class="nb-room-file-meta"><strong>' + html(note.fileName || 'Attached file') + '</strong><span>' + html(kind) + (note.fileSize ? ' · ' + html(formatBytes(note.fileSize)) : '') + '</span></div><div class="nb-room-file-actions" role="group" aria-label="Attachment actions"><button type="button" class="btn btn-secondary btn-sm" data-note-action="preview" aria-label="Preview ' + html(note.fileName || 'shared file') + '" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',false,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')"><span aria-hidden="true">👁</span><span>Preview</span></button><button type="button" class="btn btn-primary btn-sm" data-note-action="download" aria-label="Download ' + html(note.fileName || 'shared file') + '" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',true,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')"><span aria-hidden="true">⬇</span><span>Download</span></button>' + (note.me ? '<button type="button" class="btn btn-secondary btn-sm" data-note-action="replace" aria-label="Replace attachment" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')"><span aria-hidden="true">↻</span><span>Replace file</span></button><button type="button" class="btn btn-danger btn-sm" data-note-action="remove" aria-label="Remove attachment" onclick="nbRemoveRoomNoteAttachment(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')"><span aria-hidden="true">✕</span><span>Remove file</span></button>' : '') + '</div></div>';
+      fileActions = '<section class="nb-room-attachment" aria-label="Attached file">' +
+        '<div class="nb-room-file-heading"><span class="nb-room-file-symbol" aria-hidden="true">' + ic('file', 22) + '</span>' +
+        '<div class="nb-room-file-meta"><strong title="' + html(note.fileName || 'Attached file') + '">' + html(note.fileName || 'Attached file') + '</strong>' +
+        '<span>' + html(kind) + (note.fileSize ? ' · ' + html(formatBytes(note.fileSize)) : '') + '</span></div></div>' +
+        '<div class="nb-room-file-actions" role="group" aria-label="Attachment actions">' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-note-action="preview" aria-label="Preview ' + html(note.fileName || 'shared file') + '" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',false,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">' + ic('eye', 16) + '<span>Preview</span></button>' +
+        '<button type="button" class="btn btn-primary btn-sm" data-note-action="download" aria-label="Download ' + html(note.fileName || 'shared file') + '" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',true,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">' + ic('download', 16) + '<span>Download</span></button>' +
+        (note.me ? '<button type="button" class="btn btn-secondary btn-sm" data-note-action="replace" aria-label="Replace attachment" onclick="nbManageRoomNoteAttachment(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">' + ic('reset', 16) + '<span>Replace file</span></button>' +
+        '<button type="button" class="btn btn-danger btn-sm" data-note-action="remove" aria-label="Remove attachment" onclick="nbRemoveRoomNoteAttachment(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">' + ic('x', 16) + '<span>Remove file</span></button>' : '') +
+        '</div></section>';
+    } else if (note.me) {
+      fileActions = '<section class="nb-room-no-attachment" aria-label="No attachment added"><div class="nb-room-no-attachment-copy"><span class="nb-room-no-attachment-icon" aria-hidden="true">' + ic('file', 20) + '</span><div><strong>No attachment added</strong><span>You can upload a file after saving this note.</span></div></div>' +
+        '<button type="button" class="btn btn-primary btn-sm" data-note-action="add-attachment" onclick="nbManageRoomNoteAttachment(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">' + ic('upload', 16) + '<span>Add attachment</span></button></section>';
     }
-    var ownControls = note.me ? '<div class="nb-room-record-actions" role="group" aria-label="Note actions"><button type="button" class="btn btn-secondary btn-sm" data-note-action="edit-note" aria-label="Edit your note" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')"><span aria-hidden="true">✎</span><span>Edit note</span></button><button type="button" class="btn btn-danger btn-sm" data-note-action="delete-note" aria-label="Delete your note" onclick="nbDeleteSharedRecord(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')"><span aria-hidden="true">🗑</span><span>Delete note</span></button></div>' : '';
+    var ownControls = note.me ? '<div class="nb-room-record-actions" role="group" aria-label="Note actions"><button type="button" class="btn btn-secondary btn-sm" data-note-action="edit-note" aria-label="Edit your note" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">' + ic('edit', 16) + '<span>Edit note</span></button><button type="button" class="btn btn-danger btn-sm" data-note-action="delete-note" aria-label="Delete your note" onclick="nbDeleteSharedRecord(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">' + ic('trash', 16) + '<span>Delete note</span></button></div>' : '';
     var ownerLabel = room.roomType === 'private' ? 'Saved by ' : 'Shared by ';
-    return '<article class="card padc nb-room-record-card"><div class="nb-room-card-heading"><div class="grow minw"><h3 class="txm semi nb-room-record-title">' + html(note.title || 'Shared note') + '</h3><p class="txs muted mt1">' + ownerLabel + html(author) + ' · ' + html(timestamp) + '</p></div></div>' + (note.text ? '<p class="txm mt3 nb-room-preserve-text">' + html(note.text) + '</p>' : '') + attachment + ownControls + '</article>';
+    return '<article class="card padc nb-room-record-card"><div class="nb-room-card-heading"><div class="grow minw"><h3 class="txm semi nb-room-record-title">' + html(note.title || 'Shared note') + '</h3><p class="txs muted mt1">' + ownerLabel + html(author) + ' · ' + html(timestamp) + '</p></div></div>' +
+      (note.text ? '<p class="txm mt3 nb-room-preserve-text">' + html(note.text) + '</p>' : '') + fileActions + ownControls + '</article>';
   }
 
   function renderNotes(room) {
@@ -9473,22 +9486,24 @@ async function deleteRoomAny(id){
     var isPersonalRoom = room.roomType === 'private';
     var sectionTitle = isPersonalRoom ? 'My Notes' : 'Shared Notes';
     var emptyTitle = isPersonalRoom ? 'No personal notes yet' : 'No shared notes yet';
-    var emptyCopy = isPersonalRoom ? 'Create your first note or save a file in this private study room.' : 'Be the first to share notes or an attachment with this room.';
+    var emptyCopy = isPersonalRoom ? 'Create your first note. You can add a file from the saved note details.' : 'Be the first to share a note. Attachments can be added after the note is saved.';
     var cards = notes.length ? notes.map(function (note) { return noteCard(room, note); }).join('') : '<div class="empty nb-room-empty"><div class="em">📝</div><h3 class="txm semi">' + html(emptyTitle) + '</h3><p class="txs muted mt1">' + html(emptyCopy) + '</p></div>';
     var modalTitle = isPersonalRoom ? 'Create a personal note' : 'Create a shared note';
     var submitLabel = isPersonalRoom ? 'Save note to my room' : 'Share note with room';
-    var modalDescription = isPersonalRoom ? 'Your notes and attachments are private to your account.' : 'Every authorized room member can contribute notes and attachments. Attachments stay private to this room.';
+    var modalDescription = isPersonalRoom
+      ? 'Your note is private to your account. You can upload an attachment after the note is saved.'
+      : 'Save your note first. You can add or replace its attachment from the saved note details.';
     return '<div class="nb-room-notes-root"><div class="nb-room-scroll-page">' +
-      '<header class="nb-room-notes-header"><div class="grow minw"><h2 class="txl semi">' + html(sectionTitle) + '</h2><p class="txs muted mt1">' + notes.length + (isPersonalRoom ? ' saved note' : ' shared note') + (notes.length === 1 ? '' : 's') + '</p></div><button type="button" class="btn btn-primary" id="nbOpenRoomNoteComposerButton" onclick="nbOpenRoomNoteComposer()">＋ Create note</button></header>' +
+      '<header class="nb-room-notes-header"><div class="grow minw"><h2 class="txl semi">' + html(sectionTitle) + '</h2><p class="txs muted mt1">' + notes.length + (isPersonalRoom ? ' saved note' : ' shared note') + (notes.length === 1 ? '' : 's') + '</p></div><button type="button" class="btn btn-primary" id="nbOpenRoomNoteComposerButton" onclick="nbOpenRoomNoteComposer()">' + ic('plus', 17) + '<span>Create note</span></button></header>' +
       '<section class="nb-room-record-list" aria-label="' + html(sectionTitle) + '" tabindex="-1">' + cards + '</section>' +
       '</div>' +
-      '<div id="nbRoomNoteComposerModal" class="nb-room-note-modal" role="dialog" aria-modal="true" aria-labelledby="nbRoomNoteComposerTitle" hidden>' +
+      '<div id="nbRoomNoteComposerModal" class="nb-room-note-modal" data-room-id="' + html(room.id) + '" role="dialog" aria-modal="true" aria-labelledby="nbRoomNoteComposerTitle" hidden>' +
       '<section class="card padc nb-room-compose nb-room-note-dialog">' +
-      '<header class="nb-room-note-dialog-header"><div class="grow minw"><h2 class="txl semi" id="nbRoomNoteComposerTitle">' + html(modalTitle) + '</h2><p class="txs muted mt1">' + html(modalDescription) + '</p></div><button type="button" class="iconbtn" aria-label="Close create note" onclick="nbCloseRoomNoteComposer()">✕</button></header>' +
-      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteTitle">Note or document title</label><input id="sharedNoteTitle" class="input" maxlength="160" placeholder="e.g. Biology Chapter 2 summary" autocomplete="off"/></div>' +
+      '<header class="nb-room-note-dialog-header"><div class="grow minw"><h2 class="txl semi" id="nbRoomNoteComposerTitle">' + html(modalTitle) + '</h2><p class="txs muted mt1">' + html(modalDescription) + '</p></div><button type="button" class="iconbtn" aria-label="Close create note" onclick="nbCloseRoomNoteComposer()">' + ic('x', 19) + '</button></header>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteTitle">Note title</label><input id="sharedNoteTitle" class="input" maxlength="160" placeholder="e.g. Biology Chapter 2 summary" autocomplete="off"/></div>' +
       '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteText">' + (isPersonalRoom ? 'Your notes' : 'Note content') + '</label><textarea id="sharedNoteText" class="input" rows="6" maxlength="20000" placeholder="Write explanations, summaries, or study notes…"></textarea></div>' +
-      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteFile">Attachment (optional · 20 MB maximum)</label><input id="sharedNoteFile" type="file" class="input nb-room-file-input" data-room-id="' + html(room.id) + '" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp" onchange="nbCaptureRoomNoteFile(this)" oninput="nbCaptureRoomNoteFile(this)"/><div id="nbRoomNoteSelectedFile" class="nb-room-selected-file-host" aria-live="polite"></div><p id="nbRoomNoteFileStatus" class="nb-room-status" role="status" aria-live="polite"></p><p class="txs muted">Supported: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, and WEBP.</p></div>' +
-      '<div class="nb-room-note-dialog-actions"><button type="button" class="btn btn-secondary" onclick="nbCloseRoomNoteComposer()">Cancel</button><button type="button" class="btn btn-primary" id="nbShareRoomNoteButton" onclick="nbPublishRoomNote(' + inlineArg(room.id) + ')">' + html(submitLabel) + '</button></div>' +
+      '<div class="nb-room-note-after-save-hint">' + ic('file', 17) + '<span>Want to attach a document? Save this note first, then use <strong>Add attachment</strong> on its note card.</span></div>' +
+      '<div class="nb-room-note-dialog-actions"><button type="button" class="btn btn-secondary" onclick="nbCloseRoomNoteComposer()">Cancel</button><button type="button" class="btn btn-primary" id="nbShareRoomNoteButton" onclick="nbPublishRoomNote(' + inlineArg(room.id) + ')">' + ic('save', 16) + '<span>' + html(submitLabel) + '</span></button></div>' +
       '<p id="nbRoomNoteSubmitStatus" class="nb-room-status" role="status" aria-live="polite"></p>' +
       '</section></div></div>';
   }
@@ -9726,99 +9741,43 @@ async function deleteRoomAny(id){
   window.nbEditRoomNote = function (roomId, dbId) {
     var found = findRoomNote(roomId, dbId);
     var room = found.room, note = found.note;
-    var userId = currentUserId();
+    var userId = window.S && S.auth && S.auth.user && S.auth.user.id ? String(S.auth.user.id) : '';
     if (!room || !note || !note.me || !userId || String(note.userId) !== userId) {
-      toast('Only the member who created this note can edit it or replace its attachment.');
+      toast('Only the member who created this note can edit it.');
       return;
     }
-    var currentAttachment = note.filePath
-      ? '<div class="nb-room-attachment"><span class="nb-room-file-symbol">📎</span><div class="nb-room-file-meta"><strong>' + html(note.fileName || 'Attached file') + '</strong><span>Current attachment · ' + html(note.fileSize ? formatBytes(note.fileSize) : (note.fileType || 'File')) + '</span></div><span class="nb-room-meta-chip">Kept unless replaced</span></div>'
-      : '<p class="txs muted">This note has no current attachment.</p>';
     var panel = sheet(
-      '<div class="f jb aic mb3"><div><h3 class="txl semi">Edit your note</h3><p class="txs muted mt1">Only you, the note creator, can change this note or its attachment.</p></div><button type="button" class="iconbtn" data-note-edit-close aria-label="Close">✕</button></div>' +
+      '<div class="f jb aic mb3"><div><h3 class="txl semi">Edit your note</h3><p class="txs muted mt1">Edit the text here. Add or replace attachments separately from the saved note details.</p></div><button type="button" class="iconbtn" data-note-edit-close aria-label="Close">' + ic('x', 18) + '</button></div>' +
       '<div class="fc g3">' +
       '<div><label class="field-label" for="nbEditSharedNoteTitle">Note title</label><input id="nbEditSharedNoteTitle" class="input" maxlength="160" value="' + html(note.title || '') + '"/></div>' +
       '<div><label class="field-label" for="nbEditSharedNoteText">Note content</label><textarea id="nbEditSharedNoteText" class="input" rows="6" maxlength="20000">' + html(note.text || '') + '</textarea></div>' +
-      '<div><p class="field-label">Current attachment</p>' + currentAttachment + '</div>' +
-      '<div><label class="field-label" for="nbReplaceSharedNoteFile">Replace attachment (optional)</label><input id="nbReplaceSharedNoteFile" type="file" class="input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"/><div id="nbReplaceSharedNotePreview" class="nb-room-selected-file-host" aria-live="polite"></div><p class="txs muted mt1">Choose a new file to replace the current attachment. Leave this empty to keep the existing file. Maximum 20 MB.</p></div>' +
+      (note.filePath ? '<div class="nb-room-attachment-dialog-current"><span class="nb-room-file-symbol">' + ic('file', 18) + '</span><div class="grow"><strong>' + html(note.fileName || 'Attached file') + '</strong><small>Attachment is managed separately and will be kept when you edit this note.</small></div></div>' : '<p class="txs muted">No attachment is currently added. Use Add attachment on the note card after saving.</p>') +
       '<p id="nbReplaceNoteStatus" class="nb-room-status" role="status" aria-live="polite"></p>' +
-      '<div class="f g2"><button type="button" class="btn btn-secondary grow" data-note-edit-close>Cancel</button><button type="button" class="btn btn-primary grow" data-note-edit-save>Save changes</button></div>' +
+      '<div class="f g2"><button type="button" class="btn btn-secondary grow" data-note-edit-close>Cancel</button><button type="button" class="btn btn-primary grow" data-note-edit-save>' + ic('save', 15) + '<span>Save changes</span></button></div>' +
       '</div>'
     );
     panel.querySelectorAll('[data-note-edit-close]').forEach(function (button) { button.onclick = closeTop; });
-    var input = panel.querySelector('#nbReplaceSharedNoteFile');
-    var preview = panel.querySelector('#nbReplaceSharedNotePreview');
     var saveButton = panel.querySelector('[data-note-edit-save]');
-    var replacementPreviewUrl = null;
-    input.addEventListener('change', function () {
-      if (replacementPreviewUrl) { try { URL.revokeObjectURL(replacementPreviewUrl); } catch (_) {} replacementPreviewUrl = null; }
-      preview.innerHTML = '';
-      var file = input.files && input.files[0];
-      if (!file) { noteEditStatus(panel, '', false); return; }
-      var validation = validateFile(file);
-      var card = createNode('div', 'nb-room-selected-file' + (validation.ok ? '' : ' is-invalid'));
-      var visual = createNode('div', 'nb-room-selected-file-visual');
-      if (validation.ok && ['png', 'jpg', 'jpeg', 'webp'].indexOf(fileExtension(file.name)) >= 0) {
-        replacementPreviewUrl = URL.createObjectURL(file);
-        var image = createNode('img', 'nb-room-selected-file-thumbnail');
-        image.src = replacementPreviewUrl; image.alt = 'Replacement preview: ' + file.name;
-        visual.appendChild(image);
-      } else visual.appendChild(createNode('span', 'nb-room-selected-file-icon', selectedFileIcon(file)));
-      var details = createNode('div', 'nb-room-selected-file-details');
-      details.appendChild(createNode('strong', '', file.name));
-      details.appendChild(createNode('span', '', (fileExtension(file.name).toUpperCase() || 'FILE') + ' · ' + formatBytes(file.size) + ' · ' + mimeType(file)));
-      details.appendChild(createNode('span', 'nb-room-selected-file-state', validation.ok ? 'Ready to replace after saving' : validation.message));
-      var actions = createNode('div', 'nb-room-selected-file-actions');
-      if (validation.ok && (file.type === 'application/pdf' || ['png', 'jpg', 'jpeg', 'webp'].indexOf(fileExtension(file.name)) >= 0)) {
-        var previewButton = createNode('button', 'btn btn-secondary btn-sm', 'Preview');
-        previewButton.type = 'button';
-        previewButton.onclick = function () {
-          try {
-            var url = replacementPreviewUrl || URL.createObjectURL(file);
-            var opened = window.open(url, '_blank');
-            if (opened) opened.opener = null;
-            else toast('The browser blocked the preview. You can still replace the file.');
-            if (!replacementPreviewUrl) window.setTimeout(function () { try { URL.revokeObjectURL(url); } catch (_) {} }, 5 * 60 * 1000);
-          } catch (_) { toast('Could not preview this file.'); }
-        };
-        actions.appendChild(previewButton);
-      }
-      var removeButton = createNode('button', 'btn btn-secondary btn-sm', 'Clear');
-      removeButton.type = 'button';
-      removeButton.onclick = function () { input.value = ''; input.dispatchEvent(new Event('change')); };
-      actions.appendChild(removeButton);
-      card.appendChild(visual); card.appendChild(details); card.appendChild(actions); preview.appendChild(card);
-      noteEditStatus(panel, validation.ok ? 'Replacement selected. It will be uploaded when you save changes.' : validation.message, !validation.ok);
-    });
     saveButton.onclick = async function () {
       if (saveButton.disabled) return;
       var title = String(panel.querySelector('#nbEditSharedNoteTitle').value || '').trim();
       var text = String(panel.querySelector('#nbEditSharedNoteText').value || '').trim();
-      var file = input.files && input.files[0];
-      if (!title || title.length > 160 || text.length > 20000) { noteEditStatus(panel, 'Enter a valid title and keep the note content within 20,000 characters.', true); return; }
-      var validation = validateFile(file);
-      if (!validation.ok) { noteEditStatus(panel, validation.message, true); return; }
-      if (!text && !(file || note.filePath)) { noteEditStatus(panel, 'Add note content or attach a file before saving.', true); return; }
-      saveButton.disabled = true; saveButton.textContent = 'Saving…';
-      var newPath = null;
-      var previousPath = note.filePath || null;
+      if (!title || title.length > 160 || text.length > 20000) {
+        noteEditStatus(panel, 'Enter a note title and keep the content within 20,000 characters.', true);
+        return;
+      }
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving…';
       try {
         var user = await requireUserAndMembership(roomId);
-        if (String(user.id) !== String(note.userId)) throw new Error('Only the original note creator can replace this attachment.');
-        if (file) {
-          newPath = String(roomId) + '/' + user.id + '/notes/' + Date.now() + '_' + makeId() + '_' + safeFileName(file.name);
-          var uploaded = await dbClient.storage.from('study-room-files').upload(newPath, file, {
-            upsert: false, contentType: mimeType(file), cacheControl: '3600'
-          });
-          if (uploaded.error) throw uploaded.error;
-          if (!uploaded.data || !uploaded.data.path) throw new Error('Storage did not confirm the replacement upload.');
-        }
+        if (String(user.id) !== String(note.userId)) throw new Error('Only the original note creator can edit this note.');
         var payload = roomNotePayload(note, {
-          title: title, text: text,
-          filePath: file ? newPath : previousPath,
-          fileName: file ? file.name : (note.fileName || null),
-          fileSize: file ? file.size : (note.fileSize || null),
-          fileType: file ? mimeType(file) : (note.fileType || null),
+          title: title,
+          text: text,
+          filePath: note.filePath || null,
+          fileName: note.fileName || null,
+          fileSize: note.fileSize || null,
+          fileType: note.fileType || null,
           editedAt: new Date().toISOString()
         });
         var updated = await dbClient.from('study_room_messages').update({ body: payload })
@@ -9826,23 +9785,16 @@ async function deleteRoomAny(id){
           .select('id').maybeSingle();
         if (updated.error) throw updated.error;
         if (!updated.data) throw new Error('The note was not updated. Refresh the room and try again.');
-        if (file && previousPath && previousPath !== newPath) {
-          var oldCleanup = await dbClient.storage.from('study-room-files').remove([previousPath]);
-          if (oldCleanup.error) console.warn('The note was updated, but the old attachment could not be removed:', oldCleanup.error);
-        }
         cacheCommittedNote(room.id, { id: note.dbId, room_id: room.id, user_id: user.id, body: payload, created_at: note.createdAt }, user.id);
         upsertLocalMessage(room, note.dbId, user.id, payload, note.createdAt);
-        if (replacementPreviewUrl) { try { URL.revokeObjectURL(replacementPreviewUrl); } catch (_) {} replacementPreviewUrl = null; }
-        closeTop(); await refreshMessages(room);
-        toast(file ? 'Your note and replacement attachment were saved.' : 'Your note was updated.');
+        closeTop();
+        await refreshMessages(room);
+        toast('Your note was updated. Its attachment was kept unchanged.');
       } catch (error) {
-        if (newPath) {
-          try { await dbClient.storage.from('study-room-files').remove([newPath]); }
-          catch (cleanupError) { console.warn('Could not clean up the unused replacement file:', cleanupError); }
-        }
         console.error('Creator note edit failed:', error);
         noteEditStatus(panel, 'Could not save changes: ' + (error && error.message ? error.message : 'Unknown error'), true);
-        saveButton.disabled = false; saveButton.textContent = 'Retry save';
+        saveButton.disabled = false;
+        saveButton.innerHTML = ic('save', 15) + '<span>Retry save</span>';
       }
     };
   };
@@ -10069,13 +10021,35 @@ async function deleteRoomAny(id){
     .nb-room-status:empty{display:none}
     .nb-room-status.is-error{color:#dc2626}
     .nb-room-attachment{display:flex;align-items:center;gap:10px;min-width:0;margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--secondary)}
-    .nb-room-file-symbol{font-size:22px;flex:0 0 auto}
+    .nb-room-file-symbol{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex:0 0 36px;border-radius:10px;background:var(--card);color:var(--primary-text)}
+    .nb-room-file-heading{display:flex;align-items:center;gap:10px;min-width:0;width:100%}
+    .nb-room-no-attachment{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px;border:1px dashed var(--border);border-radius:12px;background:var(--secondary)}
+    .nb-room-no-attachment-copy{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 170px}
+    .nb-room-no-attachment-icon{display:flex;align-items:center;justify-content:center;flex:0 0 36px;width:36px;height:36px;border-radius:10px;background:var(--card);color:var(--muted-fg)}
+    .nb-room-no-attachment-copy div{display:flex;flex-direction:column;gap:3px;min-width:0}
+    .nb-room-no-attachment-copy strong{font-size:13px}
+    .nb-room-no-attachment-copy span{font-size:11px;color:var(--muted-fg);line-height:1.4}
+    .nb-room-no-attachment>.btn{min-height:42px;white-space:nowrap}
+    .nb-room-note-after-save-hint{display:flex;align-items:flex-start;gap:9px;padding:11px 12px;border-radius:12px;background:var(--secondary);color:var(--muted-fg);font-size:12px;line-height:1.5}
+    .nb-room-note-after-save-hint svg{flex:0 0 auto;margin-top:1px;color:var(--primary-text)}
+    .nb-room-note-after-save-hint strong{color:var(--fg)}
+    .nb-room-attachment-dialog-summary{padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--secondary)}
+    .nb-room-attachment-dialog-summary strong{display:block;font-size:14px;overflow-wrap:anywhere}
+    .nb-room-attachment-dialog-summary p{margin-top:5px;font-size:12px;color:var(--muted-fg);white-space:pre-wrap;overflow-wrap:anywhere}
+    .nb-room-attachment-dialog-current{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:12px;min-width:0}
+    .nb-room-attachment-dialog-current .grow{min-width:0}
+    .nb-room-attachment-dialog-current strong{display:block;overflow-wrap:anywhere;font-size:13px}
+    .nb-room-attachment-dialog-current small{display:block;margin-top:3px;color:var(--muted-fg);font-size:11px}
+    .nb-room-attachment-dialog-actions{display:flex;gap:10px;flex-wrap:wrap}
+    .nb-room-attachment-dialog-actions .btn{min-height:46px;flex:1 1 140px}
     .nb-room-file-meta{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
     .nb-room-file-meta strong{font-size:13px;overflow-wrap:anywhere}
     .nb-room-file-meta span{font-size:11px;color:var(--muted-fg);overflow-wrap:anywhere}
     .nb-room-file-actions,.nb-room-record-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
     .nb-room-file-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;align-items:stretch}
-    .nb-room-file-actions .btn,.nb-room-record-actions .btn{min-height:44px;height:auto;min-width:0;padding:8px 10px;font-size:13px;line-height:1.2;white-space:normal;overflow-wrap:anywhere;display:inline-flex;align-items:center;justify-content:center;gap:7px;text-align:center}
+    .nb-room-file-actions .btn,.nb-room-record-actions .btn{min-height:46px;height:auto;min-width:0;padding:9px 10px;font-size:13px;font-weight:650;line-height:1.25;white-space:normal;overflow-wrap:anywhere;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-align:center;border-radius:11px}
+    .nb-room-file-actions .btn svg,.nb-room-record-actions .btn svg,.nb-room-no-attachment .btn svg,.nb-room-note-dialog-actions .btn svg{width:16px;height:16px;flex:0 0 16px}
+    .nb-room-file-actions .btn:focus-visible,.nb-room-record-actions .btn:focus-visible,.nb-room-no-attachment .btn:focus-visible{outline:3px solid var(--primary);outline-offset:2px}
     .nb-room-file-actions .btn{width:100%}
     .nb-room-file-actions .btn span:last-child,.nb-room-record-actions .btn span:last-child{min-width:0}
     .nb-room-record-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:min(100%,360px)}
@@ -10139,9 +10113,14 @@ async function deleteRoomAny(id){
     @media(max-width:480px){
       .nb-room-scroll-page{padding:10px 10px calc(20px + env(safe-area-inset-bottom,0px));gap:10px}
       .nb-room-attachment{align-items:flex-start;flex-wrap:wrap}
-      .nb-room-file-meta{flex:1 1 calc(100% - 40px)}
-      .nb-room-file-actions{width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}
-      .nb-room-file-actions .btn{width:100%;min-height:46px;padding:8px 6px;flex:initial}
+      .nb-room-file-heading{align-items:flex-start}
+      .nb-room-file-meta{flex:1 1 calc(100% - 48px)}
+      .nb-room-file-actions{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+      .nb-room-file-actions .btn{width:100%;min-height:48px;padding:8px 6px;flex:initial}
+      .nb-room-no-attachment{align-items:stretch}
+      .nb-room-no-attachment>.btn{width:100%}
+      .nb-room-attachment-dialog-actions{flex-direction:column-reverse}
+      .nb-room-attachment-dialog-actions .btn{width:100%;flex:1 1 auto}
       .nb-room-record-actions{width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}
       .nb-room-response-controls{align-items:stretch}
       .nb-room-response-controls>.btn{width:100%;flex:1 1 100%}
@@ -10150,7 +10129,7 @@ async function deleteRoomAny(id){
     @media(min-width:700px){.nb-room-scroll-page{padding:18px;gap:16px}.nb-room-compose,.nb-room-record-card{padding:18px}}
   `;
   if (!document.getElementById(styles.id)) document.head.appendChild(styles);
-  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.4.1-room-scoped-file-object-retention-and-upload-diagnostics';
+  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.5.0-post-save-note-attachment-workflow-and-mobile-actions';
 })();
 
 </script>
@@ -10161,7 +10140,7 @@ async function deleteRoomAny(id){
    button entry point, so no earlier nbPublishRoomNote implementation can win. */
 (function () {
   'use strict';
-  var BUILD = 'nextbyte-shared-notes-v33-room-bound-file-selection-and-actions';
+  var BUILD = 'nextbyte-shared-notes-v34-post-save-attachment-management';
   var BUCKET = 'study-room-files';
   var MAX_BYTES = 20 * 1024 * 1024;
   var ALLOWED = ['pdf','doc','docx','ppt','pptx','xls','xlsx','txt','md','csv','png','jpg','jpeg','webp'];
@@ -10169,7 +10148,7 @@ async function deleteRoomAny(id){
   var fileState = window.__NB_ROOM_NOTE_FILE_STATE || (window.__NB_ROOM_NOTE_FILE_STATE = { file: null, roomId: null, name: null, size: null });
   var committedOverlay = window.__NB_SHARED_NOTE_COMMIT_OVERLAY || (window.__NB_SHARED_NOTE_COMMIT_OVERLAY = Object.create(null));
   window.NEXBYTE_SHARED_NOTE_UPLOAD_BUILD = BUILD;
-  window.NEXBYTE_SHARED_NOTE_ACTIONS_BUILD = 'v33-accessible-mobile-actions';
+  window.NEXBYTE_SHARED_NOTE_ACTIONS_BUILD = 'v34-organized-note-attachment-actions';
 
   function byId(id) { return document.getElementById(id); }
   function message(id, text, isError) {
@@ -10239,6 +10218,11 @@ async function deleteRoomAny(id){
   }
   function currentUserName() {
     return (window.S && S.auth && S.auth.user && (S.auth.user.name || S.auth.user.email)) || 'Room member';
+  }
+  function uniqueToken() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    if (typeof window.uid === 'function') return window.uid();
+    return 'nb-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12);
   }
   function payload(kind, data) {
     if (typeof window.nbSharedPayload === 'function') return window.nbSharedPayload(kind, data);
@@ -10429,166 +10413,283 @@ async function deleteRoomAny(id){
     if (!id) { notify('The current Study Room could not be identified. Reopen the room and try again.'); return; }
     if (active[id]) return;
     var room = roomFor(id);
-    if (!room || !room.isJoined) { notify('Open a room that you are authorized to access before sharing notes.'); return; }
+    if (!room || !room.isJoined) { notify('Open a room that you are authorized to access before creating a note.'); return; }
 
     var titleInput = byId('sharedNoteTitle');
     var textInput = byId('sharedNoteText');
-    var fileInput = byId('sharedNoteFile');
     var button = byId('nbShareRoomNoteButton');
     var title = String(titleInput && titleInput.value || '').trim();
     var text = String(textInput && textInput.value || '').trim();
-    var pickedNow = fileInput && fileInput.files && fileInput.files.length ? fileInput.files[0] : null;
-    if (pickedNow) {
-      fileState.file = pickedNow;
-      fileState.roomId = id;
-      fileState.name = pickedNow.name;
-      fileState.size = pickedNow.size;
-    }
-    var cached = fileState.roomId === id ? fileState.file : null;
-    var file = pickedNow || cached || null;
-    var selectedUi = !!(byId('nbRoomNoteSelectedFile') && byId('nbRoomNoteSelectedFile').querySelector('.nb-room-selected-file'));
-    var statusText = String((byId('nbRoomNoteFileStatus') || {}).textContent || '');
-    if (!file && (selectedUi || /selected file is ready/i.test(statusText))) {
-      message('nbRoomNoteSubmitStatus', 'The selected attachment is not available to this submission. Choose the file again; no text-only note was sent.', true);
-      notify('The selected file is missing from the upload request. Choose it again before sharing.');
-      return;
-    }
-    if (file && fileState.roomId && String(fileState.roomId) !== id) {
-      message('nbRoomNoteSubmitStatus', 'This attachment was selected in a different room. Please select it again in this room.', true);
-      notify('Please choose the attachment again inside this Study Room.');
-      return;
-    }
-    var validation = validate(file);
-    if (!validation.ok) { message('nbRoomNoteFileStatus', validation.message, true); notify(validation.message); return; }
-    if (title.length > 160 || text.length > 20000) { notify('The title or note content is too long.'); return; }
-    if (!title && !text && !file) { notify('Enter a title and note content, or choose an attachment.'); return; }
-    if (!title) title = file ? file.name : 'Shared study note';
+    if (!title && !text) { notify('Enter a note title or write some note content first.'); if (titleInput) titleInput.focus(); return; }
+    if (title.length > 160 || text.length > 20000) { notify('The note title or content is too long.'); return; }
+    if (!title) title = 'Untitled note';
 
+    /* Note creation is deliberately text-only. Attachments are added later from
+       the saved note's detail panel, so a file operation can never block or
+       partially complete the note-creation transaction. */
+    clearSelectedFileState();
     active[id] = true;
-    if (button) { button.disabled = true; button.textContent = file ? 'Uploading and saving…' : 'Saving note…'; }
-    message('nbRoomNoteSubmitStatus', file ? 'Checking room access before uploading ' + file.name + '…' : 'Checking room access and saving your note…', false);
-    var path = null;
-    var uploaded = false;
-    var commitUnknown = false;
-    var savedRow = null;
-    var body = null;
+    if (button) { button.disabled = true; button.textContent = 'Saving note…'; }
+    message('nbRoomNoteSubmitStatus', 'Checking room access and saving your note…', false);
     var user = null;
-    // Allocate the note identity before upload so the private object path and
-    // database payload are deterministically tied to the same submission.
-    var noteId = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'note-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    var body = null;
+    var noteId = uniqueToken();
+    var savedRow = null;
     try {
       user = await verifiedMembership(id, room);
-      if (file) {
-        var filePath = id + '/' + user.id + '/notes/' + noteId + '_' + Date.now() + '_' + safeName(file.name);
-        path = filePath;
-        message('nbRoomNoteSubmitStatus', 'Uploading ' + file.name + ' (' + bytes(file.size) + ') to private room storage…', false);
-        var bucket = dbClient.storage && dbClient.storage.from ? dbClient.storage.from(BUCKET) : null;
-        if (!bucket || typeof bucket.upload !== 'function') throw new Error('The Study Room attachment storage service is unavailable. Refresh the app and sign in again.');
-        var upload = await bucket.upload(path, file, { upsert: false, contentType: mime(file), cacheControl: '3600' });
-        if (upload && upload.error) throw new Error('Storage upload failed: ' + upload.error.message);
-        if (!upload || !upload.data || String(upload.data.path || '') !== path) throw new Error('Storage did not confirm the uploaded file path. The note was not submitted.');
-        uploaded = true;
-      }
       body = payload('shared-note', {
         id: noteId,
         title: title,
         text: text,
-        filePath: path,
-        fileName: file ? file.name : null,
-        fileSize: file ? file.size : null,
-        fileType: file ? mime(file) : null,
+        filePath: null,
+        fileName: null,
+        fileSize: null,
+        fileType: null,
         from: currentUserName(),
         createdAt: new Date().toISOString()
       });
-      message('nbRoomNoteSubmitStatus', 'Attachment uploaded. Saving the note to this room…', false);
-      var insertResult;
+      var inserted;
       try {
-        insertResult = await dbClient.from('study_room_messages')
+        inserted = await dbClient.from('study_room_messages')
           .insert({ room_id: id, user_id: user.id, body: body })
           .select('id,room_id,user_id,body,created_at').single();
-      } catch (insertException) {
-        insertResult = { error: insertException };
-      }
-      if (insertResult && insertResult.data && insertResult.data.id && !insertResult.error) {
-        savedRow = insertResult.data;
-      } else {
-        var verify;
-        try { verify = await queryCommittedNote(id, user.id, body); }
-        catch (verifyException) { commitUnknown = true; throw new Error('The server did not confirm whether the note was saved. Your attachment has been retained safely. Refresh Shared Notes before retrying. Details: ' + (verifyException.message || 'verification failed')); }
-        if (verify && verify.error) { commitUnknown = true; throw new Error('Could not verify the saved note: ' + verify.error.message + '. Your attachment was retained; refresh Shared Notes before retrying.'); }
-        if (verify && verify.data) savedRow = verify.data;
-        else throw new Error((insertResult && insertResult.error && insertResult.error.message) || 'The database did not confirm saving this note.');
+      } catch (insertError) { inserted = { error: insertError }; }
+      if (inserted && inserted.data && inserted.data.id && !inserted.error) savedRow = inserted.data;
+      else {
+        var verify = await queryCommittedNote(id, user.id, body);
+        if (verify && verify.error) throw new Error('Could not verify whether the note was saved: ' + verify.error.message);
+        if (verify && verify.data && verify.data.id) savedRow = verify.data;
+        else throw (inserted && inserted.error) || new Error('The database did not confirm saving this note.');
       }
       if (String(savedRow.room_id) !== id || String(savedRow.user_id) !== String(user.id)) {
-        commitUnknown = true;
-        throw new Error('The saved note is associated with a different room or account. The attachment was retained for safety.');
+        throw new Error('The saved note is associated with a different room or account.');
       }
       var savedPayload = parse(savedRow.body || '');
-      if (!savedPayload || savedPayload.kind !== 'shared-note' || String(savedPayload.id || '') !== String(noteId)) {
-        commitUnknown = true;
-        throw new Error('The database returned a row, but it did not confirm the expected shared-note record. The uploaded file was retained for safety.');
+      if (savedPayload.kind !== 'shared-note' || String(savedPayload.id || '') !== String(noteId) || savedPayload.filePath) {
+        throw new Error('The database did not confirm the expected text-only note.');
       }
-      if (file && (String(savedPayload.filePath || '') !== String(path) || String(savedPayload.fileName || '') !== String(file.name))) {
-        commitUnknown = true;
-        throw new Error('The saved note did not retain the correct attachment reference. The uploaded file was retained for safety.');
-      }
-      if (!file && savedPayload.filePath) {
-        commitUnknown = true;
-        throw new Error('A previous attachment was unexpectedly associated with this text-only note. The record was retained for verification.');
-      }
-
       var targetRoom = roomFor(id) || room;
       appendCommittedNote(targetRoom, savedRow, user);
       if (window.UI) UI.roomTab = 'notes';
-      // At this point the database insert and optional upload are confirmed.
-      // Update the current view immediately; do not wait for a second room fetch
-      // that can race another realtime refresh and replace the latest messages.
       if (titleInput) titleInput.value = '';
       if (textInput) textInput.value = '';
-      if (fileInput) fileInput.value = '';
-      clearSelectedFileState();
-      var fileHost = byId('nbRoomNoteSelectedFile');
-      if (fileHost) fileHost.innerHTML = '';
-      message('nbRoomNoteSubmitStatus', 'Your note and attachment have been saved successfully.', false);
-      // The operation is committed. Release the per-room lock before closing;
-      // the close handler intentionally blocks user closure while busy.
+      message('nbRoomNoteSubmitStatus', 'Your note was saved. You can add an attachment from its note card.', false);
       delete active[id];
       if (typeof window.nbCloseRoomNoteComposer === 'function') window.nbCloseRoomNoteComposer();
       if (typeof window.render === 'function') window.render();
-      notify(room.roomType === 'private' ? 'Your note has been saved to My Notes.' : 'Your note and attachment have been shared with the room.');
-      // Reconcile from Supabase in the background. The V32 overlay bridge keeps
-      // this confirmed row visible until a normal read returns the same record.
+      notify(room.roomType === 'private' ? 'Your note was saved to My Notes. You can add a file from the note card.' : 'Your note was shared. You can add a file from the note card.');
       Promise.resolve().then(function () {
-        var currentRoom = roomFor(id) || targetRoom;
-        if (typeof window.nbLoadMessages !== 'function') return null;
-        return window.nbLoadMessages(currentRoom, true).then(function () {
-          var latestRoom = roomFor(id) || currentRoom;
-          reconcileCommittedNotes(latestRoom);
+        var current = roomFor(id) || targetRoom;
+        if (!window.nbLoadMessages) return null;
+        return window.nbLoadMessages(current, true).then(function () {
+          var latest = roomFor(id) || current;
+          reconcileCommittedNotes(latest);
           var route = typeof window.resolve === 'function' ? window.resolve() : null;
-          if (route && route.view === 'room' && String(route.id) === id && typeof window.render === 'function') window.render();
+          if (route && route.view === 'room' && String(route.id) === id && window.render) window.render();
         });
-      }).catch(function (refreshError) {
-        console.warn('Shared note was saved; background room refresh failed:', refreshError);
-      });
+      }).catch(function (error) { console.warn('Saved note could not be refreshed in the background:', error); });
     } catch (error) {
-      if (path && uploaded && !savedRow && !commitUnknown) {
-        try {
-          var cleanup = await dbClient.storage.from(BUCKET).remove([path]);
-          if (cleanup && cleanup.error) console.warn('Could not remove unlinked room attachment:', cleanup.error);
-        } catch (cleanupError) { console.warn('Could not remove unlinked room attachment:', cleanupError); }
-      }
-      console.error('NEXTBYTE V32 shared note submission failed:', error);
-      var details = error && error.message ? error.message : 'Unknown error';
-      message('nbRoomNoteSubmitStatus', 'Share failed: ' + details, true);
-      notify('Could not share this note: ' + details);
-      // Crucially: do not close or reset the composer on failure.
+      console.error('NEXTBYTE note creation failed:', error);
+      message('nbRoomNoteSubmitStatus', 'Could not save the note: ' + (error && error.message ? error.message : 'Unknown error'), true);
+      notify('Could not save the note: ' + (error && error.message ? error.message : 'Unknown error'));
     } finally {
       delete active[id];
       if (button && button.isConnected) {
         button.disabled = false;
-        button.textContent = room.roomType === 'private' ? 'Save note to my room' : 'Share note with room';
+        button.innerHTML = ic('save', 16) + '<span>' + (room.roomType === 'private' ? 'Save note to my room' : 'Share note with room') + '</span>';
       }
     }
+  };
+
+  /* File uploads now happen only after a note record exists. The modal below is
+     tied to one saved note ID, and creator + room membership are checked again
+     before Storage upload and before updating the note's attachment metadata. */
+  window.nbManageRoomNoteAttachment = function (roomId, dbId) {
+    function escapeMarkup(value) { return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+    var id = String(roomId || '');
+    var room = roomFor(id);
+    var note = room && (room.messages || []).find(function (item) {
+      return item.kind === 'shared-note' && String(item.dbId) === String(dbId);
+    });
+    var userId = window.S && S.auth && S.auth.user && S.auth.user.id ? String(S.auth.user.id) : '';
+    if (!room || !note || !note.me || !userId || String(note.userId) !== userId) {
+      notify('Only the member who created this note can add or replace its attachment.');
+      return;
+    }
+
+    var modal = document.createElement('div');
+    modal.className = 'nb-room-note-modal nb-room-attachment-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'nbManageRoomNoteAttachmentTitle');
+    var hasCurrent = !!note.filePath;
+    modal.innerHTML = '<section class="card padc nb-room-compose nb-room-note-dialog nb-room-attachment-dialog">' +
+      '<header class="nb-room-note-dialog-header"><div class="grow minw"><h2 class="txl semi" id="nbManageRoomNoteAttachmentTitle">' + (hasCurrent ? 'Manage note attachment' : 'Add an attachment') + '</h2><p class="txs muted mt1">This file will be added to the saved note below. Only you, the note creator, can manage its attachment.</p></div><button type="button" class="iconbtn" data-attachment-close aria-label="Close attachment details">' + '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>' + '</button></header>' +
+      '<div class="nb-room-attachment-dialog-summary"><strong>' + escapeMarkup(note.title || 'Shared note') + '</strong><p>' + escapeMarkup(note.text || 'No note content') + '</p></div>' +
+      (hasCurrent ? '<div class="nb-room-attachment-dialog-current"><span class="nb-room-file-symbol" aria-hidden="true">' + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>' + '</span><div class="grow"><strong>' + escapeMarkup(note.fileName || 'Current attachment') + '</strong><small>' + escapeMarkup(ext(note.fileName || '').toUpperCase() || note.fileType || 'File') + (note.fileSize ? ' · ' + escapeMarkup(bytes(note.fileSize)) : '') + '</small></div><span class="nb-room-meta-chip">Current file</span></div>' : '<p class="txs muted">No file is attached to this note yet.</p>') +
+      '<div class="nb-room-form-field"><label class="field-label" for="nbManageRoomNoteFile">' + (hasCurrent ? 'Choose replacement file' : 'Choose file to attach') + '</label><input id="nbManageRoomNoteFile" type="file" class="input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"/><div id="nbManageRoomNotePreview" class="nb-room-selected-file-host" aria-live="polite"></div><p class="txs muted">PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, or WEBP · 20 MB maximum.</p></div>' +
+      '<p id="nbManageRoomNoteStatus" class="nb-room-status" role="status" aria-live="polite"></p>' +
+      '<div class="nb-room-attachment-dialog-actions"><button type="button" class="btn btn-secondary" data-attachment-close>Cancel</button><button type="button" class="btn btn-primary" id="nbManageRoomNoteUpload">' + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m-5 5 5-5 5 5M4 20h16"/></svg>' + '<span>' + (hasCurrent ? 'Upload replacement' : 'Upload attachment') + '</span></button></div>' +
+      '</section>';
+    document.body.appendChild(modal);
+    document.body.classList.add('nb-room-note-modal-open');
+    var input = modal.querySelector('#nbManageRoomNoteFile');
+    var previewHost = modal.querySelector('#nbManageRoomNotePreview');
+    var status = modal.querySelector('#nbManageRoomNoteStatus');
+    var uploadButton = modal.querySelector('#nbManageRoomNoteUpload');
+    var selectedFile = null;
+    var previewUrl = null;
+    var busy = false;
+    function setStatus(text, isError) {
+      if (!status) return;
+      status.textContent = text || '';
+      status.className = 'nb-room-status' + (isError ? ' is-error' : '');
+    }
+    function closeModal() {
+      if (busy) { notify('Please wait until the attachment upload finishes.'); return; }
+      if (previewUrl) { try { URL.revokeObjectURL(previewUrl); } catch (_) {} previewUrl = null; }
+      modal.remove();
+      document.body.classList.remove('nb-room-note-modal-open');
+    }
+    modal.querySelectorAll('[data-attachment-close]').forEach(function (button) { button.addEventListener('click', closeModal); });
+    modal.addEventListener('click', function (event) { if (event.target === modal) closeModal(); });
+    input.addEventListener('change', function () {
+      if (previewUrl) { try { URL.revokeObjectURL(previewUrl); } catch (_) {} previewUrl = null; }
+      selectedFile = input.files && input.files[0] ? input.files[0] : null;
+      previewHost.innerHTML = '';
+      if (!selectedFile) { setStatus('', false); return; }
+      var check = validate(selectedFile);
+      var card = document.createElement('div');
+      card.className = 'nb-room-selected-file' + (check.ok ? '' : ' is-invalid');
+      var visual = document.createElement('div');
+      visual.className = 'nb-room-selected-file-visual';
+      var extension = ext(selectedFile.name);
+      if (check.ok && ['png', 'jpg', 'jpeg', 'webp'].indexOf(extension) >= 0) {
+        previewUrl = URL.createObjectURL(selectedFile);
+        var image = document.createElement('img');
+        image.className = 'nb-room-selected-file-thumbnail';
+        image.src = previewUrl;
+        image.alt = 'Selected image preview';
+        visual.appendChild(image);
+      } else {
+        visual.textContent = extension === 'pdf' ? 'PDF' : (extension.toUpperCase() || 'FILE');
+        visual.className += ' nb-room-selected-file-icon';
+      }
+      var details = document.createElement('div');
+      details.className = 'nb-room-selected-file-details';
+      var name = document.createElement('strong'); name.textContent = selectedFile.name;
+      var meta = document.createElement('span'); meta.textContent = (extension.toUpperCase() || 'FILE') + ' · ' + bytes(selectedFile.size) + ' · ' + mime(selectedFile);
+      var state = document.createElement('span'); state.className = 'nb-room-selected-file-state'; state.textContent = check.ok ? 'Ready to upload to this note' : check.message;
+      details.appendChild(name); details.appendChild(meta); details.appendChild(state);
+      var actions = document.createElement('div'); actions.className = 'nb-room-selected-file-actions';
+      if (check.ok && (extension === 'pdf' || ['png', 'jpg', 'jpeg', 'webp'].indexOf(extension) >= 0)) {
+        var previewButton = document.createElement('button'); previewButton.type = 'button'; previewButton.className = 'btn btn-secondary btn-sm'; previewButton.textContent = 'Preview';
+        previewButton.addEventListener('click', function () {
+          try { var url = previewUrl || URL.createObjectURL(selectedFile); var opened = window.open(url, '_blank'); if (opened) opened.opener = null; else notify('Allow pop-ups to preview this file.'); if (!previewUrl) window.setTimeout(function(){try{URL.revokeObjectURL(url);}catch(_){}}, 300000); }
+          catch (_) { notify('Could not preview this file.'); }
+        });
+        actions.appendChild(previewButton);
+      }
+      var clearButton = document.createElement('button'); clearButton.type = 'button'; clearButton.className = 'btn btn-secondary btn-sm'; clearButton.textContent = 'Remove';
+      clearButton.addEventListener('click', function () { input.value = ''; input.dispatchEvent(new Event('change')); });
+      actions.appendChild(clearButton);
+      card.appendChild(visual); card.appendChild(details); card.appendChild(actions); previewHost.appendChild(card);
+      setStatus(check.ok ? 'Ready. Tap ' + (hasCurrent ? 'Upload replacement' : 'Upload attachment') + ' to add this file to the saved note.' : check.message, !check.ok);
+    });
+    uploadButton.addEventListener('click', async function () {
+      if (busy) return;
+      if (!selectedFile) { setStatus('Choose a file before uploading.', true); return; }
+      var check = validate(selectedFile);
+      if (!check.ok) { setStatus(check.message, true); return; }
+      busy = true;
+      uploadButton.disabled = true;
+      uploadButton.textContent = 'Uploading…';
+      var newPath = null;
+      var previousPath = note.filePath || null;
+      var uploadConfirmed = false;
+      var commitUnknown = false;
+      try {
+        var latestRoom = roomFor(id);
+        var latestNote = latestRoom && (latestRoom.messages || []).find(function (item) { return item.kind === 'shared-note' && String(item.dbId) === String(dbId); });
+        if (!latestNote || !latestNote.me || String(latestNote.userId) !== String(window.S && S.auth && S.auth.user && S.auth.user.id || '')) throw new Error('The note owner could not be verified. Reopen this note and try again.');
+        var user = await verifiedMembership(id, latestRoom);
+        if (String(user.id) !== String(latestNote.userId)) throw new Error('Only the original note creator can add or replace this attachment.');
+        previousPath = latestNote.filePath || null;
+        newPath = id + '/' + user.id + '/notes/' + String(latestNote.id || dbId) + '_' + Date.now() + '_' + uniqueToken() + '_' + safeName(selectedFile.name);
+        setStatus('Uploading ' + selectedFile.name + ' to private room storage…', false);
+        var bucket = dbClient.storage && dbClient.storage.from ? dbClient.storage.from(BUCKET) : null;
+        if (!bucket || typeof bucket.upload !== 'function') throw new Error('The private room file storage service is unavailable.');
+        var uploaded = await bucket.upload(newPath, selectedFile, { upsert: false, contentType: mime(selectedFile), cacheControl: '3600' });
+        if (uploaded && uploaded.error) throw new Error(uploaded.error.message || 'Storage upload failed.');
+        if (!uploaded || !uploaded.data || String(uploaded.data.path || '') !== newPath) throw new Error('Storage did not confirm the uploaded file path.');
+        uploadConfirmed = true;
+
+        var updatedBody = payload('shared-note', {
+          id: latestNote.id, title: latestNote.title || 'Shared study note', text: latestNote.text || '',
+          filePath: newPath, fileName: selectedFile.name, fileSize: selectedFile.size, fileType: mime(selectedFile),
+          from: latestNote.from || currentUserName(), createdAt: latestNote.createdAt || new Date().toISOString(), editedAt: new Date().toISOString()
+        });
+        setStatus('File uploaded. Saving attachment details to this note…', false);
+        var updateResult;
+        try {
+          updateResult = await dbClient.from('study_room_messages').update({ body: updatedBody })
+            .eq('id', String(dbId)).eq('room_id', id).eq('user_id', String(user.id))
+            .select('id,room_id,user_id,body,created_at').maybeSingle();
+        } catch (updateError) { updateResult = { error: updateError }; }
+        var savedRow = updateResult && updateResult.data && updateResult.data.id && !updateResult.error ? updateResult.data : null;
+        if (!savedRow) {
+          var verify;
+          try {
+            verify = await dbClient.from('study_room_messages').select('id,room_id,user_id,body,created_at')
+              .eq('id', String(dbId)).eq('room_id', id).eq('user_id', String(user.id)).maybeSingle();
+          } catch (verifyError) {
+            commitUnknown = true;
+            throw new Error('The file uploaded, but the note update could not be verified. The uploaded file was retained safely. ' + (verifyError && verifyError.message ? verifyError.message : 'Verification failed.'));
+          }
+          if (verify && verify.error) { commitUnknown = true; throw new Error('The file uploaded, but the note update could not be verified. Your file was retained safely. ' + verify.error.message); }
+          var verifiedPayload = verify && verify.data ? parse(verify.data.body || '') : null;
+          if (verifiedPayload && String(verifiedPayload.filePath || '') === newPath && String(verifiedPayload.fileName || '') === String(selectedFile.name)) savedRow = verify.data;
+          else throw (updateResult && updateResult.error) || new Error('The attachment metadata was not saved to the note.');
+        }
+        var finalPayload = parse(savedRow.body || '');
+        if (String(savedRow.room_id) !== id || String(savedRow.user_id) !== String(user.id) || String(finalPayload.filePath || '') !== newPath || String(finalPayload.fileName || '') !== String(selectedFile.name)) {
+          commitUnknown = true;
+          throw new Error('The database did not confirm the attachment belongs to this note. The uploaded file was retained for safety.');
+        }
+        appendCommittedNote(latestRoom, savedRow, user);
+        if (previousPath && previousPath !== newPath) {
+          try { var removedOld = await dbClient.storage.from(BUCKET).remove([previousPath]); if (removedOld && removedOld.error) console.warn('New attachment saved, but the previous object could not be removed:', removedOld.error); }
+          catch (cleanupOldError) { console.warn('New attachment saved, but old-file cleanup failed:', cleanupOldError); }
+        }
+        if (previewUrl) { try { URL.revokeObjectURL(previewUrl); } catch (_) {} previewUrl = null; }
+        modal.remove();
+        document.body.classList.remove('nb-room-note-modal-open');
+        if (window.render) window.render();
+        notify(previousPath ? 'The note attachment was replaced successfully.' : 'The attachment was added to your note.');
+        Promise.resolve().then(function () {
+          var activeRoom = roomFor(id) || latestRoom;
+          if (!window.nbLoadMessages) return null;
+          return window.nbLoadMessages(activeRoom, true).then(function () {
+            var reconciled = roomFor(id) || activeRoom;
+            reconcileCommittedNotes(reconciled);
+            if (window.render) window.render();
+          });
+        }).catch(function (refreshError) { console.warn('Attachment saved; background refresh failed:', refreshError); });
+      } catch (error) {
+        if (newPath && uploadConfirmed && !commitUnknown) {
+          try { var cleanupNew = await dbClient.storage.from(BUCKET).remove([newPath]); if (cleanupNew && cleanupNew.error) console.warn('Could not remove an unlinked attachment object:', cleanupNew.error); }
+          catch (cleanupError) { console.warn('Could not remove an unlinked attachment object:', cleanupError); }
+        }
+        console.error('Saved-note attachment operation failed:', error);
+        setStatus('Could not add the attachment: ' + (error && error.message ? error.message : 'Unknown error'), true);
+        notify('Could not add the attachment: ' + (error && error.message ? error.message : 'Unknown error'));
+        busy = false;
+        uploadButton.disabled = false;
+        uploadButton.innerHTML = '<span>' + (hasCurrent ? 'Retry upload replacement' : 'Retry upload attachment') + '</span>';
+      }
+    });
+    var firstControl = modal.querySelector('#nbManageRoomNoteFile');
+    if (firstControl && firstControl.focus) firstControl.focus();
   };
 })();
 </script>

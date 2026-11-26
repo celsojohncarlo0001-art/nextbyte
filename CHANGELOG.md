@@ -355,3 +355,13 @@ Static syntax and package integrity checks were run locally. The Supabase migrat
 - Display the active Storage upload stage and verify the saved object path before creating the shared-note message.
 - Preserve the note draft and attachment selection when upload or database saving fails.
 - Bumped the PWA service-worker cache to `nexbyte-pwa-v30-shared-note-file-object-retention-fix`.
+
+## November 27, 2026 — V34 Shared Notes post-save attachment workflow
+
+- Removed file selection from the Create Note / Create Personal Note form. Notes are saved first; attachments are added or replaced afterward from the saved note card.
+- Added a per-note attachment manager with note context, selected-file validation/preview, remove/reselect controls, and upload status.
+- Preserved private room storage and existing room membership/creator checks.
+- Improved attachment and note action buttons with consistent icons, labels, accessible names, and mobile touch targets.
+- Kept Edit Note focused on title/content while preserving attachment metadata.
+- Updated the service-worker cache to `nexbyte-pwa-v34-post-save-note-attachment-workflow`.
+- Local Chromium/Supabase-mock regressions passed for public/private workflows, attachment addition/replacement, text-only note isolation, independent attachment associations, and mobile dialog width. Live device testing remains required.
