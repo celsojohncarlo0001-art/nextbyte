@@ -1,3 +1,11 @@
+## 2026-11-26 — Shared Notes V31 authoritative file upload handler
+- Consolidated the final Shared Notes button entry point after the historical patches to ensure one authoritative file-aware submit handler runs.
+- Captures the selected File directly from the input and retains it by room across DOM redraws.
+- Prevents a selected attachment from silently becoming a text-only note.
+- Keeps the composer and draft open after Storage or database failures; closes only after the saved message row is confirmed.
+- Retains the private `study-room-files` bucket and existing authorization policies.
+- Bumped PWA cache version to V31.
+
 # NEXTBYTE Study Room File Picker and Attachment Management Fix — November 26, 2026
 
 ## Repairs applied
