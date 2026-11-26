@@ -8816,10 +8816,9 @@ async function deleteRoomAny(id){
     if (!cached) { try { priorRender(); } catch (_) {} }
     try {
       var user = await nbRequireSupabaseUser();
-      var membership = await dbClient.from('study_room_members').select('room_id,user_id,role,joined_at')
-        .eq('room_id', id).eq('user_id', user.id).maybeSingle();
-      if (membership.error) throw membership.error;
-      if (!membership.data) { S.rooms = (S.rooms || []).filter(function (item) { return String(item.id) !== id; }); restoreStates[id] = { status: 'unauthorized' }; if (currentRoute().view === 'room' && String(currentRoute().id) === id) priorRender(); return; }
+      /* Fetch the room first so a verified owner can recover a legacy missing
+         roster row. This mirrors requireUserAndMembership() and prevents a
+         file-picker focus return from incorrectly ejecting the room creator. */
       var roomResult = await dbClient.from('study_rooms')
         .select('id,name,subject_tag,description,emoji,color,owner_id,room_type,is_discoverable,invite_code,max_capacity,created_at')
         .eq('id', id).maybeSingle();
@@ -8827,6 +8826,29 @@ async function deleteRoomAny(id){
       if (!roomResult.data) { S.rooms = (S.rooms || []).filter(function (item) { return String(item.id) !== id; }); restoreStates[id] = { status: 'not_found' }; if (currentRoute().view === 'room' && String(currentRoute().id) === id) priorRender(); return; }
       if (roomResult.data.room_type === 'private' && String(roomResult.data.owner_id) !== String(user.id)) {
         restoreStates[id] = { status: 'unauthorized' }; if (currentRoute().view === 'room' && String(currentRoute().id) === id) priorRender(); return;
+      }
+      var membership = await dbClient.from('study_room_members').select('room_id,user_id,role,joined_at')
+        .eq('room_id', id).eq('user_id', user.id).maybeSingle();
+      if (membership.error) throw membership.error;
+      if (!membership.data) {
+        if (String(roomResult.data.owner_id) === String(user.id)) {
+          var repairedMembership = await dbClient.from('study_room_members')
+            .insert({ room_id: id, user_id: user.id, role: 'owner' })
+            .select('room_id,user_id,role,joined_at').maybeSingle();
+          if (repairedMembership.error) {
+            /* A concurrent restore may have repaired the row first. Recheck it
+               before failing rather than sending the verified owner away. */
+            var membershipRetry = await dbClient.from('study_room_members').select('room_id,user_id,role,joined_at')
+              .eq('room_id', id).eq('user_id', user.id).maybeSingle();
+            if (membershipRetry.error || !membershipRetry.data) throw new Error('Could not restore room-owner membership: ' + repairedMembership.error.message);
+            membership = membershipRetry;
+          } else membership = repairedMembership;
+        } else {
+          S.rooms = (S.rooms || []).filter(function (item) { return String(item.id) !== id; });
+          restoreStates[id] = { status: 'unauthorized' };
+          if (currentRoute().view === 'room' && String(currentRoute().id) === id) priorRender();
+          return;
+        }
       }
       var rosterResult = await dbClient.from('study_room_members').select('room_id,user_id,role').eq('room_id', id);
       if (rosterResult.error) throw rosterResult.error;
@@ -8878,7 +8900,22 @@ async function deleteRoomAny(id){
   window.addEventListener('beforeunload', rememberRoomScroll);
   function resumeRoom(reason) {
     var now = Date.now(); if (now - lastResumeAt < 1200) return; lastResumeAt = now;
-    var route = currentRoute(); if (route.view === 'room' && isCloudRoomId(route.id)) scheduleRestore(route.id, reason || 'resume');
+    var route = currentRoute();
+    if (route.view === 'room' && isCloudRoomId(route.id)) {
+      /* Opening a native file picker temporarily blurs the page and then returns
+         focus. Restoring the room during an active note composer redraws the page
+         and destroys the draft and selected File object. Preserve that composer
+         while it is open; normal room restoration still runs outside the editor. */
+      var noteDialog = document.getElementById('nbRoomNoteComposerModal');
+      var noteDialogOpen = !!(noteDialog && !noteDialog.hidden);
+      var replaceFileInput = document.getElementById('nbReplaceSharedNoteFile');
+      var replaceDialogOpen = !!(replaceFileInput && replaceFileInput.closest('.overlay'));
+      var noteFileInput = document.getElementById('sharedNoteFile');
+      var activeElement = document.activeElement;
+      var filePickerReturned = !!(activeElement && activeElement.type === 'file' &&
+        (activeElement === noteFileInput || activeElement === replaceFileInput));
+      if (!noteDialogOpen && !replaceDialogOpen && !filePickerReturned) scheduleRestore(route.id, reason || 'resume');
+    }
     if (typeof hydrateLinkCards === 'function') hydrateLinkCards(document);
     processPendingShare();
   }
@@ -9312,7 +9349,7 @@ async function deleteRoomAny(id){
     if (note.filePath) {
       var extension = fileExtension(note.fileName || '');
       var kind = extension ? extension.toUpperCase() : String(note.fileType || 'File').toUpperCase();
-      attachment = '<div class="nb-room-attachment"><div class="nb-room-file-symbol" aria-hidden="true">📎</div><div class="nb-room-file-meta"><strong>' + html(note.fileName || 'Attached file') + '</strong><span>' + html(kind) + (note.fileSize ? ' · ' + html(formatBytes(note.fileSize)) : '') + '</span></div><div class="nb-room-file-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',false,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">Preview</button><button type="button" class="btn btn-primary btn-sm" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',true,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">Download</button></div></div>';
+      attachment = '<div class="nb-room-attachment"><div class="nb-room-file-symbol" aria-hidden="true">📎</div><div class="nb-room-file-meta"><strong>' + html(note.fileName || 'Attached file') + '</strong><span>' + html(kind) + (note.fileSize ? ' · ' + html(formatBytes(note.fileSize)) : '') + '</span></div><div class="nb-room-file-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',false,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">Preview</button><button type="button" class="btn btn-primary btn-sm" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',true,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">Download</button>' + (note.me ? '<button type="button" class="btn btn-secondary btn-sm" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Replace</button><button type="button" class="btn btn-danger btn-sm" onclick="nbRemoveRoomNoteAttachment(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Remove file</button>' : '') + '</div></div>';
     }
     var ownControls = note.me ? '<div class="nb-room-record-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Edit note</button><button type="button" class="btn btn-danger btn-sm" onclick="nbDeleteSharedRecord(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Delete</button></div>' : '';
     var ownerLabel = room.roomType === 'private' ? 'Saved by ' : 'Shared by ';
@@ -9415,6 +9452,193 @@ async function deleteRoomAny(id){
       noteBusy[key] = false;
       if (button && button.isConnected) { button.disabled = false; button.textContent = 'Share note or file'; }
     }
+  };
+
+  /* Creator-only note attachment management. These controls deliberately use
+     both the in-memory author flag and the authenticated user_id filter in the
+     database update, so a room owner cannot replace another member's file. */
+  function findRoomNote(roomId, dbId) {
+    var room = currentRoom(roomId);
+    var note = room && (room.messages || []).filter(function (item) {
+      return item.kind === 'shared-note' && String(item.dbId) === String(dbId);
+    })[0];
+    return { room: room, note: note };
+  }
+  function roomNotePayload(note, updates) {
+    return sharedPayload('shared-note', Object.assign({
+      id: note.id, title: note.title || 'Shared study note', text: note.text || '',
+      filePath: note.filePath || null, fileName: note.fileName || null,
+      fileSize: note.fileSize || null, fileType: note.fileType || null,
+      from: note.from || profileName(), createdAt: note.createdAt || new Date().toISOString()
+    }, updates || {}));
+  }
+  function noteEditStatus(panel, message, isError) {
+    var node = panel && panel.querySelector('#nbReplaceNoteStatus');
+    if (!node) return;
+    node.textContent = message || '';
+    node.className = 'nb-room-status' + (isError ? ' is-error' : '');
+  }
+  window.nbEditRoomNote = function (roomId, dbId) {
+    var found = findRoomNote(roomId, dbId);
+    var room = found.room, note = found.note;
+    var userId = currentUserId();
+    if (!room || !note || !note.me || !userId || String(note.userId) !== userId) {
+      toast('Only the member who created this note can edit it or replace its attachment.');
+      return;
+    }
+    var currentAttachment = note.filePath
+      ? '<div class="nb-room-attachment"><span class="nb-room-file-symbol">📎</span><div class="nb-room-file-meta"><strong>' + html(note.fileName || 'Attached file') + '</strong><span>Current attachment · ' + html(note.fileSize ? formatBytes(note.fileSize) : (note.fileType || 'File')) + '</span></div><span class="nb-room-meta-chip">Kept unless replaced</span></div>'
+      : '<p class="txs muted">This note has no current attachment.</p>';
+    var panel = sheet(
+      '<div class="f jb aic mb3"><div><h3 class="txl semi">Edit your note</h3><p class="txs muted mt1">Only you, the note creator, can change this note or its attachment.</p></div><button type="button" class="iconbtn" data-note-edit-close aria-label="Close">✕</button></div>' +
+      '<div class="fc g3">' +
+      '<div><label class="field-label" for="nbEditSharedNoteTitle">Note title</label><input id="nbEditSharedNoteTitle" class="input" maxlength="160" value="' + html(note.title || '') + '"/></div>' +
+      '<div><label class="field-label" for="nbEditSharedNoteText">Note content</label><textarea id="nbEditSharedNoteText" class="input" rows="6" maxlength="20000">' + html(note.text || '') + '</textarea></div>' +
+      '<div><p class="field-label">Current attachment</p>' + currentAttachment + '</div>' +
+      '<div><label class="field-label" for="nbReplaceSharedNoteFile">Replace attachment (optional)</label><input id="nbReplaceSharedNoteFile" type="file" class="input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp"/><div id="nbReplaceSharedNotePreview" class="nb-room-selected-file-host" aria-live="polite"></div><p class="txs muted mt1">Choose a new file to replace the current attachment. Leave this empty to keep the existing file. Maximum 20 MB.</p></div>' +
+      '<p id="nbReplaceNoteStatus" class="nb-room-status" role="status" aria-live="polite"></p>' +
+      '<div class="f g2"><button type="button" class="btn btn-secondary grow" data-note-edit-close>Cancel</button><button type="button" class="btn btn-primary grow" data-note-edit-save>Save changes</button></div>' +
+      '</div>'
+    );
+    panel.querySelectorAll('[data-note-edit-close]').forEach(function (button) { button.onclick = closeTop; });
+    var input = panel.querySelector('#nbReplaceSharedNoteFile');
+    var preview = panel.querySelector('#nbReplaceSharedNotePreview');
+    var saveButton = panel.querySelector('[data-note-edit-save]');
+    var replacementPreviewUrl = null;
+    input.addEventListener('change', function () {
+      if (replacementPreviewUrl) { try { URL.revokeObjectURL(replacementPreviewUrl); } catch (_) {} replacementPreviewUrl = null; }
+      preview.innerHTML = '';
+      var file = input.files && input.files[0];
+      if (!file) { noteEditStatus(panel, '', false); return; }
+      var validation = validateFile(file);
+      var card = createNode('div', 'nb-room-selected-file' + (validation.ok ? '' : ' is-invalid'));
+      var visual = createNode('div', 'nb-room-selected-file-visual');
+      if (validation.ok && ['png', 'jpg', 'jpeg', 'webp'].indexOf(fileExtension(file.name)) >= 0) {
+        replacementPreviewUrl = URL.createObjectURL(file);
+        var image = createNode('img', 'nb-room-selected-file-thumbnail');
+        image.src = replacementPreviewUrl; image.alt = 'Replacement preview: ' + file.name;
+        visual.appendChild(image);
+      } else visual.appendChild(createNode('span', 'nb-room-selected-file-icon', selectedFileIcon(file)));
+      var details = createNode('div', 'nb-room-selected-file-details');
+      details.appendChild(createNode('strong', '', file.name));
+      details.appendChild(createNode('span', '', (fileExtension(file.name).toUpperCase() || 'FILE') + ' · ' + formatBytes(file.size) + ' · ' + mimeType(file)));
+      details.appendChild(createNode('span', 'nb-room-selected-file-state', validation.ok ? 'Ready to replace after saving' : validation.message));
+      var actions = createNode('div', 'nb-room-selected-file-actions');
+      if (validation.ok && (file.type === 'application/pdf' || ['png', 'jpg', 'jpeg', 'webp'].indexOf(fileExtension(file.name)) >= 0)) {
+        var previewButton = createNode('button', 'btn btn-secondary btn-sm', 'Preview');
+        previewButton.type = 'button';
+        previewButton.onclick = function () {
+          try {
+            var url = replacementPreviewUrl || URL.createObjectURL(file);
+            var opened = window.open(url, '_blank');
+            if (opened) opened.opener = null;
+            else toast('The browser blocked the preview. You can still replace the file.');
+            if (!replacementPreviewUrl) window.setTimeout(function () { try { URL.revokeObjectURL(url); } catch (_) {} }, 5 * 60 * 1000);
+          } catch (_) { toast('Could not preview this file.'); }
+        };
+        actions.appendChild(previewButton);
+      }
+      var removeButton = createNode('button', 'btn btn-secondary btn-sm', 'Clear');
+      removeButton.type = 'button';
+      removeButton.onclick = function () { input.value = ''; input.dispatchEvent(new Event('change')); };
+      actions.appendChild(removeButton);
+      card.appendChild(visual); card.appendChild(details); card.appendChild(actions); preview.appendChild(card);
+      noteEditStatus(panel, validation.ok ? 'Replacement selected. It will be uploaded when you save changes.' : validation.message, !validation.ok);
+    });
+    saveButton.onclick = async function () {
+      if (saveButton.disabled) return;
+      var title = String(panel.querySelector('#nbEditSharedNoteTitle').value || '').trim();
+      var text = String(panel.querySelector('#nbEditSharedNoteText').value || '').trim();
+      var file = input.files && input.files[0];
+      if (!title || title.length > 160 || text.length > 20000) { noteEditStatus(panel, 'Enter a valid title and keep the note content within 20,000 characters.', true); return; }
+      var validation = validateFile(file);
+      if (!validation.ok) { noteEditStatus(panel, validation.message, true); return; }
+      if (!text && !(file || note.filePath)) { noteEditStatus(panel, 'Add note content or attach a file before saving.', true); return; }
+      saveButton.disabled = true; saveButton.textContent = 'Saving…';
+      var newPath = null;
+      var previousPath = note.filePath || null;
+      try {
+        var user = await requireUserAndMembership(roomId);
+        if (String(user.id) !== String(note.userId)) throw new Error('Only the original note creator can replace this attachment.');
+        if (file) {
+          newPath = String(roomId) + '/' + user.id + '/notes/' + Date.now() + '_' + makeId() + '_' + safeFileName(file.name);
+          var uploaded = await dbClient.storage.from('study-room-files').upload(newPath, file, {
+            upsert: false, contentType: mimeType(file), cacheControl: '3600'
+          });
+          if (uploaded.error) throw uploaded.error;
+          if (!uploaded.data || !uploaded.data.path) throw new Error('Storage did not confirm the replacement upload.');
+        }
+        var payload = roomNotePayload(note, {
+          title: title, text: text,
+          filePath: file ? newPath : previousPath,
+          fileName: file ? file.name : (note.fileName || null),
+          fileSize: file ? file.size : (note.fileSize || null),
+          fileType: file ? mimeType(file) : (note.fileType || null),
+          editedAt: new Date().toISOString()
+        });
+        var updated = await dbClient.from('study_room_messages').update({ body: payload })
+          .eq('id', String(dbId)).eq('room_id', String(roomId)).eq('user_id', String(user.id))
+          .select('id').maybeSingle();
+        if (updated.error) throw updated.error;
+        if (!updated.data) throw new Error('The note was not updated. Refresh the room and try again.');
+        if (file && previousPath && previousPath !== newPath) {
+          var oldCleanup = await dbClient.storage.from('study-room-files').remove([previousPath]);
+          if (oldCleanup.error) console.warn('The note was updated, but the old attachment could not be removed:', oldCleanup.error);
+        }
+        upsertLocalMessage(room, note.dbId, user.id, payload, note.createdAt);
+        if (replacementPreviewUrl) { try { URL.revokeObjectURL(replacementPreviewUrl); } catch (_) {} replacementPreviewUrl = null; }
+        closeTop(); await refreshMessages(room);
+        toast(file ? 'Your note and replacement attachment were saved.' : 'Your note was updated.');
+      } catch (error) {
+        if (newPath) {
+          try { await dbClient.storage.from('study-room-files').remove([newPath]); }
+          catch (cleanupError) { console.warn('Could not clean up the unused replacement file:', cleanupError); }
+        }
+        console.error('Creator note edit failed:', error);
+        noteEditStatus(panel, 'Could not save changes: ' + (error && error.message ? error.message : 'Unknown error'), true);
+        saveButton.disabled = false; saveButton.textContent = 'Retry save';
+      }
+    };
+  };
+
+  window.nbRemoveRoomNoteAttachment = function (roomId, dbId) {
+    var found = findRoomNote(roomId, dbId);
+    var room = found.room, note = found.note;
+    var userId = currentUserId();
+    if (!room || !note || !note.filePath || !note.me || !userId || String(note.userId) !== userId) {
+      toast('Only the member who attached this file can remove it.');
+      return;
+    }
+    if (!String(note.text || '').trim()) {
+      toast('Add note text before removing this file, so your note is not left empty.');
+      return;
+    }
+    confirmSheet({
+      title: 'Remove your attachment?',
+      message: 'The note will stay in Shared Notes, but this file will be removed for room members.',
+      confirmLabel: 'Remove file', danger: true,
+      onConfirm: async function () {
+        try {
+          var user = await requireUserAndMembership(roomId);
+          if (String(user.id) !== String(note.userId)) throw new Error('Only the original note creator can remove this attachment.');
+          var oldPath = note.filePath;
+          var payload = roomNotePayload(note, { filePath: null, fileName: null, fileSize: null, fileType: null, editedAt: new Date().toISOString() });
+          var updated = await dbClient.from('study_room_messages').update({ body: payload })
+            .eq('id', String(dbId)).eq('room_id', String(roomId)).eq('user_id', String(user.id))
+            .select('id').maybeSingle();
+          if (updated.error) throw updated.error;
+          if (!updated.data) throw new Error('The attachment was not removed from the note. Refresh the room and try again.');
+          upsertLocalMessage(room, note.dbId, user.id, payload, note.createdAt);
+          var cleanup = await dbClient.storage.from('study-room-files').remove([oldPath]);
+          if (cleanup.error) console.warn('The note no longer references the attachment, but storage cleanup failed:', cleanup.error);
+          await refreshMessages(room);
+          toast('Your attachment was removed. The note remains shared.');
+        } catch (error) {
+          console.error('Creator attachment removal failed:', error);
+          toast('Could not remove the attachment: ' + (error && error.message ? error.message : 'Unknown error'));
+        }
+      }
+    });
   };
 
   function responseStatusLabel(status) {
@@ -9673,7 +9897,7 @@ async function deleteRoomAny(id){
     @media(min-width:700px){.nb-room-scroll-page{padding:18px;gap:16px}.nb-room-compose,.nb-room-record-card{padding:18px}}
   `;
   if (!document.getElementById(styles.id)) document.head.appendChild(styles);
-  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.1.0-shared-notes-composer-preview';
+  window.NEXBYTE_STUDY_ROOM_NOTES_TASKS_FIX = '1.2.0-file-picker-focus-and-creator-attachments';
 })();
 
 </script>

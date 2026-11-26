@@ -1,3 +1,31 @@
+# NEXTBYTE Study Room File Picker and Attachment Management Fix — November 26, 2026
+
+## Repairs applied
+
+- Fixed the root cause of Shared Notes disappearing after choosing a file: browser focus/visibility restoration no longer redraws the room while the Create Note dialog or the creator's Replace Attachment editor is open. This preserves the in-progress form and the selected local `File` object when the native device file chooser returns.
+- Kept normal room restoration active outside the note editors, so resuming a room still performs the existing room verification flow.
+- Repaired owner recovery during room restoration. If a verified room owner has a legacy missing membership row, the app now restores that owner's own roster row before loading the room; non-owners without membership remain denied.
+- Added creator-only Replace and Remove File actions to each note attachment. The edit flow can update the note title/content and optionally replace its attachment; leaving the replacement input empty preserves the current file.
+- Replacement uploads use a new private Storage object path, update the note row filtered by the authenticated author, and remove the previous object after the metadata update succeeds. Failed note updates clean up the newly uploaded object.
+- Removing an attachment detaches its metadata from the note and deletes the private Storage object while preserving the note itself. Empty notes are protected from being left without either text or an attachment.
+- Kept Preview and Download connected to the existing member-authorized private Storage signed-URL and in-app preview pipeline.
+- Bumped the PWA shell cache to `nexbyte-pwa-v28-file-picker-focus-restore-fix` so installed clients request the updated app shell.
+
+## Verification
+
+- All 12 inline JavaScript blocks passed Node.js syntax checks; `sw.js` passed Node.js syntax checks; `manifest.webmanifest` parsed as valid JSON; HTML parsing completed successfully.
+- Chromium browser regression harness passed for a public room at 390×844 and a private personal room at 1280×800.
+- The simulated native file-picker focus/visibility return preserved the Create Note dialog, the Replace Attachment editor, and each selected file. No room restore was started while either editor was open.
+- Verified file selection preview, remove/reselect, note publishing with file metadata, Preview and Download action wiring, creator-only replacement, old-object cleanup, attachment removal while retaining the note, and rejection of editing another member's note.
+- No browser JavaScript errors were recorded in the regression harness.
+- Supabase Storage/database calls were mocked for the browser test. Live uploads, signed URLs, deployed RLS behavior, and device-specific Android/PWA file-picker behavior still require verification against the deployed Supabase project.
+
+## Preserved
+
+- Existing room schema, message payload model, private Storage bucket, and room-membership security policies.
+- Existing public/private room behavior and the existing secure preview/download implementation.
+- No database tables or policies were changed, and no existing user data or files were migrated or deleted.
+
 
 ## 2026-11-22 — PDF reader pinch zoom and fit-page repair
 

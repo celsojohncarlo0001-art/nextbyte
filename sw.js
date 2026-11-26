@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v27-shared-notes-composer-preview';
+const CACHE_VERSION = 'nexbyte-pwa-v28-file-picker-focus-restore-fix';
 const PDFJS_ASSET_CACHE = 'nexbyte-pdfjs-assets-6-5-438';
 const PDFJS_ASSET_PREFIX = '/npm/pdfjs-dist@6.5.438/';
 const APP_SHELL = [
