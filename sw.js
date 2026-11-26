@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v32-shared-note-attachment-sync';
+const CACHE_VERSION = 'nexbyte-pwa-v33-room-bound-file-selection-and-actions';
 const PDFJS_ASSET_CACHE = 'nexbyte-pdfjs-assets-6-5-438';
 const PDFJS_ASSET_PREFIX = '/npm/pdfjs-dist@6.5.438/';
 const APP_SHELL = [

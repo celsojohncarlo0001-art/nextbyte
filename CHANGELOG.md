@@ -1,3 +1,12 @@
+
+## V33 — Shared Notes file selection and action controls
+
+- Bind the selected file to the Study Room ID rendered on the file input, so native Android/PWA picker return and view redraw do not lose the file's room association.
+- Keep the selected-file identity consistent between the current uploader and legacy preview cache.
+- Improve attachment action controls with labelled icons, accessible names, responsive two-column layout, and larger mobile tap targets.
+- Preserve creator-only Replace, Remove, Edit, and Delete controls.
+- Bump service-worker app-shell cache to V33.
+
 ## 2026-11-27 — Shared Notes V32 attachment synchronization repair
 - Added a committed-note overlay so a saved note remains visible if an overlapping or stale room-message refresh temporarily replaces the in-memory list.
 - Render the verified note immediately after the Storage upload and database insert complete; the follow-up room refresh now reconciles in the background.

@@ -9380,7 +9380,8 @@ async function deleteRoomAny(id){
     if (inputFile) {
       selectedRoomNoteFile = inputFile;
       var selectedRoute = typeof currentRoute === 'function' ? currentRoute() : null;
-      selectedRoomNoteFileRoomId = selectedRoute && selectedRoute.id ? String(selectedRoute.id) : null;
+      var explicitRoomId = input && (input.getAttribute('data-room-id') || (input.dataset && input.dataset.roomId));
+      selectedRoomNoteFileRoomId = explicitRoomId ? String(explicitRoomId) : (selectedRoute && selectedRoute.id ? String(selectedRoute.id) : null);
     }
     var file = inputFile || selectedRoomNoteFile;
     var preview = document.getElementById('nbRoomNoteSelectedFile');
@@ -9459,9 +9460,9 @@ async function deleteRoomAny(id){
     if (note.filePath) {
       var extension = fileExtension(note.fileName || '');
       var kind = extension ? extension.toUpperCase() : String(note.fileType || 'File').toUpperCase();
-      attachment = '<div class="nb-room-attachment"><div class="nb-room-file-symbol" aria-hidden="true">📎</div><div class="nb-room-file-meta"><strong>' + html(note.fileName || 'Attached file') + '</strong><span>' + html(kind) + (note.fileSize ? ' · ' + html(formatBytes(note.fileSize)) : '') + '</span></div><div class="nb-room-file-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',false,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">Preview</button><button type="button" class="btn btn-primary btn-sm" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',true,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')">Download</button>' + (note.me ? '<button type="button" class="btn btn-secondary btn-sm" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Replace</button><button type="button" class="btn btn-danger btn-sm" onclick="nbRemoveRoomNoteAttachment(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Remove file</button>' : '') + '</div></div>';
+      attachment = '<div class="nb-room-attachment"><div class="nb-room-file-symbol" aria-hidden="true">📎</div><div class="nb-room-file-meta"><strong>' + html(note.fileName || 'Attached file') + '</strong><span>' + html(kind) + (note.fileSize ? ' · ' + html(formatBytes(note.fileSize)) : '') + '</span></div><div class="nb-room-file-actions" role="group" aria-label="Attachment actions"><button type="button" class="btn btn-secondary btn-sm" data-note-action="preview" aria-label="Preview ' + html(note.fileName || 'shared file') + '" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',false,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')"><span aria-hidden="true">👁</span><span>Preview</span></button><button type="button" class="btn btn-primary btn-sm" data-note-action="download" aria-label="Download ' + html(note.fileName || 'shared file') + '" onclick="nbOpenRoomFile(' + inlineArg(room.id) + ',' + inlineArg(note.filePath) + ',true,' + inlineArg(note.fileName || 'Shared file') + ',' + inlineArg(note.fileType || '') + ')"><span aria-hidden="true">⬇</span><span>Download</span></button>' + (note.me ? '<button type="button" class="btn btn-secondary btn-sm" data-note-action="replace" aria-label="Replace attachment" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')"><span aria-hidden="true">↻</span><span>Replace file</span></button><button type="button" class="btn btn-danger btn-sm" data-note-action="remove" aria-label="Remove attachment" onclick="nbRemoveRoomNoteAttachment(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')"><span aria-hidden="true">✕</span><span>Remove file</span></button>' : '') + '</div></div>';
     }
-    var ownControls = note.me ? '<div class="nb-room-record-actions"><button type="button" class="btn btn-secondary btn-sm" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Edit note</button><button type="button" class="btn btn-danger btn-sm" onclick="nbDeleteSharedRecord(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')">Delete</button></div>' : '';
+    var ownControls = note.me ? '<div class="nb-room-record-actions" role="group" aria-label="Note actions"><button type="button" class="btn btn-secondary btn-sm" data-note-action="edit-note" aria-label="Edit your note" onclick="nbEditRoomNote(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')"><span aria-hidden="true">✎</span><span>Edit note</span></button><button type="button" class="btn btn-danger btn-sm" data-note-action="delete-note" aria-label="Delete your note" onclick="nbDeleteSharedRecord(' + inlineArg(room.id) + ',' + inlineArg(note.dbId) + ')"><span aria-hidden="true">🗑</span><span>Delete note</span></button></div>' : '';
     var ownerLabel = room.roomType === 'private' ? 'Saved by ' : 'Shared by ';
     return '<article class="card padc nb-room-record-card"><div class="nb-room-card-heading"><div class="grow minw"><h3 class="txm semi nb-room-record-title">' + html(note.title || 'Shared note') + '</h3><p class="txs muted mt1">' + ownerLabel + html(author) + ' · ' + html(timestamp) + '</p></div></div>' + (note.text ? '<p class="txm mt3 nb-room-preserve-text">' + html(note.text) + '</p>' : '') + attachment + ownControls + '</article>';
   }
@@ -9486,7 +9487,7 @@ async function deleteRoomAny(id){
       '<header class="nb-room-note-dialog-header"><div class="grow minw"><h2 class="txl semi" id="nbRoomNoteComposerTitle">' + html(modalTitle) + '</h2><p class="txs muted mt1">' + html(modalDescription) + '</p></div><button type="button" class="iconbtn" aria-label="Close create note" onclick="nbCloseRoomNoteComposer()">✕</button></header>' +
       '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteTitle">Note or document title</label><input id="sharedNoteTitle" class="input" maxlength="160" placeholder="e.g. Biology Chapter 2 summary" autocomplete="off"/></div>' +
       '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteText">' + (isPersonalRoom ? 'Your notes' : 'Note content') + '</label><textarea id="sharedNoteText" class="input" rows="6" maxlength="20000" placeholder="Write explanations, summaries, or study notes…"></textarea></div>' +
-      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteFile">Attachment (optional · 20 MB maximum)</label><input id="sharedNoteFile" type="file" class="input nb-room-file-input" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp" onchange="nbCaptureRoomNoteFile(this)" oninput="nbCaptureRoomNoteFile(this)"/><div id="nbRoomNoteSelectedFile" class="nb-room-selected-file-host" aria-live="polite"></div><p id="nbRoomNoteFileStatus" class="nb-room-status" role="status" aria-live="polite"></p><p class="txs muted">Supported: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, and WEBP.</p></div>' +
+      '<div class="nb-room-form-field"><label class="field-label" for="sharedNoteFile">Attachment (optional · 20 MB maximum)</label><input id="sharedNoteFile" type="file" class="input nb-room-file-input" data-room-id="' + html(room.id) + '" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.csv,.png,.jpg,.jpeg,.webp" onchange="nbCaptureRoomNoteFile(this)" oninput="nbCaptureRoomNoteFile(this)"/><div id="nbRoomNoteSelectedFile" class="nb-room-selected-file-host" aria-live="polite"></div><p id="nbRoomNoteFileStatus" class="nb-room-status" role="status" aria-live="polite"></p><p class="txs muted">Supported: PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, and WEBP.</p></div>' +
       '<div class="nb-room-note-dialog-actions"><button type="button" class="btn btn-secondary" onclick="nbCloseRoomNoteComposer()">Cancel</button><button type="button" class="btn btn-primary" id="nbShareRoomNoteButton" onclick="nbPublishRoomNote(' + inlineArg(room.id) + ')">' + html(submitLabel) + '</button></div>' +
       '<p id="nbRoomNoteSubmitStatus" class="nb-room-status" role="status" aria-live="polite"></p>' +
       '</section></div></div>';
@@ -10073,7 +10074,11 @@ async function deleteRoomAny(id){
     .nb-room-file-meta strong{font-size:13px;overflow-wrap:anywhere}
     .nb-room-file-meta span{font-size:11px;color:var(--muted-fg);overflow-wrap:anywhere}
     .nb-room-file-actions,.nb-room-record-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-    .nb-room-file-actions .btn,.nb-room-record-actions .btn{min-height:36px;height:36px;padding:0 12px;font-size:12px}
+    .nb-room-file-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;align-items:stretch}
+    .nb-room-file-actions .btn,.nb-room-record-actions .btn{min-height:44px;height:auto;min-width:0;padding:8px 10px;font-size:13px;line-height:1.2;white-space:normal;overflow-wrap:anywhere;display:inline-flex;align-items:center;justify-content:center;gap:7px;text-align:center}
+    .nb-room-file-actions .btn{width:100%}
+    .nb-room-file-actions .btn span:last-child,.nb-room-record-actions .btn span:last-child{min-width:0}
+    .nb-room-record-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:min(100%,360px)}
     .nb-room-meta-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
     .nb-room-meta-chip{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:var(--secondary);color:var(--muted-fg);font-size:11px;font-weight:600}
     .nb-room-task-instructions{margin-top:14px;padding:12px;border-radius:12px;background:var(--secondary);min-width:0}
@@ -10135,11 +10140,13 @@ async function deleteRoomAny(id){
       .nb-room-scroll-page{padding:10px 10px calc(20px + env(safe-area-inset-bottom,0px));gap:10px}
       .nb-room-attachment{align-items:flex-start;flex-wrap:wrap}
       .nb-room-file-meta{flex:1 1 calc(100% - 40px)}
-      .nb-room-file-actions{width:100%}
-      .nb-room-file-actions .btn{flex:1 1 100px}
+      .nb-room-file-actions{width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}
+      .nb-room-file-actions .btn{width:100%;min-height:46px;padding:8px 6px;flex:initial}
+      .nb-room-record-actions{width:100%;grid-template-columns:repeat(2,minmax(0,1fr))}
       .nb-room-response-controls{align-items:stretch}
       .nb-room-response-controls>.btn{width:100%;flex:1 1 100%}
     }
+    @media(max-width:340px){.nb-room-file-actions,.nb-room-record-actions{grid-template-columns:1fr}}
     @media(min-width:700px){.nb-room-scroll-page{padding:18px;gap:16px}.nb-room-compose,.nb-room-record-card{padding:18px}}
   `;
   if (!document.getElementById(styles.id)) document.head.appendChild(styles);
@@ -10147,14 +10154,14 @@ async function deleteRoomAny(id){
 })();
 
 </script>
-<!-- NEXTBYTE V31: authoritative shared-note attachment submission -->
+<!-- NEXTBYTE V33: room-bound shared-note attachment submission and mobile actions -->
 <script>
-/* NEXTBYTE V31 — single authoritative Shared Notes upload/commit flow.
+/* NEXTBYTE V33 — single authoritative Shared Notes upload/commit flow.
    This script intentionally runs after legacy room patches and owns the global
    button entry point, so no earlier nbPublishRoomNote implementation can win. */
 (function () {
   'use strict';
-  var BUILD = 'nextbyte-shared-notes-v32-attachment-sync';
+  var BUILD = 'nextbyte-shared-notes-v33-room-bound-file-selection-and-actions';
   var BUCKET = 'study-room-files';
   var MAX_BYTES = 20 * 1024 * 1024;
   var ALLOWED = ['pdf','doc','docx','ppt','pptx','xls','xlsx','txt','md','csv','png','jpg','jpeg','webp'];
@@ -10162,6 +10169,7 @@ async function deleteRoomAny(id){
   var fileState = window.__NB_ROOM_NOTE_FILE_STATE || (window.__NB_ROOM_NOTE_FILE_STATE = { file: null, roomId: null, name: null, size: null });
   var committedOverlay = window.__NB_SHARED_NOTE_COMMIT_OVERLAY || (window.__NB_SHARED_NOTE_COMMIT_OVERLAY = Object.create(null));
   window.NEXBYTE_SHARED_NOTE_UPLOAD_BUILD = BUILD;
+  window.NEXBYTE_SHARED_NOTE_ACTIONS_BUILD = 'v33-accessible-mobile-actions';
 
   function byId(id) { return document.getElementById(id); }
   function message(id, text, isError) {
@@ -10206,7 +10214,16 @@ async function deleteRoomAny(id){
     if (ALLOWED.indexOf(ext(file.name)) < 0) return { ok: false, message: 'Unsupported file type. Use PDF, Word, PowerPoint, Excel, TXT, Markdown, CSV, PNG, JPG, or WEBP.' };
     return { ok: true };
   }
-  function currentRoomId() {
+  function currentRoomId(input) {
+    // Prefer the room ID embedded by renderNotes on this exact file input.
+    // The Android document picker can cause route resolution or the live input
+    // node to change before the submit handler runs.
+    var target = input || byId('sharedNoteFile');
+    var explicit = target && (target.getAttribute('data-room-id') || (target.dataset && target.dataset.roomId));
+    if (explicit) return String(explicit);
+    var modal = byId('nbRoomNoteComposerModal');
+    var modalRoomId = modal && (modal.getAttribute('data-room-id') || (modal.dataset && modal.dataset.roomId));
+    if (modalRoomId) return String(modalRoomId);
     try {
       if (typeof window.resolve === 'function') {
         var route = window.resolve();
@@ -10237,7 +10254,7 @@ async function deleteRoomAny(id){
     var file = input && input.files && input.files.length ? input.files[0] : null;
     if (!file) return fileState.file || null; // A cancelled native picker must not erase the previous selection.
     fileState.file = file;
-    fileState.roomId = currentRoomId();
+    fileState.roomId = currentRoomId(input);
     fileState.name = file.name;
     fileState.size = file.size;
     var check = validate(file);
