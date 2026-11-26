@@ -121,7 +121,7 @@
 - Added reconnect handling for an offline startup: once connectivity returns, reload the app so the external Supabase SDK can initialize and normal session/cloud recovery can resume.
 - Changed signed-file opening for personal, room, and cloud-manager files to reserve a browser tab synchronously before requesting the Supabase signed URL, reducing popup-blocker failures.
 - Reordered cloud deletion so the actual Storage object is deleted before attempting to clean up a shared-room message reference. If the Storage deletion fails, the app retains the metadata reference. If later room-message cleanup fails, the UI reports that partial cleanup rather than claiming everything was removed.
-- Added `NEXBYTE_ROOM_SCHEMA.sql`, which creates the missing shared-room base tables and `join_study_room_by_code` RPC only when absent. The SQL does not drop or truncate existing tables or rows.
+- Added `NEXTBYTE_ROOM_SCHEMA.sql`, which creates the missing shared-room base tables and `join_study_room_by_code` RPC only when absent. The SQL does not drop or truncate existing tables or rows.
 - Bumped the service-worker cache namespace to `nexbyte-pwa-v5-offline-auth-repair` so deployed clients fetch the repaired shell.
 - Removed a duplicate `REPLICA IDENTITY FULL` statement from the room enhancement migration.
 - Updated setup and deployment documentation with the required SQL order, RLS cautions, known functional limitations, and post-deployment verification steps.

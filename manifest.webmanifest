@@ -1,7 +1,7 @@
 {
   "id": "./index.html",
-  "name": "NEXBYTE — Academic Collaboration Environment",
-  "short_name": "NEXBYTE",
+  "name": "NEXTBYTE — Academic Collaboration Environment",
+  "short_name": "NEXTBYTE",
   "description": "Your personal academic workspace, available online and with saved offline files.",
   "start_url": "./index.html#/dashboard",
   "scope": "./",

@@ -37,7 +37,7 @@ Static code checks are included in TESTING_REPORT.md. Live Supabase retrieval, a
 
 NEXTBYTE STUDY ROOM PUBLIC / PRIVATE VISIBILITY UPGRADE
 1. Open Supabase Dashboard > SQL Editor.
-2. Run NEXTBYTE_STUDY_ROOM_VISIBILITY.sql AFTER NEXBYTE_ROOM_SCHEMA.sql and NEXBYTE_ENHANCEMENTS.sql have already been applied.
+2. Run NEXTBYTE_STUDY_ROOM_VISIBILITY.sql AFTER NEXTBYTE_ROOM_SCHEMA.sql and NEXTBYTE_ENHANCEMENTS.sql have already been applied.
 3. Existing collaborative rooms remain invite-only and hidden from public discovery, while their memberships and invite codes continue to work. This avoids unexpectedly exposing old room metadata.
 4. New Public Rooms appear in the signed-in public directory and can be joined there or with a public room invite code.
 5. New Private Rooms have no invite code, a capacity of one, owner-only database access, and no chat/messaging interface.
@@ -61,8 +61,8 @@ service-worker cache can install. Test with two separate authenticated accounts.
 
 NEXTBYTE PUBLIC STUDY ROOM CHAT REPAIR (November 22, 2026)
 1. In Supabase Dashboard > SQL Editor, run NEXTBYTE_PUBLIC_ROOM_CHAT_REPAIR.sql AFTER these migrations have already been applied:
-   - NEXBYTE_ROOM_SCHEMA.sql
-   - NEXBYTE_ENHANCEMENTS.sql
+   - NEXTBYTE_ROOM_SCHEMA.sql
+   - NEXTBYTE_ENHANCEMENTS.sql
    - NEXTBYTE_STUDY_ROOM_VISIBILITY.sql
 2. The new migration makes message deletion author-only, enables room-filtered Realtime DELETE updates, and creates the unique poll-vote table. Do not skip it: the client-side poll voting requires study_room_poll_votes.
 3. The study-room-files bucket remains private. Room-file Preview now uses a short-lived signed URL after Supabase Storage authorizes the room member, then renders the downloaded Blob through NEXTBYTE's in-app file preview.
@@ -75,9 +75,9 @@ The source ZIP did not contain a hard-coded visible nexbyte-mu.vercel.app label.
 STUDY ROOM SHARED NOTES + TASKS REPAIR (November 25, 2026)
 
 - Deploy the updated index.html and sw.js from this ZIP to the existing Vercel-connected project. Keep supabase-config.js and its public publishable/anon key unchanged.
-- No new SQL migration is required for this frontend repair. Confirm the existing room schema, NEXBYTE_ENHANCEMENTS.sql, room visibility SQL, and public-room chat repair have already been applied as appropriate.
+- No new SQL migration is required for this frontend repair. Confirm the existing room schema, NEXTBYTE_ENHANCEMENTS.sql, room visibility SQL, and public-room chat repair have already been applied as appropriate.
 - The existing study-room-files bucket must remain private, with the existing room-member read policy and user-folder upload policy. Do not make the bucket public and do not add broad RLS policies.
 - Shared notes now show file name/type/size and provide in-app Preview and Download. Attachments are restricted to supported academic document/image formats and 20 MB.
 - Shared Notes and Tasks now place their lists and forms inside one full-height scrollable panel. All joined members can publish notes/tasks, and each member's task response/status is saved as their own room-message row.
-- The new PWA cache is nexbyte-pwa-v26-study-room-notes-tasks. Open NEXTBYTE online after deployment and close/reopen the installed PWA if it continues showing the previous interface.
+- The new PWA cache is nextbyte-pwa-v35-branding-background-fix. Open NEXTBYTE online after deployment and close/reopen the installed PWA if it continues showing the previous interface.
 - Follow TESTING_REPORT_STUDY_ROOM_NOTES_TASKS.md to verify with two separate authenticated room accounts.

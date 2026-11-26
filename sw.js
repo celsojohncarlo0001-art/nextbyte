@@ -1,10 +1,10 @@
-/* NEXBYTE PWA service worker.
+/* NEXTBYTE PWA service worker.
  * Caches only the app shell and same-origin static assets.
  * Supabase Auth, database, storage, realtime and function requests are never cached.
  */
 'use strict';
 
-const CACHE_VERSION = 'nexbyte-pwa-v34-post-save-note-attachment-workflow';
+const CACHE_VERSION = 'nextbyte-pwa-v35-branding-background-fix';
 const PDFJS_ASSET_CACHE = 'nexbyte-pdfjs-assets-6-5-438';
 const PDFJS_ASSET_PREFIX = '/npm/pdfjs-dist@6.5.438/';
 const APP_SHELL = [
@@ -12,7 +12,7 @@ const APP_SHELL = [
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
-  './nexbyte-background.png',
+  './nextbyte-background.png',
   './supabase-config.js'
 ];
 
@@ -29,7 +29,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(
-        keys.filter((key) => key.startsWith('nexbyte-pwa-') && key !== CACHE_VERSION)
+        keys.filter((key) => (key.startsWith('nexbyte-pwa-') || key.startsWith('nextbyte-pwa-')) && key !== CACHE_VERSION)
           .map((key) => caches.delete(key))
       ))
       .then(() => self.clients.claim())
@@ -86,7 +86,7 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(async () => {
           const cached = await caches.match(new URL('./index.html', self.registration.scope).toString());
-          return cached || new Response('NEXBYTE is offline. Open the app once while online, then try again.', {
+          return cached || new Response('NEXTBYTE is offline. Open the app once while online, then try again.', {
             status: 503,
             headers: { 'Content-Type': 'text/plain; charset=utf-8' }
           });
@@ -109,7 +109,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(request).then((cached) => cached || refresh).then((response) => {
       if (response) return response;
-      return new Response('This NEXBYTE file is not available offline yet.', {
+      return new Response('This NEXTBYTE file is not available offline yet.', {
         status: 503,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' }
       });

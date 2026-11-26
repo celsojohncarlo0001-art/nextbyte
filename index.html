@@ -4,8 +4,8 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <meta name="theme-color" content="#2563EB"/>
-<meta name="nexbyte-repair-layer" content="4.4"/>
-<meta name="description" content="NEXBYTE — your personal academic workspace, available online and offline."/>
+<meta name="nextbyte-repair-layer" content="4.4"/>
+<meta name="description" content="NEXTBYTE — your personal academic workspace, available online and offline."/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
@@ -13,13 +13,13 @@
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png"/>
 <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png"/>
 <link rel="apple-touch-icon" href="./icon-192.png"/>
-<title>NEXBYTE — Academic Collaboration Environment</title>
+<title>NEXTBYTE — Academic Collaboration Environment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   NEXBYTE — 3-COLOR BACKGROUND PALETTE
+   NEXTBYTE — 3-COLOR BACKGROUND PALETTE
    1) Neutral base  (--bg / --shell)
    2) Surface       (--card)
    3) Brand primary (--primary)
@@ -83,7 +83,7 @@ body{
   font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   color:var(--fg);background-color:var(--shell);font-size:14px;line-height:1.45;
   /* NEXTBYTE Global App Background */
-  background-image:url("./nexbyte-background.png");
+  background-image:url("./nextbyte-background.png");
   background-size:cover;
   background-position:center center;
   background-repeat:no-repeat;
@@ -923,8 +923,8 @@ var KEY='nexbyte_v3';
 /* Stores only the last locally authenticated account ID so its cached workspace can
    be reopened when the PWA starts offline and the remote SDK cannot load. */
 var LAST_AUTH_USER_KEY='nexbyte_last_authenticated_user';
-var SUPABASE_URL=window.NEXBYTE_SUPABASE_URL||'';
-var SUPABASE_ANON_KEY=window.NEXBYTE_SUPABASE_ANON_KEY||'';
+var SUPABASE_URL=window.NEXTBYTE_SUPABASE_URL||window.NEXBYTE_SUPABASE_URL||'';
+var SUPABASE_ANON_KEY=window.NEXTBYTE_SUPABASE_ANON_KEY||window.NEXBYTE_SUPABASE_ANON_KEY||'';
 var dbClient=(window.supabase&&SUPABASE_URL&&SUPABASE_ANON_KEY)?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}):null;
 
 function defaultState(){return{
@@ -1122,7 +1122,7 @@ async function bootstrapAuth(){
 }
 
 /* ============================================================
-   NEXBYTE MUSIC — private cloud library + YouTube embed player
+   NEXTBYTE MUSIC — private cloud library + YouTube embed player
    Audio files live in the user's private Supabase Storage folder.
    Metadata and playlists live in the user's workspace document.
    ============================================================ */
@@ -1173,7 +1173,7 @@ async function downloadCloudFile(path,bucketName,name,mime,key,kind,metadata){
 }
 window.addEventListener('online',function(){
   if(!dbClient||!S.auth.user||!S.auth.user.id)return;
-  setTimeout(async function(){var result=await saveWorkspaceNow();if(result.ok)toast('NEXBYTE is back online. Your workspace is synced.');},700);
+  setTimeout(async function(){var result=await saveWorkspaceNow();if(result.ok)toast('NEXTBYTE is back online. Your workspace is synced.');},700);
 });
 
 function getAudio(){return document.getElementById('nbAudio');}
@@ -1186,7 +1186,7 @@ function currentMusicList(){
   return S.offlineMusic.slice();
 }
 function currentTrackName(){var t=musicTrackById(S.music.localId);if(S.music.active==='local')return t?t.name:'Cloud audio';if(S.music.active==='youtube')return 'YouTube player';return '';}
-function currentTrackSub(){var t=musicTrackById(S.music.localId);if(S.music.active==='local')return (t&&t.artist?t.artist+' · ':'')+'Saved to your NEXBYTE account';if(S.music.active==='youtube')return 'YouTube / YouTube Music';return '';}
+function currentTrackSub(){var t=musicTrackById(S.music.localId);if(S.music.active==='local')return (t&&t.artist?t.artist+' · ':'')+'Saved to your NEXTBYTE account';if(S.music.active==='youtube')return 'YouTube / YouTube Music';return '';}
 async function requireMusicUser(){
   if(!dbClient)throw new Error('Supabase is not configured. Check supabase-config.js.');
   var result=await dbClient.auth.getSession();if(result.error)throw result.error;
@@ -1333,7 +1333,7 @@ function musicAddToPlaylist(id){
 }
 function musicDeleteTrack(id){
   var track=musicTrackById(id);if(!track)return;
-  confirmSheet({title:'Remove this track?',message:'The audio file will be removed from your NEXBYTE account and its playlists.',confirmLabel:'Remove track',onConfirm:async function(){
+  confirmSheet({title:'Remove this track?',message:'The audio file will be removed from your NEXTBYTE account and its playlists.',confirmLabel:'Remove track',onConfirm:async function(){
     var oldList=S.offlineMusic.slice();
     S.offlineMusic=S.offlineMusic.filter(function(t){return t.id!==id;});
     S.music.favorites=S.music.favorites.filter(function(x){return x!==id;});
@@ -1367,7 +1367,7 @@ async function addOfflineFiles(input){
     if(!added.length){if(input)input.value='';return;}
     S.offlineMusic=S.offlineMusic.concat(added);
     try{await persistMusicState();}catch(saveError){S.offlineMusic=S.offlineMusic.filter(function(t){return added.every(function(a){return a.id!==t.id;});});throw saveError;}
-    toast(added.length+' track'+(added.length===1?'':'s')+' saved to your NEXBYTE account.');
+    toast(added.length+' track'+(added.length===1?'':'s')+' saved to your NEXTBYTE account.');
   }catch(error){
     console.error('Cloud music upload failed',error);
     if(uploadedPaths.length&&dbClient){try{await dbClient.storage.from(NB_MUSIC_BUCKET).remove(uploadedPaths);}catch(_){} }
@@ -1443,7 +1443,7 @@ function musicLibraryTab(){
   var view=S.music.view||'all',playlist=S.music.playlists.filter(function(p){return p.id===view;})[0];
   if(view!=='all'&&view!=='fav'&&!playlist){view='all';S.music.view='all';}
   var list=currentMusicList();
-  var html='<div class="nb-music-panel"><div class="nb-music-upload"><div class="f g3 aic"><div class="nb-music-art">'+ic('headphones',22)+'</div><div class="grow minw"><h2 class="txl semi">Your music library</h2><p class="txs muted">'+S.offlineMusic.length+' track(s) saved to your account</p></div></div><label class="btn btn-primary btn-block mt3" for="localMusicInput">'+ic('upload',17)+' Upload audio files</label><input id="localMusicInput" type="file" multiple accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.flac,.weba,.webm,.aif,.aiff,.3gp" style="display:none" onchange="addOfflineFiles(this)"/><p class="txs muted mt2">Your uploads are stored privately in your NEXBYTE account and available after signing in on another device.</p></div>';
+  var html='<div class="nb-music-panel"><div class="nb-music-upload"><div class="f g3 aic"><div class="nb-music-art">'+ic('headphones',22)+'</div><div class="grow minw"><h2 class="txl semi">Your music library</h2><p class="txs muted">'+S.offlineMusic.length+' track(s) saved to your account</p></div></div><label class="btn btn-primary btn-block mt3" for="localMusicInput">'+ic('upload',17)+' Upload audio files</label><input id="localMusicInput" type="file" multiple accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.flac,.weba,.webm,.aif,.aiff,.3gp" style="display:none" onchange="addOfflineFiles(this)"/><p class="txs muted mt2">Your uploads are stored privately in your NEXTBYTE account and available after signing in on another device.</p></div>';
   if(!S.offlineMusic.length)html+='<div class="empty"><div class="em">🎵</div><h3 class="txl semi mb1">Your library is empty</h3><p class="txm muted">Upload MP3, M4A, AAC, WAV, or OGG files to get started.</p></div>';
   else{
     html+='<div class="hscroll mt3 nb-music-filters"><button class="chip'+(view==='all'?' on':'')+'" onclick="musicSetView(\'all\')">All songs · '+S.offlineMusic.length+'</button><button class="chip'+(view==='fav'?' on':'')+'" onclick="musicSetView(\'fav\')">♥ Favorites · '+S.music.favorites.length+'</button>'+S.music.playlists.map(function(p){return '<button class="chip'+(view===p.id?' on':'')+'" onclick="musicSetView(\''+p.id+'\')">'+esc(p.name)+' · '+p.ids.length+'</button>';}).join('')+'<button class="chip" onclick="musicCreatePlaylist()">'+ic('plus',13)+' New playlist</button></div>';
@@ -1537,7 +1537,7 @@ function bottomNav(active){
 }
 function topBar(active){
   var u=S.auth.user||{},dark=S.theme==='dark';
-  return '<button class="brand" onclick="go(\'/dashboard\')" aria-label="NEXBYTE — go to Home">'+logo(26)+'<span class="brand-name">NEXBYTE</span></button>'+
+  return '<button class="brand" onclick="go(\'/dashboard\')" aria-label="NEXTBYTE — go to Home">'+logo(26)+'<span class="brand-name">NEXTBYTE</span></button>'+
     '<span class="streakbadge" aria-label="Study streak: '+Number(S.focus.streak||0)+' days">'+ic('flame',13)+' '+Number(S.focus.streak||0)+'d</span>'+
     '<div class="grow"></div>'+
     '<button class="iconbtn" onclick="openSearch()" aria-label="Search workspace" title="Search (Ctrl+K)">'+ic('search',18)+'</button>'+
@@ -1707,7 +1707,7 @@ function vWelcome(){
   return '<div class="main welcome">'+
     '<button class="iconbtn theme-toggle auth-theme" onclick="toggleTheme()" aria-label="Toggle color theme" style="background:var(--card);border:1px solid var(--border);color:var(--muted-fg)">'+ic(S.theme==='dark'?'sun':'moon',19)+'</button>'+
     '<div class="wcontent"><div class="wtop">'+logo(88)+
-      '<h1 class="wtitle">NEXBYTE</h1><p class="wtag">Academic Collaboration Environment</p>'+
+      '<h1 class="wtitle">NEXTBYTE</h1><p class="wtag">Academic Collaboration Environment</p>'+
       '<p class="wdesc">Subject-bound focus sessions, study rooms, shared notes, and task tracking — everything you need to learn together, in one place.</p>'+
       '<div class="wgrid" aria-label="App features">'+features.map(function(f){return '<div class="wfeat"><span aria-hidden="true">'+f[0]+'</span><span class="txs muted med">'+f[1]+'</span></div>';}).join('')+'</div>'+
     '</div><div class="wactions">'+
@@ -1861,7 +1861,7 @@ function subjectTabBody(s){
   if(UI.subjectTab==='materials'){
     if(!Array.isArray(s.materials))s.materials=[];
     var materialCards=s.materials.length?s.materials.map(function(m,i){return '<div class="rowitem"><span class="iconbtn" style="background:var(--primary-soft);color:var(--primary-text)">'+ic('file',17)+'</span><div class="grow minw"><p class="txm med trunc">'+esc(m.n||m.fileName||'Study material')+'</p><p class="txs muted">'+esc(m.t||'File')+' · '+esc(m.s||'')+'</p></div><button class="iconbtn" onclick="cacheMaterialOffline(\''+s.id+'\','+i+')" aria-label="Save material offline">'+ic('download',15)+'</button><button class="iconbtn" onclick="openMaterial(\''+s.id+'\','+i+')" aria-label="Open material">'+ic('download',15)+'</button><button class="iconbtn" onclick="removeMaterial(\''+s.id+'\','+i+')" aria-label="Remove material">'+ic('trash',15)+'</button></div>';}).join(''):'<div class="empty" style="padding:32px 16px"><div class="em">📎</div><p class="txm muted">No files attached to this subject yet.</p></div>';
-    return '<div class="fc g2">'+materialCards+'</div><button class="btn btn-primary btn-block mt4" onclick="addMaterial(\''+s.id+'\')">'+ic('upload',18)+' Upload material</button><p class="txs muted mt2">Files are saved privately to your NEXBYTE account (20 MB maximum each).</p>';
+    return '<div class="fc g2">'+materialCards+'</div><button class="btn btn-primary btn-block mt4" onclick="addMaterial(\''+s.id+'\')">'+ic('upload',18)+' Upload material</button><p class="txs muted mt2">Files are saved privately to your NEXTBYTE account (20 MB maximum each).</p>';
   }
   if(UI.subjectTab==='tasks'){
     var list=S.tasks.filter(function(t){return t.subjectId===s.id;});
@@ -2350,8 +2350,8 @@ function profileSettings(){
   /* FIX 9: honest note about notification toggles */
   h+='<div class="pgroup"><div class="pgroup-head">'+ic('moon',15)+' Appearance & Notifications</div><div class="pgroup-body"><p class="txs muted" style="padding:4px 0 6px">Preferences below are saved to your account. Actual delivery (in-app, email, or push) must be wired to a backend before these fire.</p><div class="prow"><div class="f g3 aic"><span class="iconbtn" style="background:var(--secondary);color:'+(S.theme==='dark'?'#A78BFA':'#FBBF24')+'">'+ic(S.theme==='dark'?'moon':'sun',17)+'</span><span class="txm med">Dark mode</span></div><button class="toggle purple'+(S.theme==='dark'?' on':'')+'" onclick="toggleTheme()"><span></span></button></div><div class="hr"></div>'+[['roomUpdates','Room updates'],['taskReminders','Task reminders'],['chatMessages','Chat messages'],['weeklyProgress','Weekly progress']].map(function(n){return '<div class="prow"><span class="txm med">'+n[1]+'</span><button class="toggle'+(S.notifications[n[0]]?' on':'')+'" onclick="toggleNotif(\''+n[0]+'\')"><span></span></button></div>';}).join('')+'<div class="hr"></div><div class="prow"><div><p class="txm med">Auto-save notes</p><p class="txs muted">Persist edits as you type</p></div><button class="toggle'+(S.settings.autoSave?' on':'')+'" onclick="toggleSetting(\'autoSave\')"><span></span></button></div></div></div>';
   /* FIX 5: relabelled "Delete account" → honest sign-out */
-  h+='<div class="pgroup pb"><div class="pgroup-head">'+ic('lock',15)+' Session & Security</div><div class="pgroup-body"><button class="arow" onclick="exportWorkspaceData()"><span class="txm med">Export workspace data</span>'+ic('download',18)+'</button><div class="hr"></div><button class="arow" onclick="importWorkspaceData()"><span class="txm med">Import workspace data</span>'+ic('upload',18)+'</button><div class="hr"></div><button class="arow" onclick="downloadAppFile()"><span class="txm med">Download app file</span>'+ic('download',18)+'</button><div class="hr"></div><button class="arow" onclick="clearWorkspace()"><span class="txm med">Clear my workspace</span>'+ic('reset',18)+'</button><div class="hr"></div><button class="arow" onclick="openAbout()"><span class="txm med">About NEXBYTE</span>'+ic('info',18)+'</button><div class="hr"></div><button class="arow" onclick="doLogout()"><span class="txm med">Sign out</span>'+ic('logOut',18)+'</button></div></div>';
-  h+='<div class="pad mt5 pb"><p class="center txs muted">NEXBYTE · Academic Collaboration Environment · v3.6</p></div>';
+  h+='<div class="pgroup pb"><div class="pgroup-head">'+ic('lock',15)+' Session & Security</div><div class="pgroup-body"><button class="arow" onclick="exportWorkspaceData()"><span class="txm med">Export workspace data</span>'+ic('download',18)+'</button><div class="hr"></div><button class="arow" onclick="importWorkspaceData()"><span class="txm med">Import workspace data</span>'+ic('upload',18)+'</button><div class="hr"></div><button class="arow" onclick="downloadAppFile()"><span class="txm med">Download app file</span>'+ic('download',18)+'</button><div class="hr"></div><button class="arow" onclick="clearWorkspace()"><span class="txm med">Clear my workspace</span>'+ic('reset',18)+'</button><div class="hr"></div><button class="arow" onclick="openAbout()"><span class="txm med">About NEXTBYTE</span>'+ic('info',18)+'</button><div class="hr"></div><button class="arow" onclick="doLogout()"><span class="txm med">Sign out</span>'+ic('logOut',18)+'</button></div></div>';
+  h+='<div class="pad mt5 pb"><p class="center txs muted">NEXTBYTE · Academic Collaboration Environment · v3.6</p></div>';
   return h;
 }
 function infoRow(icon,color,label,value){return '<div class="f g3 aic" style="padding:8px 0"><span class="iconbtn" style="background:'+color+'15;color:'+color+'">'+ic(icon,17)+'</span><div class="grow"><p class="txs muted">'+esc(label)+'</p><p class="txm med">'+esc(value)+'</p></div></div>';}
@@ -2389,18 +2389,18 @@ function openEditProfile(){
     save();closeTop();toast('Profile updated');render();
   };
 }
-function openAbout(){var el=sheet('<div class="fc aic center">'+logo(64)+'<h3 class="txl bold mt3">NEXBYTE</h3><p class="txs muted" style="letter-spacing:.2em;text-transform:uppercase">Academic Collaboration Environment</p><p class="txm muted mt4">An all-in-one academic workspace. Subject-bound Lock-In sessions, synchronized study rooms, a Markdown knowledge base, a cloud-backed music library, collaborative whiteboards and quizzes, and task telemetry — all in one place.</p><p class="txs muted mt4">Version 3.6 · Account-based workspace</p></div><button class="btn btn-secondary btn-block mt5" data-close>Close</button>');el.querySelector('[data-close]').onclick=closeTop;}
-function downloadAppFile(){var html=document.documentElement.outerHTML;var blob=new Blob([html],{type:'text/html'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='nexbyte_app.html';document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},3000);toast('App file downloaded 📥');}
+function openAbout(){var el=sheet('<div class="fc aic center">'+logo(64)+'<h3 class="txl bold mt3">NEXTBYTE</h3><p class="txs muted" style="letter-spacing:.2em;text-transform:uppercase">Academic Collaboration Environment</p><p class="txm muted mt4">An all-in-one academic workspace. Subject-bound Lock-In sessions, synchronized study rooms, a Markdown knowledge base, a cloud-backed music library, collaborative whiteboards and quizzes, and task telemetry — all in one place.</p><p class="txs muted mt4">Version 3.6 · Account-based workspace</p></div><button class="btn btn-secondary btn-block mt5" data-close>Close</button>');el.querySelector('[data-close]').onclick=closeTop;}
+function downloadAppFile(){var html=document.documentElement.outerHTML;var blob=new Blob([html],{type:'text/html'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='nextbyte_app.html';document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},3000);toast('App file downloaded 📥');}
 function exportWorkspaceData(){
   var data={format:'NEXBYTE_WORKSPACE',version:1,exportedAt:new Date().toISOString(),subjects:S.subjects,tasks:S.tasks,notes:S.notes,activities:S.activities,sessions:S.sessions,weekly:S.weekly,achievements:S.achievements,focus:S.focus,settings:S.settings,notifications:S.notifications,music:{volume:S.music.volume,shuffle:S.music.shuffle,repeat:S.music.repeat,favorites:S.music.favorites,playlists:S.music.playlists,view:S.music.view},offlineMusic:S.offlineMusic.map(function(t){return {id:t.id,name:t.name,title:t.title,artist:t.artist,mime:t.mime,size:t.size,addedAt:t.addedAt};})};
   var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
-  a.href=url;a.download='nexbyte-workspace-'+todayISO()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},3000);toast('Workspace export downloaded. Cloud audio files are not duplicated in this export.');
+  a.href=url;a.download='nextbyte-workspace-'+todayISO()+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url);},3000);toast('Workspace export downloaded. Cloud audio files are not duplicated in this export.');
 }
 function importWorkspaceData(){
   var input=document.createElement('input');input.type='file';input.accept='.json,application/json';
   input.onchange=function(){var file=input.files&&input.files[0];if(!file)return;var reader=new FileReader();
     reader.onload=async function(){try{
-      var data=JSON.parse(String(reader.result||''));if(!data||data.format!=='NEXBYTE_WORKSPACE'||!data.version)throw new Error('This is not a supported NEXBYTE workspace export.');
+      var data=JSON.parse(String(reader.result||''));if(!data||(data.format!=='NEXTBYTE_WORKSPACE'&&data.format!=='NEXBYTE_WORKSPACE')||!data.version)throw new Error('This is not a supported NEXTBYTE workspace export.');
       var confirmed=confirm('Import this workspace data? Your current subjects, tasks, notes, and study history will be replaced. Your shared-room memberships and uploaded music files will be preserved.');if(!confirmed)return;
       var keepRooms=S.rooms.slice(),keepMusicFiles=S.offlineMusic.slice(),keepMusic=clone(S.music);
       ['subjects','tasks','notes','activities','sessions','weekly','achievements'].forEach(function(key){if(Array.isArray(data[key]))S[key]=data[key];});
@@ -2652,13 +2652,13 @@ async function deleteRoomAny(id){
 </script>
 
 <script>
-/* NEXBYTE FINAL integration: shared whiteboard, room quizzes, durable polls,
+/* NEXTBYTE FINAL integration: shared whiteboard, room quizzes, durable polls,
    shared chat extras, safer room file actions, and reference styling. */
 (function () {
   'use strict';
 
   if (typeof roomTabBody !== 'function' || typeof vRoom !== 'function') {
-    console.error('NEXBYTE integration could not find the room views.');
+    console.error('NEXTBYTE integration could not find the room views.');
     return;
   }
 
@@ -3281,7 +3281,7 @@ async function deleteRoomAny(id){
     if(!installButton){
       installButton=document.createElement('button');
       installButton.type='button';installButton.className='btn btn-primary';
-      installButton.textContent='Install NEXBYTE';
+      installButton.textContent='Install NEXTBYTE';
       installButton.style.cssText='position:fixed;right:16px;bottom:88px;z-index:80;padding:0 16px;box-shadow:var(--shadow-lg)';
       installButton.addEventListener('click',async function(){
         if(!installPrompt)return;
@@ -3296,7 +3296,7 @@ async function deleteRoomAny(id){
   window.addEventListener('appinstalled',function(){
     if(installButton){installButton.remove();installButton=null;}
     installPrompt=null;
-    if(typeof toast==='function')toast('NEXBYTE installed successfully.');
+    if(typeof toast==='function')toast('NEXTBYTE installed successfully.');
   });
 })();
 
@@ -4233,7 +4233,7 @@ async function deleteRoomAny(id){
         } catch (error) {
           console.error('Room whiteboard load failed', error);
           var host = document.getElementById('nbBoardFullscreenHost');
-          if (host) host.insertAdjacentHTML('beforeend', '<p class="txs" style="color:#b45309">Whiteboards need the NEXBYTE enhancements SQL migration. Please run it in Supabase, then reopen this room.</p>');
+          if (host) host.insertAdjacentHTML('beforeend', '<p class="txs" style="color:#b45309">Whiteboards need the NEXTBYTE enhancements SQL migration. Please run it in Supabase, then reopen this room.</p>');
         }
       })();
     }

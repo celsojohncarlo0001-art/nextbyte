@@ -1,5 +1,5 @@
 -- NEXTBYTE Public Study Room chat ownership, real-time deletion, and durable poll votes.
--- Run AFTER NEXBYTE_ROOM_SCHEMA.sql, NEXBYTE_ENHANCEMENTS.sql, and
+-- Run AFTER NEXTBYTE_ROOM_SCHEMA.sql, NEXTBYTE_ENHANCEMENTS.sql, and
 -- NEXTBYTE_STUDY_ROOM_VISIBILITY.sql in the Supabase SQL Editor.
 -- This migration preserves existing rows and does not expose private Storage files.
 
@@ -14,7 +14,7 @@ begin
   end if;
   if to_regprocedure('public.is_study_room_member(uuid)') is null
      or to_regprocedure('public.is_study_room_owner(uuid)') is null then
-    raise exception 'NEXTBYTE room access helper functions are missing. Run NEXBYTE_ENHANCEMENTS.sql first.';
+    raise exception 'NEXTBYTE room access helper functions are missing. Run NEXTBYTE_ENHANCEMENTS.sql first.';
   end if;
 end $$;
 

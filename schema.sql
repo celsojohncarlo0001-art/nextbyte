@@ -1,4 +1,4 @@
--- NEXBYTE per-user workspace persistence for Supabase Postgres.
+-- NEXTBYTE per-user workspace persistence for Supabase Postgres.
 -- Run this in Supabase SQL Editor before using the app.
 create table if not exists public.user_workspaces (
   user_id uuid primary key references auth.users(id) on delete cascade,

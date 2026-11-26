@@ -8,9 +8,9 @@ NEXTBYTE is a single-page academic workspace built with HTML, CSS, JavaScript, a
 2. Deploy the repository root to Vercel over HTTPS. Keep `index.html`, `supabase-config.js`, `manifest.webmanifest`, `sw.js`, both icon files, and the background image assets in the same root folder.
 3. Keep the existing `supabase-config.js` project URL and public publishable/anon key. It contains frontend configuration only; never add a service-role key or other secret to browser code.
 4. In Supabase SQL Editor, inspect the existing tables first. If `user_workspaces` is missing, run `schema.sql`.
-5. If the shared-room base tables are missing, review and run `NEXBYTE_ROOM_SCHEMA.sql`. It creates missing `study_rooms`, `study_room_members`, and `study_room_messages` tables plus the invite-code join RPC. It does not drop or truncate existing rows. If same-named tables already exist with a different schema, compare their columns before running it.
-6. Run `NEXBYTE_ENHANCEMENTS.sql` after the base room tables exist. It applies room/member/message access policies, the whiteboard table and policies, room-file storage policies, and Realtime publication entries.
-7. Review `NEXBYTE_UPLOAD_STORAGE_FIX.sql` separately. Run it only if the relevant personal storage buckets or policies are missing or need repair. Supabase permissive policies are OR-combined, so inspect and remove obsolete broad policies deliberately rather than adding policies blindly.
+5. If the shared-room base tables are missing, review and run `NEXTBYTE_ROOM_SCHEMA.sql`. It creates missing `study_rooms`, `study_room_members`, and `study_room_messages` tables plus the invite-code join RPC. It does not drop or truncate existing rows. If same-named tables already exist with a different schema, compare their columns before running it.
+6. Run `NEXTBYTE_ENHANCEMENTS.sql` after the base room tables exist. It applies room/member/message access policies, the whiteboard table and policies, room-file storage policies, and Realtime publication entries.
+7. Review `NEXTBYTE_UPLOAD_STORAGE_FIX.sql` separately. Run it only if the relevant personal storage buckets or policies are missing or need repair. Supabase permissive policies are OR-combined, so inspect and remove obsolete broad policies deliberately rather than adding policies blindly.
 8. Commit the source changes to the branch connected to Vercel and wait for the deployment to show **Ready**. Open the deployed site online once so the new service worker can install and cache the app shell.
 
 See `README_SETUP.txt` and `TESTING_REPORT.md` for known limitations, verification status, and post-deployment checks.
@@ -56,7 +56,7 @@ Do not describe any external integration as verified until the authenticated liv
 
 When a user enters or re-renders a subject, NEXTBYTE now recursively scans the authenticated account's private `user-study-files/<user-id>/` tree and reconnects objects to the matching subject by an exact subject-ID directory segment. This supports legacy root-level files and nested `materials/`, `syllabus/`, `attachments/`, and other folder layouts. References are deduplicated by full Storage path. The scan is delayed briefly and retried a limited number of times to tolerate mobile authentication startup timing. New uploads now re-resolve the open subject by ID after the Storage request, attach to the current live workspace object, update the local snapshot, and re-render the Materials list immediately before waiting for the cloud workspace save. A temporary workspace-sync failure no longer deletes an uploaded Storage object; the app keeps the local attachment and clearly reports that cloud sync is pending.
 
-No additional database migration is required for this repair. The existing `user-study-files` bucket must remain private, and the signed-in user's Storage `SELECT` policy must permit listing their own prefix. Review `NEXBYTE_UPLOAD_STORAGE_FIX.sql` if the project has not already been configured with the private bucket and owner-folder policies.
+No additional database migration is required for this repair. The existing `user-study-files` bucket must remain private, and the signed-in user's Storage `SELECT` policy must permit listing their own prefix. Review `NEXTBYTE_UPLOAD_STORAGE_FIX.sql` if the project has not already been configured with the private bucket and owner-folder policies.
 
 Long Materials names remain contained in their rows, with the full name available through the title attribute. Syllabus titles and original filenames wrap safely inside their card using a constrained grid layout, so they cannot cover the Syllabus badge or extend beyond the card. File action controls remain visible on narrow layouts. The missing external/open icon in the Materials row is now included. The PWA cache was also versioned again so installed devices can receive the immediate-upload correction.
 
@@ -75,7 +75,7 @@ The Materials overview has a single upload entry point. After uploading from the
 
 The Create/Edit Detailed Task form now includes **Attach supporting files (optional)** directly beneath Step-by-Step Instructions. Users may select multiple files and review file names, types, and sizes before saving. Allowed file types include PDF, DOC/DOCX, images, TXT/Markdown, and supported video formats. Spreadsheet, presentation, CSV, and audio file types are rejected by extension and MIME checks. Each file is limited to 20 MB, consistent with the existing private bucket limit.
 
-Task attachments are uploaded to the existing private `user-study-files` bucket under `<user-id>/tasks/<task-id>/...`. The task's `attachments` metadata is saved inside the existing `user_workspaces` JSON state, associated with task and owner IDs. No new table, bucket, or SQL migration is required. The existing Storage policy in `NEXBYTE_UPLOAD_STORAGE_FIX.sql` expects the first path segment to equal `auth.uid()`; task attachment paths follow that rule. Task cards provide separate Preview and Download actions. Removing a saved attachment removes its workspace reference only after save, then attempts to remove the private Storage object. Deleting a task also attempts cleanup after the task deletion syncs.
+Task attachments are uploaded to the existing private `user-study-files` bucket under `<user-id>/tasks/<task-id>/...`. The task's `attachments` metadata is saved inside the existing `user_workspaces` JSON state, associated with task and owner IDs. No new table, bucket, or SQL migration is required. The existing Storage policy in `NEXTBYTE_UPLOAD_STORAGE_FIX.sql` expects the first path segment to equal `auth.uid()`; task attachment paths follow that rule. Task cards provide separate Preview and Download actions. Removing a saved attachment removes its workspace reference only after save, then attempts to remove the private Storage object. Deleting a task also attempts cleanup after the task deletion syncs.
 
 ## Verification status for this update
 
@@ -83,7 +83,7 @@ For the current preview correction, all eight inline JavaScript blocks passed No
 
 ### Deployment note
 
-Deploy the files in this project folder as the root of the existing Vercel project. Keep the existing `supabase-config.js`, project URL, and public anon/publishable key. The current service-worker cache namespace is `nexbyte-pwa-v26-study-room-notes-tasks`; open NEXTBYTE online after deployment so the updated worker can install and activate.
+Deploy the files in this project folder as the root of the existing Vercel project. Keep the existing `supabase-config.js`, project URL, and public anon/publishable key. The current service-worker cache namespace is `nextbyte-pwa-v35-branding-background-fix`; open NEXTBYTE online after deployment so the updated worker can install and activate.
 
 ## Latest follow-up — Study Hub Add Task button
 
@@ -113,8 +113,8 @@ The Study Room Notes and Tasks tabs now use one full-height, vertically scrollab
 - Shared note cards display the author, date, file name, type, and size, with separate in-app Preview and Download actions. Failed message inserts attempt to remove a just-uploaded orphan file.
 - Tasks include a category, optional due date, detailed instructions, author/date metadata, and separate per-member response/status records. Response updates are filtered by room, message row, and the authenticated user ID so another member's response is not overwritten.
 - Existing note edit/delete actions and task-author delete actions remain available. Existing room SQL schema and policies are reused; no new table or policy broadening is introduced.
-- The service-worker cache namespace is now `nexbyte-pwa-v26-study-room-notes-tasks` so installed clients fetch the updated room interface.
+- The service-worker cache namespace is now `nextbyte-pwa-v35-branding-background-fix` so installed clients fetch the updated room interface.
 
-No new SQL migration is included for this repair. The deployment must already have the existing room schema, `NEXBYTE_ENHANCEMENTS.sql`, the room visibility migration, and the public-room chat repair installed as applicable. In particular, the private `study-room-files` bucket must exist with the existing member-read and user-folder upload policies. Do not add permissive policies or expose the bucket publicly to work around access errors.
+No new SQL migration is included for this repair. The deployment must already have the existing room schema, `NEXTBYTE_ENHANCEMENTS.sql`, the room visibility migration, and the public-room chat repair installed as applicable. In particular, the private `study-room-files` bucket must exist with the existing member-read and user-folder upload policies. Do not add permissive policies or expose the bucket publicly to work around access errors.
 
 Static JavaScript, HTML, and manifest checks are recorded in `TESTING_REPORT_STUDY_ROOM_NOTES_TASKS.md`. Live two-account Supabase behavior and Vercel deployment have not been tested from this environment; use the two-account verification steps in that report after deploying.

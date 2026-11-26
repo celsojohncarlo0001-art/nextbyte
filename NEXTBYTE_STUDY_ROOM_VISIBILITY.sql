@@ -1,5 +1,5 @@
 -- NEXTBYTE Public / Private Study Room visibility and access-control upgrade.
--- Run AFTER NEXBYTE_ROOM_SCHEMA.sql and NEXBYTE_ENHANCEMENTS.sql.
+-- Run AFTER NEXTBYTE_ROOM_SCHEMA.sql and NEXTBYTE_ENHANCEMENTS.sql.
 -- Existing collaborative rooms remain invite-only and visible to their existing
 -- members/owners. New public rooms are explicitly discoverable. New private rooms
 -- are owner-only; older room metadata is not exposed unexpectedly.
